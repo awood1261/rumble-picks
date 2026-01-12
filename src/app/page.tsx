@@ -27,6 +27,12 @@ export default function Home() {
           >
             View scoreboard
           </Link>
+          <Link
+            className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-700 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+            href="/picks"
+          >
+            Make picks
+          </Link>
           <span className="text-sm text-zinc-400">
             No account? You can sign up in seconds.
           </span>
