@@ -21,6 +21,12 @@ export default function Home() {
           >
             Sign in to play
           </Link>
+          <Link
+            className="inline-flex h-12 items-center justify-center rounded-full border border-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+            href="/scoreboard"
+          >
+            View scoreboard
+          </Link>
           <span className="text-sm text-zinc-400">
             No account? You can sign up in seconds.
           </span>

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import { calculateScore, type PicksPayload } from "../../lib/scoring";
+import { scoringRules } from "../../lib/scoringRules";
 
 type EventRow = {
   id: string;
@@ -26,6 +28,12 @@ type RumbleEntryRow = {
   eliminations_count: number;
 };
 
+type PickRow = {
+  id: string;
+  user_id: string;
+  payload: Record<string, unknown> | null;
+};
+
 export default function AdminPage() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -43,6 +51,7 @@ export default function AdminPage() {
   const [entryNumber, setEntryNumber] = useState("");
   const [eliminateEntryId, setEliminateEntryId] = useState("");
   const [eliminatedById, setEliminatedById] = useState("");
+  const [recalcBusy, setRecalcBusy] = useState(false);
 
   const activeEvent = useMemo(() => events[0] ?? null, [events]);
   const entrantOptions = useMemo(() => {
@@ -226,6 +235,72 @@ export default function AdminPage() {
     setEliminateEntryId("");
     setEliminatedById("");
     refreshData();
+  };
+
+  const handleRecalculateScores = async () => {
+    if (!activeEvent) {
+      setMessage("Create an event before recalculating scores.");
+      return;
+    }
+    setRecalcBusy(true);
+    setMessage(null);
+
+    const [{ data: pickRows, error: pickError }, { data: entryRows, error: entryError }] =
+      await Promise.all([
+        supabase
+          .from("picks")
+          .select("id, user_id, payload")
+          .eq("event_id", activeEvent.id),
+        supabase
+          .from("rumble_entries")
+          .select("id, entrant_id, entry_number, eliminated_at, eliminations_count")
+          .eq("event_id", activeEvent.id),
+      ]);
+
+    if (pickError) {
+      setMessage(pickError.message);
+      setRecalcBusy(false);
+      return;
+    }
+    if (entryError) {
+      setMessage(entryError.message);
+      setRecalcBusy(false);
+      return;
+    }
+
+    const picks = (pickRows ?? []) as PickRow[];
+    const entries = (entryRows ?? []) as RumbleEntryRow[];
+
+    if (picks.length === 0) {
+      setMessage("No picks found for this event yet.");
+      setRecalcBusy(false);
+      return;
+    }
+
+    const scoreRows = picks.map((pick) => {
+      const payload = (pick.payload ?? {}) as PicksPayload;
+      const { points, breakdown } = calculateScore(payload, entries, scoringRules);
+      return {
+        user_id: pick.user_id,
+        event_id: activeEvent.id,
+        points,
+        breakdown,
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+    const { error: scoreError } = await supabase
+      .from("scores")
+      .upsert(scoreRows, { onConflict: "user_id,event_id" });
+
+    if (scoreError) {
+      setMessage(scoreError.message);
+      setRecalcBusy(false);
+      return;
+    }
+
+    setMessage("Scores recalculated.");
+    setRecalcBusy(false);
   };
 
   if (loading) {
@@ -412,6 +487,23 @@ export default function AdminPage() {
               onClick={handleElimination}
             >
               Record elimination
+            </button>
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <h2 className="text-lg font-semibold">Scoring</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Recalculate scores after updating eliminations or results.
+          </p>
+          <div className="mt-4">
+            <button
+              className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+              type="button"
+              onClick={handleRecalculateScores}
+              disabled={recalcBusy}
+            >
+              {recalcBusy ? "Recalculating…" : "Recalculate scores"}
             </button>
           </div>
         </section>
