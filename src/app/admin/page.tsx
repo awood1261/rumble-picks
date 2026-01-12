@@ -45,6 +45,25 @@ export default function AdminPage() {
   const [eliminatedById, setEliminatedById] = useState("");
 
   const activeEvent = useMemo(() => events[0] ?? null, [events]);
+  const entrantOptions = useMemo(() => {
+    const byName = new Map<string, EntrantRow>();
+    entrants.forEach((entrant) => {
+      const nameKey = entrant.name.trim().toLowerCase();
+      const current = byName.get(nameKey);
+      if (!current) {
+        byName.set(nameKey, entrant);
+        return;
+      }
+      const currentIsWwe = (current.promotion ?? "").toLowerCase() === "wwe";
+      const nextIsWwe = (entrant.promotion ?? "").toLowerCase() === "wwe";
+      if (!currentIsWwe && nextIsWwe) {
+        byName.set(nameKey, entrant);
+      }
+    });
+    return Array.from(byName.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+  }, [entrants]);
 
   const refreshData = async () => {
     if (!activeEvent) {
@@ -329,7 +348,7 @@ export default function AdminPage() {
                 onChange={(event) => setEntryEntrantId(event.target.value)}
               >
                 <option value="">Select entrant</option>
-                {entrants.map((entrant) => (
+                {entrantOptions.map((entrant) => (
                   <option key={entrant.id} value={entrant.id}>
                     {entrant.name}
                   </option>
@@ -381,7 +400,7 @@ export default function AdminPage() {
               onChange={(event) => setEliminatedById(event.target.value)}
             >
               <option value="">Eliminated by (optional)</option>
-              {entrants.map((entrant) => (
+              {entrantOptions.map((entrant) => (
                 <option key={entrant.id} value={entrant.id}>
                   {entrant.name}
                 </option>
