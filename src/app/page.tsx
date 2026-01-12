@@ -25,6 +25,12 @@ export default function Home() {
             No account? You can sign up in seconds.
           </span>
         </div>
+        <Link
+          className="mt-8 text-xs uppercase tracking-[0.3em] text-zinc-500 transition hover:text-amber-300"
+          href="/admin"
+        >
+          Admin console
+        </Link>
       </main>
     </div>
   );
