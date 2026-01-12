@@ -54,6 +54,9 @@ export default function AdminPage() {
   const [recalcBusy, setRecalcBusy] = useState(false);
 
   const activeEvent = useMemo(() => events[0] ?? null, [events]);
+  const entrantMap = useMemo(() => {
+    return new Map(entrants.map((entrant) => [entrant.id, entrant]));
+  }, [entrants]);
   const entrantOptions = useMemo(() => {
     const byName = new Map<string, EntrantRow>();
     entrants.forEach((entrant) => {
@@ -73,6 +76,10 @@ export default function AdminPage() {
       a.name.localeCompare(b.name)
     );
   }, [entrants]);
+  const eventEntrantOptions = useMemo(() => {
+    const eventEntrantIds = new Set(entries.map((entry) => entry.entrant_id));
+    return entrantOptions.filter((entrant) => eventEntrantIds.has(entrant.id));
+  }, [entries, entrantOptions]);
 
   const refreshData = async () => {
     if (!activeEvent) {
@@ -163,6 +170,24 @@ export default function AdminPage() {
       return;
     }
     setEventName("");
+    refreshData();
+  };
+
+  const handleUpdateEntry = async (entry: RumbleEntryRow) => {
+    setMessage(null);
+    const { error } = await supabase
+      .from("rumble_entries")
+      .update({
+        entry_number: entry.entry_number,
+        eliminations_count: entry.eliminations_count,
+        eliminated_by: entry.eliminated_by || null,
+      })
+      .eq("id", entry.id);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage("Entry updated.");
     refreshData();
   };
 
@@ -475,7 +500,7 @@ export default function AdminPage() {
               onChange={(event) => setEliminatedById(event.target.value)}
             >
               <option value="">Eliminated by (optional)</option>
-              {entrantOptions.map((entrant) => (
+              {eventEntrantOptions.map((entrant) => (
                 <option key={entrant.id} value={entrant.id}>
                   {entrant.name}
                 </option>
@@ -488,6 +513,121 @@ export default function AdminPage() {
             >
               Record elimination
             </button>
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <h2 className="text-lg font-semibold">Active Event Entries</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Edit entry numbers, eliminations, or the credited eliminator.
+          </p>
+          <div className="mt-6 space-y-4">
+            {entries.length === 0 ? (
+              <p className="text-sm text-zinc-400">No entries yet.</p>
+            ) : (
+              entries.map((entry) => {
+                const entrant = entrantMap.get(entry.entrant_id);
+                return (
+                  <div
+                    key={entry.id}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-base font-semibold">
+                          {entrant?.name ?? "Unknown entrant"}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          {entrant?.promotion ?? "Unknown promotion"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <label className="flex flex-col text-xs text-zinc-400">
+                          Entry #
+                          <input
+                            className="mt-1 h-10 w-24 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={entry.entry_number ?? ""}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setEntries((prev) =>
+                                prev.map((item) =>
+                                  item.id === entry.id
+                                    ? {
+                                        ...item,
+                                        entry_number:
+                                          value === ""
+                                            ? null
+                                            : Number(value),
+                                      }
+                                    : item
+                                )
+                              );
+                            }}
+                          />
+                        </label>
+                        <label className="flex flex-col text-xs text-zinc-400">
+                          Eliminations
+                          <input
+                            className="mt-1 h-10 w-28 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={entry.eliminations_count ?? 0}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setEntries((prev) =>
+                                prev.map((item) =>
+                                  item.id === entry.id
+                                    ? {
+                                        ...item,
+                                        eliminations_count:
+                                          value === ""
+                                            ? 0
+                                            : Number(value),
+                                      }
+                                    : item
+                                )
+                              );
+                            }}
+                          />
+                        </label>
+                        <label className="flex flex-col text-xs text-zinc-400">
+                          Eliminated by
+                          <select
+                            className="mt-1 h-10 min-w-[200px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={entry.eliminated_by ?? ""}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setEntries((prev) =>
+                                prev.map((item) =>
+                                  item.id === entry.id
+                                    ? {
+                                        ...item,
+                                        eliminated_by: value || null,
+                                      }
+                                    : item
+                                )
+                              );
+                            }}
+                          >
+                            <option value="">Not set</option>
+                            {eventEntrantOptions.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          className="mt-5 h-10 rounded-full border border-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-200 hover:text-amber-100"
+                          type="button"
+                          onClick={() => handleUpdateEntry(entry)}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </section>
 
