@@ -47,6 +47,10 @@ export default function PicksPage() {
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [payload, setPayload] = useState<PicksPayload>(emptyPayload);
   const [saving, setSaving] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
+  const [editSection, setEditSection] = useState<
+    "entrants" | "final_four" | "key_picks" | null
+  >(null);
 
   const entrantOptions = useMemo(() => {
     const byName = new Map<string, EntrantRow>();
@@ -67,6 +71,10 @@ export default function PicksPage() {
       a.name.localeCompare(b.name)
     );
   }, [entrants]);
+
+  const entrantById = useMemo(() => {
+    return new Map(entrantOptions.map((entrant) => [entrant.id, entrant]));
+  }, [entrantOptions]);
 
   const selectedEntrantOptions = useMemo(() => {
     const selected = new Set(payload.entrants);
@@ -123,6 +131,8 @@ export default function PicksPage() {
     if (!selectedEventId || !userId) return;
     setMessage(null);
     setPayload(emptyPayload);
+    setHasSaved(false);
+    setEditSection(null);
 
     const loadEventData = async () => {
       const [{ data: pickRows }, { data: entrantRows, error: entrantError }] =
@@ -157,6 +167,7 @@ export default function PicksPage() {
           entry_30: savedPayload.entry_30 ?? null,
           most_eliminations: savedPayload.most_eliminations ?? null,
         });
+        setHasSaved(true);
       }
     };
 
@@ -242,9 +253,14 @@ export default function PicksPage() {
       setSaving(false);
       return;
     }
+    setHasSaved(true);
+    setEditSection(null);
     setMessage("Picks saved.");
     setSaving(false);
   };
+
+  const getName = (id: string | null) =>
+    id ? entrantById.get(id)?.name ?? "Unknown" : "Not set";
 
   if (loading) {
     return (
@@ -312,112 +328,278 @@ export default function PicksPage() {
               No entrants are available yet.
             </p>
           </section>
+        ) : hasSaved && !editSection ? (
+          <section className="mt-8 grid gap-6 lg:grid-cols-3">
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Entrants</h2>
+                <button
+                  className="text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
+                  type="button"
+                  onClick={() => setEditSection("entrants")}
+                >
+                  Edit
+                </button>
+              </div>
+              <p className="mt-2 text-sm text-zinc-400">
+                {payload.entrants.length} selected
+              </p>
+              <ul className="mt-4 space-y-2 text-sm text-zinc-200">
+                {payload.entrants.map((id) => (
+                  <li key={id} className="rounded-xl border border-zinc-800 px-3 py-2">
+                    {getName(id)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Final Four</h2>
+                <button
+                  className="text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
+                  type="button"
+                  onClick={() => setEditSection("final_four")}
+                >
+                  Edit
+                </button>
+              </div>
+              <p className="mt-2 text-sm text-zinc-400">
+                {payload.final_four.length} selected
+              </p>
+              <ul className="mt-4 space-y-2 text-sm text-zinc-200">
+                {payload.final_four.map((id) => (
+                  <li key={id} className="rounded-xl border border-zinc-800 px-3 py-2">
+                    {getName(id)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Key Picks</h2>
+                <button
+                  className="text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
+                  type="button"
+                  onClick={() => setEditSection("key_picks")}
+                >
+                  Edit
+                </button>
+              </div>
+              <div className="mt-4 space-y-3 text-sm text-zinc-200">
+                <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
+                  <span className="text-zinc-400">Winner</span>
+                  <span>{getName(payload.winner)}</span>
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
+                  <span className="text-zinc-400">Entry #1</span>
+                  <span>{getName(payload.entry_1)}</span>
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
+                  <span className="text-zinc-400">Entry #2</span>
+                  <span>{getName(payload.entry_2)}</span>
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
+                  <span className="text-zinc-400">Entry #30</span>
+                  <span>{getName(payload.entry_30)}</span>
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
+                  <span className="text-zinc-400">Most eliminations</span>
+                  <span>{getName(payload.most_eliminations)}</span>
+                </div>
+              </div>
+            </div>
+          </section>
         ) : (
           <>
-            <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-              <h2 className="text-lg font-semibold">Entrants</h2>
-              <p className="mt-2 text-sm text-zinc-400">
-                Select up to 30. You have picked {payload.entrants.length}.
-              </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {entrantOptions.map((entrant) => (
-                  <label
-                    key={entrant.id}
-                    className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={payload.entrants.includes(entrant.id)}
-                      onChange={() => toggleEntrant(entrant.id)}
-                    />
-                    <span className="flex-1">{entrant.name}</span>
-                    <span className="text-xs text-zinc-500">
-                      {entrant.promotion ?? "—"}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </section>
-
-            <section className="mt-8 grid gap-6 lg:grid-cols-2">
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-                <h2 className="text-lg font-semibold">Final Four</h2>
-                <p className="mt-2 text-sm text-zinc-400">
-                  Select exactly 4. You have picked {payload.final_four.length}.
-                </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {selectedEntrantOptions.map((entrant) => (
+            {(editSection === "entrants" || !hasSaved) && (
+              <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">Entrants</h2>
+                    <p className="mt-2 text-sm text-zinc-400">
+                      Select up to 30. You have picked {payload.entrants.length}.
+                    </p>
+                  </div>
+                  {hasSaved && (
+                    <button
+                      className="text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200"
+                      type="button"
+                      onClick={() => setEditSection(null)}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {entrantOptions.map((entrant) => (
                     <label
                       key={entrant.id}
                       className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm"
                     >
                       <input
                         type="checkbox"
-                        checked={payload.final_four.includes(entrant.id)}
-                        onChange={() => toggleFinalFour(entrant.id)}
+                        checked={payload.entrants.includes(entrant.id)}
+                        onChange={() => toggleEntrant(entrant.id)}
                       />
                       <span className="flex-1">{entrant.name}</span>
+                      <span className="text-xs text-zinc-500">
+                        {entrant.promotion ?? "—"}
+                      </span>
                     </label>
                   ))}
                 </div>
-              </div>
-
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-                <h2 className="text-lg font-semibold">Key Picks</h2>
-                <p className="mt-2 text-sm text-zinc-400">
-                  Choose your winner and entry position picks.
-                </p>
-                <div className="mt-4 space-y-4">
-                  {[
-                    { label: "Winner", key: "winner" },
-                    { label: "Entry #1", key: "entry_1" },
-                    { label: "Entry #2", key: "entry_2" },
-                    { label: "Entry #30", key: "entry_30" },
-                    { label: "Most eliminations", key: "most_eliminations" },
-                  ].map((field) => (
-                    <label
-                      key={field.key}
-                      className="flex flex-col text-sm text-zinc-300"
+                {hasSaved && (
+                  <div className="mt-6">
+                    <button
+                      className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                      type="button"
+                      onClick={handleSave}
+                      disabled={saving}
                     >
-                      {field.label}
-                      <select
-                        className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                        value={(payload as Record<string, string | null>)[
-                          field.key
-                        ] ?? ""}
-                        onChange={(event) =>
-                          setPayload((prev) => ({
-                            ...prev,
-                            [field.key]: event.target.value || null,
-                          }))
-                        }
+                      {saving ? "Saving…" : "Save entrants"}
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            <section className="mt-8 grid gap-6 lg:grid-cols-2">
+              {(editSection === "final_four" || !hasSaved) && (
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold">Final Four</h2>
+                      <p className="mt-2 text-sm text-zinc-400">
+                        Select exactly 4. You have picked {payload.final_four.length}.
+                      </p>
+                    </div>
+                    {hasSaved && (
+                      <button
+                        className="text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200"
+                        type="button"
+                        onClick={() => setEditSection(null)}
                       >
-                        <option value="">Select</option>
-                        {selectedEntrantOptions.map((entrant) => (
-                          <option key={entrant.id} value={entrant.id}>
-                            {entrant.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {selectedEntrantOptions.map((entrant) => (
+                      <label
+                        key={entrant.id}
+                        className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={payload.final_four.includes(entrant.id)}
+                          onChange={() => toggleFinalFour(entrant.id)}
+                        />
+                        <span className="flex-1">{entrant.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {hasSaved && (
+                    <div className="mt-6">
+                      <button
+                        className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                        type="button"
+                        onClick={handleSave}
+                        disabled={saving}
+                      >
+                        {saving ? "Saving…" : "Save final four"}
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
+
+              {(editSection === "key_picks" || !hasSaved) && (
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold">Key Picks</h2>
+                      <p className="mt-2 text-sm text-zinc-400">
+                        Choose your winner and entry position picks.
+                      </p>
+                    </div>
+                    {hasSaved && (
+                      <button
+                        className="text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200"
+                        type="button"
+                        onClick={() => setEditSection(null)}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-4 space-y-4">
+                    {[
+                      { label: "Winner", key: "winner" },
+                      { label: "Entry #1", key: "entry_1" },
+                      { label: "Entry #2", key: "entry_2" },
+                      { label: "Entry #30", key: "entry_30" },
+                      { label: "Most eliminations", key: "most_eliminations" },
+                    ].map((field) => (
+                      <label
+                        key={field.key}
+                        className="flex flex-col text-sm text-zinc-300"
+                      >
+                        {field.label}
+                        <select
+                          className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                          value={(payload as Record<string, string | null>)[
+                            field.key
+                          ] ?? ""}
+                          onChange={(event) =>
+                            setPayload((prev) => ({
+                              ...prev,
+                              [field.key]: event.target.value || null,
+                            }))
+                          }
+                        >
+                          <option value="">Select</option>
+                          {selectedEntrantOptions.map((entrant) => (
+                            <option key={entrant.id} value={entrant.id}>
+                              {entrant.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                  {hasSaved && (
+                    <div className="mt-6">
+                      <button
+                        className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                        type="button"
+                        onClick={handleSave}
+                        disabled={saving}
+                      >
+                        {saving ? "Saving…" : "Save key picks"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
 
-            <section className="mt-8 flex flex-col items-start gap-3">
-              <button
-                className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? "Saving…" : "Save picks"}
-              </button>
-              <p className="text-xs text-zinc-500">
-                Your picks can be updated until the event locks.
-              </p>
-            </section>
+            {!hasSaved && (
+              <section className="mt-8 flex flex-col items-start gap-3">
+                <button
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? "Saving…" : "Save picks"}
+                </button>
+                <p className="text-xs text-zinc-500">
+                  Your picks can be updated until the event locks.
+                </p>
+              </section>
+            )}
           </>
         )}
       </main>
