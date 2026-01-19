@@ -263,6 +263,24 @@ export default function AdminPage() {
       setMessage(error.message);
       return;
     }
+
+    if (eliminatedById) {
+      const { data: eliminatorEntry, error: eliminatorError } = await supabase
+        .from("rumble_entries")
+        .select("id, eliminations_count")
+        .eq("event_id", activeEvent?.id ?? "")
+        .eq("entrant_id", eliminatedById)
+        .maybeSingle();
+      if (!eliminatorError && eliminatorEntry) {
+        await supabase
+          .from("rumble_entries")
+          .update({
+            eliminations_count: (eliminatorEntry.eliminations_count ?? 0) + 1,
+          })
+          .eq("id", eliminatorEntry.id);
+      }
+    }
+
     setEliminateEntryId("");
     setEliminatedById("");
     refreshData();
@@ -537,13 +555,24 @@ export default function AdminPage() {
                 return (
                   <div
                     key={entry.id}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                    className={`rounded-2xl border p-4 ${
+                      entry.eliminated_at
+                        ? "border-red-500/60 bg-red-500/5"
+                        : "border-zinc-800 bg-zinc-950/60"
+                    }`}
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                      <EntrantCard
-                        name={entrant?.name ?? "Unknown entrant"}
-                        promotion={entrant?.promotion ?? "Unknown promotion"}
-                      />
+                      <div className="flex items-center gap-3">
+                        <EntrantCard
+                          name={entrant?.name ?? "Unknown entrant"}
+                          promotion={entrant?.promotion ?? "Unknown promotion"}
+                        />
+                        {entry.eliminated_at ? (
+                          <span className="rounded-full border border-red-500/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-red-200">
+                            Eliminated
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="flex flex-wrap gap-3">
                         <label className="flex flex-col text-xs text-zinc-400">
                           Entry #
