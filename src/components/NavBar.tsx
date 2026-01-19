@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 
 export const NavBar = () => {
   const router = useRouter();
+  const pathname = usePathname();
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -59,6 +60,13 @@ export const NavBar = () => {
     router.push("/");
   };
 
+  const linkClass = (isActive: boolean) =>
+    `transition ${
+      isActive
+        ? "text-amber-200 underline decoration-amber-400/70 underline-offset-4"
+        : "hover:text-amber-200"
+    }`;
+
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-900/80 bg-zinc-950/80 backdrop-blur">
       <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
@@ -69,14 +77,26 @@ export const NavBar = () => {
           Rumble Picks
         </Link>
         <div className="flex flex-nowrap items-center gap-3 text-xs font-semibold uppercase tracking-wide text-zinc-300">
-          <Link className="transition hover:text-amber-200" href="/picks">
+          <Link
+            className={linkClass(pathname.startsWith("/picks"))}
+            href="/picks"
+            aria-current={pathname.startsWith("/picks") ? "page" : undefined}
+          >
             Picks
           </Link>
-          <Link className="transition hover:text-amber-200" href="/scoreboard">
+          <Link
+            className={linkClass(pathname.startsWith("/scoreboard"))}
+            href="/scoreboard"
+            aria-current={pathname.startsWith("/scoreboard") ? "page" : undefined}
+          >
             Scores
           </Link>
           {isAdmin && (
-            <Link className="transition hover:text-amber-200" href="/admin">
+            <Link
+              className={linkClass(pathname.startsWith("/admin"))}
+              href="/admin"
+              aria-current={pathname.startsWith("/admin") ? "page" : undefined}
+            >
               Admin
             </Link>
           )}

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { EntrantCard } from "../../components/EntrantCard";
+import { scoringRules } from "../../lib/scoringRules";
 
 type EventRow = {
   id: string;
@@ -29,6 +30,13 @@ type PicksPayload = {
   most_eliminations: string | null;
 };
 
+type RumbleEntryRow = {
+  entrant_id: string;
+  entry_number: number | null;
+  eliminated_at: string | null;
+  eliminations_count: number;
+};
+
 const emptyPayload: PicksPayload = {
   entrants: [],
   final_four: [],
@@ -48,9 +56,13 @@ export default function PicksPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
+  const [rumbleEntries, setRumbleEntries] = useState<RumbleEntryRow[]>([]);
   const [payload, setPayload] = useState<PicksPayload>(emptyPayload);
   const [saving, setSaving] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
+  const [rankInfo, setRankInfo] = useState<{ rank: number | null; total: number }>(
+    { rank: null, total: 0 }
+  );
   const [editSection, setEditSection] = useState<
     "entrants" | "final_four" | "key_picks" | null
   >(null);
@@ -110,6 +122,90 @@ export default function PicksPage() {
   const sameArray = (a: string[], b: string[]) =>
     a.length === b.length && a.every((value, index) => value === b[index]);
 
+  const getEliminationKey = (entry: RumbleEntryRow) =>
+    entry.eliminated_at
+      ? new Date(entry.eliminated_at).getTime()
+      : Number.MAX_SAFE_INTEGER;
+
+  const actuals = useMemo(() => {
+    const entrantSet = new Set(rumbleEntries.map((entry) => entry.entrant_id));
+    const finalFour = [...rumbleEntries]
+      .sort((a, b) => getEliminationKey(b) - getEliminationKey(a))
+      .slice(0, 4)
+      .map((entry) => entry.entrant_id);
+    const winners = rumbleEntries.filter((entry) => !entry.eliminated_at);
+    const winner = winners.length === 1 ? winners[0].entrant_id : null;
+    const entry1 =
+      rumbleEntries.find((entry) => entry.entry_number === 1)?.entrant_id ??
+      null;
+    const entry2 =
+      rumbleEntries.find((entry) => entry.entry_number === 2)?.entrant_id ??
+      null;
+    const entry30 =
+      rumbleEntries.find((entry) => entry.entry_number === 30)?.entrant_id ??
+      null;
+    const maxElims = rumbleEntries.reduce(
+      (max, entry) => Math.max(max, entry.eliminations_count ?? 0),
+      0
+    );
+    const topElims = new Set(
+      rumbleEntries
+        .filter((entry) => entry.eliminations_count === maxElims)
+        .map((entry) => entry.entrant_id)
+    );
+
+    return {
+      entrantSet,
+      finalFourSet: new Set(finalFour),
+      winner,
+      entry1,
+      entry2,
+      entry30,
+      topElims,
+      hasData: rumbleEntries.length > 0,
+    };
+  }, [rumbleEntries]);
+
+  const sectionPoints = useMemo(() => {
+    if (!actuals.hasData) {
+      return {
+        entrants: null,
+        finalFour: null,
+        keyPicks: null,
+      };
+    }
+
+    const entrantsCorrect = payload.entrants.filter((id) =>
+      actuals.entrantSet.has(id)
+    ).length;
+    const finalFourCorrect = payload.final_four.filter((id) =>
+      actuals.finalFourSet.has(id)
+    ).length;
+    const keyPicksTotal =
+      (payload.winner && payload.winner === actuals.winner
+        ? scoringRules.winner
+        : 0) +
+      (payload.entry_1 && payload.entry_1 === actuals.entry1
+        ? scoringRules.entry_1
+        : 0) +
+      (payload.entry_2 && payload.entry_2 === actuals.entry2
+        ? scoringRules.entry_2
+        : 0) +
+      (payload.entry_30 && payload.entry_30 === actuals.entry30
+        ? scoringRules.entry_30
+        : 0) +
+      (payload.most_eliminations &&
+      actuals.topElims.has(payload.most_eliminations)
+        ? scoringRules.most_eliminations
+        : 0);
+
+    return {
+      entrants: entrantsCorrect * scoringRules.entrants,
+      finalFour: finalFourCorrect * scoringRules.final_four,
+      keyPicks: keyPicksTotal,
+    };
+  }, [actuals, payload]);
+
   useEffect(() => {
     let ignore = false;
     const loadSession = async () => {
@@ -161,8 +257,11 @@ export default function PicksPage() {
     setEditSection(null);
 
     const loadEventData = async () => {
-      const [{ data: pickRows }, { data: entrantRows, error: entrantError }] =
-        await Promise.all([
+      const [
+        { data: pickRows },
+        { data: entrantRows, error: entrantError },
+        { data: entryRows, error: entryError },
+      ] = await Promise.all([
           supabase
             .from("picks")
             .select("payload")
@@ -173,6 +272,10 @@ export default function PicksPage() {
             .from("entrants")
             .select("id, name, promotion, gender")
             .order("name", { ascending: true }),
+          supabase
+            .from("rumble_entries")
+            .select("entrant_id, entry_number, eliminated_at, eliminations_count")
+            .eq("event_id", selectedEventId),
         ]);
 
       if (entrantError) {
@@ -180,7 +283,13 @@ export default function PicksPage() {
         return;
       }
 
+      if (entryError) {
+        setMessage(entryError.message);
+        return;
+      }
+
       setEntrants(entrantRows ?? []);
+      setRumbleEntries(entryRows ?? []);
 
       const savedPayload = pickRows?.payload as Partial<PicksPayload> | null;
       if (savedPayload) {
@@ -198,6 +307,34 @@ export default function PicksPage() {
     };
 
     loadEventData();
+  }, [selectedEventId, userId]);
+
+  useEffect(() => {
+    if (!selectedEventId || !userId) return;
+
+    let ignore = false;
+    const loadRank = async () => {
+      const { data, error } = await supabase
+        .from("scores")
+        .select("user_id, points")
+        .eq("event_id", selectedEventId)
+        .order("points", { ascending: false });
+
+      if (ignore) return;
+      if (error || !data) {
+        setRankInfo({ rank: null, total: 0 });
+        return;
+      }
+
+      const total = data.length;
+      const index = data.findIndex((row) => row.user_id === userId);
+      setRankInfo({ rank: index === -1 ? null : index + 1, total });
+    };
+
+    loadRank();
+    return () => {
+      ignore = true;
+    };
   }, [selectedEventId, userId]);
 
   useEffect(() => {
@@ -292,6 +429,53 @@ export default function PicksPage() {
   const getEntrant = (id: string | null) =>
     id ? entrantById.get(id) ?? null : null;
 
+  const renderPickList = (
+    ids: string[],
+    correctSet: Set<string>,
+    points: number
+  ) => {
+    if (ids.length === 0) {
+      return <p className="text-sm text-zinc-400">None selected.</p>;
+    }
+    return (
+      <ul className="mt-4 max-h-64 space-y-2 overflow-y-auto pr-1 text-sm text-zinc-200">
+        {ids
+          .map((id) => ({
+            id,
+            entrant: getEntrant(id),
+            name: getEntrant(id)?.name ?? "Unknown",
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map(({ id, entrant, name }) => {
+            const isCorrect = actuals.hasData && correctSet.has(id);
+            return (
+              <li
+                key={id}
+                className={`rounded-xl border px-3 py-2 ${
+                  !actuals.hasData
+                    ? "border-zinc-800"
+                    : isCorrect
+                      ? "border-emerald-400/60 bg-emerald-400/10"
+                      : "border-red-500/50 bg-red-500/10"
+                }`}
+              >
+                <EntrantCard name={name} promotion={entrant?.promotion} />
+                {actuals.hasData && (
+                  <p
+                    className={`mt-2 text-[10px] font-semibold uppercase tracking-wide ${
+                      isCorrect ? "text-emerald-200" : "text-red-200"
+                    }`}
+                  >
+                    {isCorrect ? `+${points} pts` : "0 pts"}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+      </ul>
+    );
+  };
+
   const EditIcon = () => (
     <svg
       className="h-4 w-4"
@@ -343,6 +527,21 @@ export default function PicksPage() {
             Choose an event and lock in your rumble picks before bell time.
           </p>
         </header>
+        <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
+          {rankInfo.rank ? (
+            <span>
+              Your current rank:{" "}
+              <span className="font-semibold text-amber-200">
+                #{rankInfo.rank}
+              </span>{" "}
+              of {rankInfo.total}
+            </span>
+          ) : (
+            <span className="text-zinc-400">
+              Your rank will appear once scores are calculated for this event.
+            </span>
+          )}
+        </div>
         {isLocked && (
           <div className="mt-6 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
             Picks are locked for this event.
@@ -397,20 +596,16 @@ export default function PicksPage() {
               <p className="mt-2 text-sm text-zinc-400">
                 {payload.entrants.length} selected
               </p>
-              <ul className="mt-4 max-h-64 space-y-2 overflow-y-auto pr-1 text-sm text-zinc-200">
-                {payload.entrants
-                  .map((id) => ({
-                    id,
-                    entrant: getEntrant(id),
-                    name: getEntrant(id)?.name ?? "Unknown",
-                  }))
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map(({ id, entrant, name }) => (
-                    <li key={id} className="rounded-xl border border-zinc-800 px-3 py-2">
-                      <EntrantCard name={name} promotion={entrant?.promotion} />
-                    </li>
-                  ))}
-              </ul>
+              {sectionPoints.entrants !== null && (
+                <p className="mt-1 text-xs text-emerald-200">
+                  Points: {sectionPoints.entrants}
+                </p>
+              )}
+              {renderPickList(
+                payload.entrants,
+                actuals.entrantSet,
+                scoringRules.entrants
+              )}
             </div>
 
             <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
@@ -429,19 +624,16 @@ export default function PicksPage() {
               <p className="mt-2 text-sm text-zinc-400">
                 {payload.final_four.length} selected
               </p>
-              <ul className="mt-4 space-y-2 text-sm text-zinc-200">
-                {payload.final_four.map((id) => {
-                  const entrant = getEntrant(id);
-                  return (
-                    <li key={id} className="rounded-xl border border-zinc-800 px-3 py-2">
-                      <EntrantCard
-                        name={entrant?.name ?? "Unknown"}
-                        promotion={entrant?.promotion}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
+              {sectionPoints.finalFour !== null && (
+                <p className="mt-1 text-xs text-emerald-200">
+                  Points: {sectionPoints.finalFour}
+                </p>
+              )}
+              {renderPickList(
+                payload.final_four,
+                actuals.finalFourSet,
+                scoringRules.final_four
+              )}
             </div>
 
             <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
@@ -457,50 +649,60 @@ export default function PicksPage() {
                   Edit
                 </button>
               </div>
-                <div className="mt-4 space-y-3 text-sm text-zinc-200">
-                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
-                    <span className="text-zinc-400">Winner</span>
-                    <EntrantCard
-                      name={getEntrant(payload.winner)?.name ?? "Not set"}
-                      promotion={getEntrant(payload.winner)?.promotion}
-                      className="justify-end"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
-                    <span className="text-zinc-400">Entry #1</span>
-                    <EntrantCard
-                      name={getEntrant(payload.entry_1)?.name ?? "Not set"}
-                      promotion={getEntrant(payload.entry_1)?.promotion}
-                      className="justify-end"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
-                    <span className="text-zinc-400">Entry #2</span>
-                    <EntrantCard
-                      name={getEntrant(payload.entry_2)?.name ?? "Not set"}
-                      promotion={getEntrant(payload.entry_2)?.promotion}
-                      className="justify-end"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
-                    <span className="text-zinc-400">Entry #30</span>
-                    <EntrantCard
-                      name={getEntrant(payload.entry_30)?.name ?? "Not set"}
-                      promotion={getEntrant(payload.entry_30)?.promotion}
-                      className="justify-end"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
-                    <span className="text-zinc-400">Most eliminations</span>
-                    <EntrantCard
-                      name={
-                        getEntrant(payload.most_eliminations)?.name ?? "Not set"
-                      }
-                      promotion={getEntrant(payload.most_eliminations)?.promotion}
-                      className="justify-end"
-                    />
-                  </div>
-                </div>
+              {sectionPoints.keyPicks !== null && (
+                <p className="mt-2 text-xs text-emerald-200">
+                  Points: {sectionPoints.keyPicks}
+                </p>
+              )}
+              <div className="mt-4 space-y-3 text-sm text-zinc-200">
+                {[
+                  ["Winner", payload.winner, actuals.winner, scoringRules.winner],
+                  ["Entry #1", payload.entry_1, actuals.entry1, scoringRules.entry_1],
+                  ["Entry #2", payload.entry_2, actuals.entry2, scoringRules.entry_2],
+                  ["Entry #30", payload.entry_30, actuals.entry30, scoringRules.entry_30],
+                  [
+                    "Most eliminations",
+                    payload.most_eliminations,
+                    null,
+                    scoringRules.most_eliminations,
+                  ],
+                ].map(([label, value, actual, points]) => {
+                  const entrant = value ? getEntrant(String(value)) : null;
+                  const isCorrect =
+                    actuals.hasData &&
+                    (label === "Most eliminations"
+                      ? value && actuals.topElims.has(String(value))
+                      : value && actual === value);
+                  return (
+                    <div
+                      key={label as string}
+                      className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
+                        !actuals.hasData
+                          ? "border-zinc-800"
+                          : isCorrect
+                            ? "border-emerald-400/60 bg-emerald-400/10"
+                            : "border-red-500/50 bg-red-500/10"
+                      }`}
+                    >
+                      <span className="text-zinc-400">{label}</span>
+                      <EntrantCard
+                        name={entrant?.name ?? "Not set"}
+                        promotion={entrant?.promotion}
+                        className="justify-end"
+                      />
+                      {actuals.hasData && (
+                        <span
+                          className={`ml-3 text-[10px] font-semibold uppercase tracking-wide ${
+                            isCorrect ? "text-emerald-200" : "text-red-200"
+                          }`}
+                        >
+                          {isCorrect ? `+${points} pts` : "0 pts"}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </section>
         ) : (
