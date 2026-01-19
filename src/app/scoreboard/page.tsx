@@ -21,6 +21,7 @@ type EventRow = {
 
 type RumbleEntryRow = {
   entrant_id: string;
+  entry_number: number | null;
   eliminated_at: string | null;
 };
 
@@ -88,6 +89,12 @@ export default function ScoreboardPage() {
     return new Map(eventEntrants.map((entrant) => [entrant.id, entrant]));
   }, [eventEntrants]);
 
+  const entryNumberMap = useMemo(() => {
+    return new Map(
+      rumbleEntries.map((entry) => [entry.entrant_id, entry.entry_number])
+    );
+  }, [rumbleEntries]);
+
   const remainingEntrants = useMemo(() => {
     const remainingIds = new Set(
       rumbleEntries
@@ -96,6 +103,14 @@ export default function ScoreboardPage() {
     );
     return eventEntrants.filter((entrant) => remainingIds.has(entrant.id));
   }, [eventEntrants, rumbleEntries]);
+
+  const eliminatedEntrantIds = useMemo(() => {
+    return new Set(
+      rumbleEntries
+        .filter((entry) => entry.eliminated_at)
+        .map((entry) => entry.entrant_id)
+    );
+  }, [rumbleEntries]);
 
   const loadScores = async () => {
     setMessage(null);
@@ -186,7 +201,7 @@ export default function ScoreboardPage() {
     const loadRumbleEntries = async () => {
       const { data: entryRows, error } = await supabase
         .from("rumble_entries")
-        .select("entrant_id, eliminated_at")
+        .select("entrant_id, entry_number, eliminated_at")
         .eq("event_id", selectedEventId);
       if (error) {
         setMessage(error.message);
@@ -246,12 +261,41 @@ export default function ScoreboardPage() {
                 <p className="mt-3 text-zinc-400">No entrants added yet.</p>
               ) : (
                 <ul className="mt-3 max-h-28 space-y-2 overflow-y-auto pr-1 text-zinc-300">
-                  {eventEntrants.map((entrant) => (
-                    <li key={entrant.id}>
-                      {entrant.name}
-                      {entrant.promotion ? ` • ${entrant.promotion}` : ""}
-                    </li>
-                  ))}
+                  {[...eventEntrants]
+                    .sort((a, b) => {
+                      const aNum = entryNumberMap.get(a.id);
+                      const bNum = entryNumberMap.get(b.id);
+                      if (aNum == null && bNum == null) return a.name.localeCompare(b.name);
+                      if (aNum == null) return 1;
+                      if (bNum == null) return -1;
+                      return aNum - bNum;
+                    })
+                    .map((entrant) => {
+                    const eliminated = eliminatedEntrantIds.has(entrant.id);
+                    return (
+                      <li
+                        key={entrant.id}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span
+                          className={
+                            eliminated ? "text-red-200" : "text-zinc-300"
+                          }
+                        >
+                          <span className="mr-2 text-[10px] font-semibold text-zinc-400">
+                            #{entryNumberMap.get(entrant.id) ?? "—"}
+                          </span>
+                          {entrant.name}
+                          {entrant.promotion ? ` • ${entrant.promotion}` : ""}
+                        </span>
+                        {eliminated ? (
+                          <span className="rounded-full border border-red-500/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-200">
+                            Eliminated
+                          </span>
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
