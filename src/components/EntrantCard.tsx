@@ -20,6 +20,11 @@ export const EntrantCard = ({
         src={imageUrl || PLACEHOLDER_IMAGE}
         alt={name}
         loading="lazy"
+        onError={(event) => {
+          const target = event.currentTarget;
+          if (target.src.includes(PLACEHOLDER_IMAGE)) return;
+          target.src = PLACEHOLDER_IMAGE;
+        }}
       />
       <div className="min-w-0">
         <p className="truncate text-sm font-medium text-zinc-100">{name}</p>

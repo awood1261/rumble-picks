@@ -50,6 +50,7 @@ create table if not exists public.entrants (
   name text not null,
   promotion text,
   gender text,
+  image_url text,
   active boolean not null default true,
   notes text,
   created_at timestamptz not null default now()

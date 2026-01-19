@@ -18,6 +18,7 @@ type EntrantRow = {
   name: string;
   promotion: string | null;
   gender: string | null;
+  image_url: string | null;
 };
 
 type PicksPayload = {
@@ -270,7 +271,7 @@ export default function PicksPage() {
             .maybeSingle(),
           supabase
             .from("entrants")
-            .select("id, name, promotion, gender")
+            .select("id, name, promotion, gender, image_url")
             .order("name", { ascending: true }),
           supabase
             .from("rumble_entries")
@@ -459,7 +460,11 @@ export default function PicksPage() {
                       : "border-red-500/50 bg-red-500/10"
                 }`}
               >
-                <EntrantCard name={name} promotion={entrant?.promotion} />
+                <EntrantCard
+                  name={name}
+                  promotion={entrant?.promotion}
+                  imageUrl={entrant?.image_url}
+                />
                 {actuals.hasData && (
                   <p
                     className={`mt-2 text-[10px] font-semibold uppercase tracking-wide ${
@@ -685,11 +690,12 @@ export default function PicksPage() {
                       }`}
                     >
                       <span className="text-zinc-400">{label}</span>
-                      <EntrantCard
-                        name={entrant?.name ?? "Not set"}
-                        promotion={entrant?.promotion}
-                        className="justify-end"
-                      />
+                        <EntrantCard
+                          name={entrant?.name ?? "Not set"}
+                          promotion={entrant?.promotion}
+                          imageUrl={entrant?.image_url}
+                          className="justify-end"
+                        />
                       {actuals.hasData && (
                         <span
                           className={`ml-3 text-[10px] font-semibold uppercase tracking-wide ${
@@ -764,6 +770,7 @@ export default function PicksPage() {
                               <EntrantCard
                                 name={entrant.name}
                                 promotion={entrant.promotion}
+                                imageUrl={entrant.image_url}
                                 className="flex-1"
                               />
                             </label>
@@ -826,6 +833,7 @@ export default function PicksPage() {
                         <EntrantCard
                           name={entrant.name}
                           promotion={entrant.promotion}
+                          imageUrl={entrant.image_url}
                           className="flex-1"
                         />
                       </label>

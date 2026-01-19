@@ -20,6 +20,7 @@ type EntrantRow = {
   promotion: string | null;
   gender: string | null;
   active: boolean;
+  image_url: string | null;
 };
 
 type RumbleEntryRow = {
@@ -143,7 +144,7 @@ export default function AdminPage() {
             .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
-            .select("id, name, promotion, gender, active")
+            .select("id, name, promotion, gender, active, image_url")
             .order("name", { ascending: true }),
           supabase
             .from("rumble_entries")
@@ -688,6 +689,7 @@ export default function AdminPage() {
                         <EntrantCard
                           name={entrant?.name ?? "Unknown entrant"}
                           promotion={entrant?.promotion ?? "Unknown promotion"}
+                          imageUrl={entrant?.image_url}
                         />
                         {entry.eliminated_at ? (
                           <span className="rounded-full border border-red-500/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-red-200">

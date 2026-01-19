@@ -21,6 +21,7 @@ type EntrantRow = {
   id: string;
   name: string;
   promotion: string | null;
+  image_url: string | null;
 };
 
 type EventRow = {
@@ -171,7 +172,7 @@ export default function ScoreboardPicksPage() {
 
       const { data: entrantRows, error: entrantError } = await supabase
         .from("entrants")
-        .select("id, name, promotion")
+        .select("id, name, promotion, image_url")
         .in("id", uniqueIds);
 
       if (entrantError) {
@@ -220,6 +221,7 @@ export default function ScoreboardPicksPage() {
               <EntrantCard
                 name={entrant?.name ?? "Unknown"}
                 promotion={entrant?.promotion}
+                imageUrl={entrant?.image_url}
               />
               {actuals.hasData && (
                 <p
