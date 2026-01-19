@@ -262,6 +262,22 @@ export default function PicksPage() {
   const getName = (id: string | null) =>
     id ? entrantById.get(id)?.name ?? "Unknown" : "Not set";
 
+  const EditIcon = () => (
+    <svg
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
@@ -334,22 +350,29 @@ export default function PicksPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Entrants</h2>
                 <button
-                  className="text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
                   type="button"
                   onClick={() => setEditSection("entrants")}
                 >
+                  <EditIcon />
                   Edit
                 </button>
               </div>
               <p className="mt-2 text-sm text-zinc-400">
                 {payload.entrants.length} selected
               </p>
-              <ul className="mt-4 space-y-2 text-sm text-zinc-200">
-                {payload.entrants.map((id) => (
-                  <li key={id} className="rounded-xl border border-zinc-800 px-3 py-2">
-                    {getName(id)}
-                  </li>
-                ))}
+              <ul className="mt-4 max-h-64 space-y-2 overflow-y-auto pr-1 text-sm text-zinc-200">
+                {payload.entrants
+                  .map((id) => ({ id, name: getName(id) }))
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((entrant) => (
+                    <li
+                      key={entrant.id}
+                      className="rounded-xl border border-zinc-800 px-3 py-2"
+                    >
+                      {entrant.name}
+                    </li>
+                  ))}
               </ul>
             </div>
 
@@ -357,10 +380,11 @@ export default function PicksPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Final Four</h2>
                 <button
-                  className="text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
                   type="button"
                   onClick={() => setEditSection("final_four")}
                 >
+                  <EditIcon />
                   Edit
                 </button>
               </div>
@@ -380,10 +404,11 @@ export default function PicksPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Key Picks</h2>
                 <button
-                  className="text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
                   type="button"
                   onClick={() => setEditSection("key_picks")}
                 >
+                  <EditIcon />
                   Edit
                 </button>
               </div>
@@ -475,13 +500,13 @@ export default function PicksPage() {
                         Select exactly 4. You have picked {payload.final_four.length}.
                       </p>
                     </div>
-                    {hasSaved && (
-                      <button
-                        className="text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200"
-                        type="button"
-                        onClick={() => setEditSection(null)}
-                      >
-                        Cancel
+                  {hasSaved && (
+                    <button
+                      className="text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200"
+                      type="button"
+                      onClick={() => setEditSection(null)}
+                    >
+                      Cancel
                       </button>
                     )}
                   </div>
