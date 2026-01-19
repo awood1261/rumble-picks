@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 
 type ScoreRow = {
   id: string;
   user_id: string;
+  event_id: string | null;
   points: number;
   breakdown: Record<string, number> | null;
   updated_at: string;
@@ -43,7 +45,7 @@ export default function ScoreboardPage() {
     setMessage(null);
     const { data: scoreRows, error: scoreError } = await supabase
       .from("scores")
-      .select("id, user_id, points, breakdown, updated_at");
+      .select("id, user_id, event_id, points, breakdown, updated_at");
     if (scoreError) {
       setMessage(scoreError.message);
       setLoading(false);
@@ -117,34 +119,54 @@ export default function ScoreboardPage() {
             </p>
           ) : (
             <div className="divide-y divide-zinc-800">
-              {scoreboard.map((row, index) => (
-                <div
-                  key={row.id}
-                  className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="text-lg font-semibold text-amber-300">
-                      #{index + 1}
-                    </span>
-                    <div>
-                      <p className="text-base font-semibold">
-                        {row.display_name}
-                      </p>
-                      <p className="text-xs text-zinc-400">
-                        Updated{" "}
-                        {new Date(row.updated_at).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
+              {scoreboard.map((row, index) => {
+                const content = (
+                  <>
+                    <div className="flex items-center gap-4">
+                      <span className="text-lg font-semibold text-amber-300">
+                        #{index + 1}
+                      </span>
+                      <div>
+                        <p className="text-base font-semibold">
+                          {row.display_name}
+                        </p>
+                        <p className="text-xs text-zinc-400">
+                          Updated{" "}
+                          {new Date(row.updated_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-semibold">{row.points}</p>
-                    <p className="text-xs text-zinc-500">points</p>
-                  </div>
-                </div>
-              ))}
+                    <div className="text-right">
+                      <p className="text-2xl font-semibold">{row.points}</p>
+                      <p className="text-xs text-zinc-500">points</p>
+                    </div>
+                  </>
+                );
+
+                if (!row.event_id) {
+                  return (
+                    <div
+                      key={row.id}
+                      className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      {content}
+                    </div>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={row.id}
+                    className="flex flex-col gap-2 py-4 transition hover:text-amber-200 sm:flex-row sm:items-center sm:justify-between"
+                    href={`/scoreboard/${row.user_id}?event=${row.event_id}`}
+                  >
+                    {content}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </section>

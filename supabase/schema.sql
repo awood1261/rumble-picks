@@ -140,6 +140,11 @@ create policy "Profiles are viewable by owner or admin"
   for select
   using (auth.uid() = id or public.is_admin(auth.uid()));
 
+create policy "Profiles are viewable by authenticated users"
+  on public.profiles
+  for select
+  using (auth.role() = 'authenticated');
+
 create policy "Profiles are updateable by owner"
   on public.profiles
   for update
@@ -196,6 +201,11 @@ create policy "Picks are viewable by owner or admin"
   on public.picks
   for select
   using (auth.uid() = user_id or public.is_admin(auth.uid()));
+
+create policy "Picks are viewable by authenticated users"
+  on public.picks
+  for select
+  using (auth.role() = 'authenticated');
 
 create policy "Picks are insertable by owner"
   on public.picks
