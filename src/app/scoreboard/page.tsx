@@ -224,7 +224,7 @@ export default function ScoreboardPage() {
                     href={`/scoreboard/${row.user_id}?event=${row.event_id}`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      <span className="text-3xl font-semibold text-amber-300">
                         #{index + 1}
                       </span>
                       {index === 0 && (
