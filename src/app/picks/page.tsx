@@ -92,6 +92,17 @@ export default function PicksPage() {
     return entrantOptions.filter((entrant) => selected.has(entrant.id));
   }, [entrantOptions, payload.entrants]);
 
+  const entrantsByPromotion = useMemo(() => {
+    return entrantOptions.reduce((groups, entrant) => {
+      const key = entrant.promotion ?? "Other";
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(entrant);
+      return groups;
+    }, {} as Record<string, EntrantRow[]>);
+  }, [entrantOptions]);
+
   const sameArray = (a: string[], b: string[]) =>
     a.length === b.length && a.every((value, index) => value === b[index]);
 
@@ -497,24 +508,50 @@ export default function PicksPage() {
                     </button>
                   )}
                 </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {entrantOptions.map((entrant) => (
-                    <label
-                      key={entrant.id}
-                      className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={payload.entrants.includes(entrant.id)}
-                        onChange={() => toggleEntrant(entrant.id)}
-                      />
-                      <EntrantCard
-                        name={entrant.name}
-                        promotion={entrant.promotion}
-                        className="flex-1"
-                      />
-                    </label>
-                  ))}
+                <div className="mt-4 max-h-[520px] space-y-6 overflow-y-auto pr-1">
+                  {Object.entries(entrantsByPromotion)
+                    .sort(([a], [b]) => {
+                      const order = ["WWE", "TNA", "AAA"];
+                      const aIndex = order.indexOf(a);
+                      const bIndex = order.indexOf(b);
+                      if (aIndex !== -1 || bIndex !== -1) {
+                        return (
+                          (aIndex === -1 ? order.length : aIndex) -
+                          (bIndex === -1 ? order.length : bIndex)
+                        );
+                      }
+                      return a.localeCompare(b);
+                    })
+                    .map(([promotion, promotionEntrants]) => (
+                      <div key={promotion}>
+                        <div className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">
+                          {promotion}
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {promotionEntrants.map((entrant) => (
+                            <label
+                              key={entrant.id}
+                              className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition ${
+                                payload.entrants.includes(entrant.id)
+                                  ? "border-amber-400 bg-amber-400/10"
+                                  : "border-zinc-800 bg-zinc-950/70"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={payload.entrants.includes(entrant.id)}
+                                onChange={() => toggleEntrant(entrant.id)}
+                              />
+                              <EntrantCard
+                                name={entrant.name}
+                                promotion={entrant.promotion}
+                                className="flex-1"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                 </div>
                 {hasSaved && (
                   <div className="mt-6">
@@ -553,10 +590,14 @@ export default function PicksPage() {
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {selectedEntrantOptions.map((entrant) => (
-                      <label
-                        key={entrant.id}
-                        className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm"
-                      >
+                    <label
+                      key={entrant.id}
+                      className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition ${
+                        payload.final_four.includes(entrant.id)
+                          ? "border-amber-400 bg-amber-400/10"
+                          : "border-zinc-800 bg-zinc-950/70"
+                      }`}
+                    >
                         <input
                           type="checkbox"
                           checked={payload.final_four.includes(entrant.id)}
