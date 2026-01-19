@@ -646,13 +646,15 @@ export default function PicksPage() {
                     )}
                   </div>
                   <div className="mt-4 space-y-4">
-                    {[
-                      { label: "Winner", key: "winner" },
-                      { label: "Entry #1", key: "entry_1" },
-                      { label: "Entry #2", key: "entry_2" },
-                      { label: "Entry #30", key: "entry_30" },
-                      { label: "Most eliminations", key: "most_eliminations" },
-                    ].map((field) => (
+                    {(
+                      [
+                        { label: "Winner", key: "winner" },
+                        { label: "Entry #1", key: "entry_1" },
+                        { label: "Entry #2", key: "entry_2" },
+                        { label: "Entry #30", key: "entry_30" },
+                        { label: "Most eliminations", key: "most_eliminations" },
+                      ] as const
+                    ).map((field) => (
                       <label
                         key={field.key}
                         className="flex flex-col text-sm text-zinc-300"
@@ -660,9 +662,7 @@ export default function PicksPage() {
                         {field.label}
                         <select
                           className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                          value={(payload as Record<string, string | null>)[
-                            field.key
-                          ] ?? ""}
+                          value={payload[field.key] ?? ""}
                           onChange={(event) =>
                             setPayload((prev) => ({
                               ...prev,
