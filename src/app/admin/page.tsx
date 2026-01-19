@@ -266,6 +266,7 @@ export default function AdminPage() {
       setMessage(error.message);
       return;
     }
+    await handleRecalculateScores({ silent: true });
     setMessage("Entry updated.");
     refreshData();
   };
@@ -334,18 +335,23 @@ export default function AdminPage() {
       }
     }
 
+    await handleRecalculateScores({ silent: true });
     setEliminateEntryId("");
     setEliminatedById("");
     refreshData();
   };
 
-  const handleRecalculateScores = async () => {
+  const handleRecalculateScores = async (
+    options?: { silent?: boolean }
+  ) => {
     if (!activeEvent) {
       setMessage("Create an event before recalculating scores.");
       return;
     }
     setRecalcBusy(true);
-    setMessage(null);
+    if (!options?.silent) {
+      setMessage(null);
+    }
 
     const [{ data: pickRows, error: pickError }, { data: entryRows, error: entryError }] =
       await Promise.all([
@@ -401,7 +407,9 @@ export default function AdminPage() {
       return;
     }
 
-    setMessage("Scores recalculated.");
+    if (!options?.silent) {
+      setMessage("Scores recalculated.");
+    }
     setRecalcBusy(false);
   };
 
