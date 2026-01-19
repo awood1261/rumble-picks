@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 
 type ScoreRow = {
@@ -26,10 +27,13 @@ type ProfileRow = {
 type ScoreboardRow = ScoreRow & { display_name: string };
 
 export default function ScoreboardPage() {
+  const searchParams = useSearchParams();
+  const queryEventId = searchParams.get("event");
   const [scores, setScores] = useState<ScoreRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -52,6 +56,15 @@ export default function ScoreboardPage() {
     if (!selectedEventId) return scoreboard;
     return scoreboard.filter((row) => row.event_id === selectedEventId);
   }, [scoreboard, selectedEventId]);
+
+  const topThree = useMemo(() => filteredScoreboard.slice(0, 3), [filteredScoreboard]);
+  const currentUserIndex = useMemo(() => {
+    if (!currentUserId) return null;
+    const idx = filteredScoreboard.findIndex(
+      (row) => row.user_id === currentUserId
+    );
+    return idx >= 0 ? idx : null;
+  }, [currentUserId, filteredScoreboard]);
 
   const loadScores = async () => {
     setMessage(null);
@@ -85,6 +98,16 @@ export default function ScoreboardPage() {
   };
 
   useEffect(() => {
+    if (queryEventId && events.some((event) => event.id === queryEventId)) {
+      setSelectedEventId(queryEventId);
+    }
+  }, [queryEventId, events]);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentUserId(data.session?.user.id ?? null);
+    });
+
     const loadEvents = async () => {
       const { data: eventRows, error } = await supabase
         .from("events")
@@ -95,8 +118,12 @@ export default function ScoreboardPage() {
         return;
       }
       setEvents(eventRows ?? []);
-      if (!selectedEventId && eventRows && eventRows.length > 0) {
-        setSelectedEventId(eventRows[0].id);
+      if (eventRows && eventRows.length > 0) {
+        const defaultId =
+          queryEventId && eventRows.some((event) => event.id === queryEventId)
+            ? queryEventId
+            : eventRows[0].id;
+        setSelectedEventId((current) => current || defaultId);
       }
     };
 
@@ -146,7 +173,13 @@ export default function ScoreboardPage() {
                 <select
                   className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                   value={selectedEventId}
-                  onChange={(event) => setSelectedEventId(event.target.value)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setSelectedEventId(value);
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("event", value);
+                    window.history.replaceState({}, "", url.toString());
+                  }}
                 >
                   {events.map((event) => (
                     <option key={event.id} value={event.id}>
@@ -155,6 +188,11 @@ export default function ScoreboardPage() {
                   ))}
                 </select>
               </label>
+            </div>
+          )}
+          {currentUserIndex !== null && (
+            <div className="mb-6 rounded-2xl border border-sky-400/40 bg-sky-400/5 px-4 py-3 text-sm text-sky-100">
+              You are currently <span className="font-semibold">#{currentUserIndex + 1}</span> in this event.
             </div>
           )}
           {loading ? (
@@ -173,30 +211,62 @@ export default function ScoreboardPage() {
               </Link>
             </div>
           ) : (
-            <div className="divide-y divide-zinc-800">
-              {filteredScoreboard.map((row, index) => {
-                const content = (
-                  <>
-                    <div className="flex items-center gap-4">
-                      <span
-                        className={
-                          index === 0
-                            ? "text-2xl font-semibold text-amber-300"
-                            : "text-lg font-semibold text-amber-300"
-                        }
-                      >
+            <>
+              <div className="mb-6 grid gap-4 md:grid-cols-3">
+                {topThree.map((row, index) => (
+                  <Link
+                    key={row.id}
+                    className={`rounded-2xl border px-4 py-4 transition hover:text-amber-200 ${
+                      index === 0
+                        ? "border-amber-400/60 bg-amber-400/10"
+                        : "border-zinc-800 bg-zinc-950/50"
+                    }`}
+                    href={`/scoreboard/${row.user_id}?event=${row.event_id}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                         #{index + 1}
                       </span>
-                      <div>
-                        <p
-                          className={
-                            index === 0
-                              ? "text-lg font-semibold"
-                              : "text-base font-semibold"
-                          }
-                        >
-                          {row.display_name}
-                        </p>
+                      {index === 0 && (
+                        <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200">
+                          <svg
+                            className="h-4 w-4"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <rect x="2" y="8" width="20" height="8" rx="3" />
+                            <rect x="9" y="6" width="6" height="12" rx="2" />
+                            <circle cx="12" cy="12" r="2.5" />
+                          </svg>
+                          Champion
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-3 text-lg font-semibold">{row.display_name}</p>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      {row.points} points
+                    </p>
+                  </Link>
+                ))}
+              </div>
+
+              <div className="divide-y divide-zinc-800">
+                {filteredScoreboard.slice(3).map((row, index) => {
+                  const content = (
+                    <>
+                      <div className="flex items-center gap-4">
+                        <span className="text-lg font-semibold text-amber-300">
+                          #{index + 4}
+                        </span>
+                        <div>
+                          <p className="text-base font-semibold">
+                            {row.display_name}
+                          </p>
                         <p className="text-xs text-zinc-400">
                           Updated{" "}
                           {new Date(row.updated_at).toLocaleTimeString([], {
@@ -204,6 +274,11 @@ export default function ScoreboardPage() {
                             minute: "2-digit",
                           })}
                         </p>
+                        {currentUserId === row.user_id && (
+                          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                            You
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
@@ -215,10 +290,6 @@ export default function ScoreboardPage() {
 
                 const rowClassName = `flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between ${
                   index % 2 === 0 ? "bg-zinc-950/40" : "bg-zinc-900/30"
-                } ${
-                  index === 0
-                    ? "-mx-6 px-6 bg-amber-400/10 border border-amber-400/60 shadow-[0_0_24px_rgba(251,191,36,0.18)]"
-                    : ""
                 }`;
 
                 if (!row.event_id) {
@@ -242,7 +313,8 @@ export default function ScoreboardPage() {
                   </Link>
                 );
               })}
-            </div>
+              </div>
+            </>
           )}
         </section>
       </main>
