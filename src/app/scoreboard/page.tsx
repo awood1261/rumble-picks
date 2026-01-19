@@ -239,11 +239,35 @@ export default function ScoreboardPage() {
           <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
             Live Scoreboard
           </p>
-          <h1 className="text-3xl font-semibold">Rumble Picks Leaderboard</h1>
+          <h1 className="text-3xl font-semibold">Scoreboard</h1>
           <p className="text-sm text-zinc-400">
             Scores update as eliminations and results are recorded.
           </p>
         </header>
+        {events.length > 1 && (
+          <div className="mt-6">
+            <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+              Event
+              <select
+                className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                value={selectedEventId}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSelectedEventId(value);
+                  const url = new URL(window.location.href);
+                  url.searchParams.set("event", value);
+                  window.history.replaceState({}, "", url.toString());
+                }}
+              >
+                {events.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
 
         {message && (
           <div className="mt-6 rounded-2xl border border-zinc-800 bg-black/50 px-4 py-3 text-sm text-zinc-200">
@@ -319,30 +343,6 @@ export default function ScoreboardPage() {
               )}
             </div>
           </div>
-          {events.length > 1 && (
-            <div className="mb-6">
-              <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                Event
-                <select
-                  className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  value={selectedEventId}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setSelectedEventId(value);
-                    const url = new URL(window.location.href);
-                    url.searchParams.set("event", value);
-                    window.history.replaceState({}, "", url.toString());
-                  }}
-                >
-                  {events.map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {event.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
           {currentUserIndex !== null && (
             <div className="mb-6 rounded-2xl border border-sky-400/40 bg-sky-400/5 px-4 py-3 text-sm text-sky-100">
               You are currently <span className="font-semibold">#{currentUserIndex + 1}</span> in this event.
@@ -428,7 +428,7 @@ export default function ScoreboardPage() {
                           })}
                         </p>
                         {currentUserId === row.user_id && (
-                          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-sky-200">
                             You
                           </p>
                         )}
@@ -443,6 +443,10 @@ export default function ScoreboardPage() {
 
                 const rowClassName = `flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between ${
                   index % 2 === 0 ? "bg-zinc-950/40" : "bg-zinc-900/30"
+                } ${
+                  currentUserId === row.user_id
+                    ? "border border-sky-400/50 bg-sky-400/5"
+                    : ""
                 }`;
 
                 if (!row.event_id) {
