@@ -40,6 +40,7 @@ create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   starts_at timestamptz,
+  rumble_gender text,
   status text not null default 'draft',
   created_at timestamptz not null default now()
 );
@@ -48,6 +49,7 @@ create table if not exists public.entrants (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   promotion text,
+  gender text,
   active boolean not null default true,
   notes text,
   created_at timestamptz not null default now()
@@ -95,6 +97,14 @@ create table if not exists public.scores (
   updated_at timestamptz not null default now(),
   unique (user_id, event_id)
 );
+
+alter table public.entrants
+  add constraint if not exists entrants_gender_check
+  check (gender is null or gender in ('men', 'women'));
+
+alter table public.events
+  add constraint if not exists events_rumble_gender_check
+  check (rumble_gender is null or rumble_gender in ('men', 'women'));
 
 create or replace function public.set_updated_at()
 returns trigger

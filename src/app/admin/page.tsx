@@ -11,12 +11,14 @@ type EventRow = {
   name: string;
   status: string;
   starts_at: string | null;
+  rumble_gender: string | null;
 };
 
 type EntrantRow = {
   id: string;
   name: string;
   promotion: string | null;
+  gender: string | null;
   active: boolean;
 };
 
@@ -46,8 +48,7 @@ export default function AdminPage() {
   const [entries, setEntries] = useState<RumbleEntryRow[]>([]);
 
   const [eventName, setEventName] = useState("");
-  const [entrantName, setEntrantName] = useState("");
-  const [entrantPromotion, setEntrantPromotion] = useState("");
+  const [eventGender, setEventGender] = useState("men");
   const [entryEntrantId, setEntryEntrantId] = useState("");
   const [entryNumber, setEntryNumber] = useState("");
   const [eliminateEntryId, setEliminateEntryId] = useState("");
@@ -77,16 +78,36 @@ export default function AdminPage() {
       a.name.localeCompare(b.name)
     );
   }, [entrants]);
+  const filteredEntrantOptions = useMemo(() => {
+    const gender = activeEvent?.rumble_gender;
+    if (!gender) return entrantOptions;
+    return entrantOptions.filter((entrant) => entrant.gender === gender);
+  }, [activeEvent?.rumble_gender, entrantOptions]);
   const eventEntrantOptions = useMemo(() => {
     const eventEntrantIds = new Set(entries.map((entry) => entry.entrant_id));
-    return entrantOptions.filter((entrant) => eventEntrantIds.has(entrant.id));
-  }, [entries, entrantOptions]);
+    return filteredEntrantOptions.filter((entrant) =>
+      eventEntrantIds.has(entrant.id)
+    );
+  }, [entries, filteredEntrantOptions]);
+  const eventEntrantIdSet = useMemo(() => {
+    return new Set(entries.map((entry) => entry.entrant_id));
+  }, [entries]);
+  const entrantsByPromotion = useMemo(() => {
+    return filteredEntrantOptions.reduce((groups, entrant) => {
+      const key = entrant.promotion ?? "Other";
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(entrant);
+      return groups;
+    }, {} as Record<string, EntrantRow[]>);
+  }, [filteredEntrantOptions]);
 
   const refreshData = async () => {
     if (!activeEvent) {
       const { data: eventRows } = await supabase
         .from("events")
-        .select("id, name, status, starts_at")
+        .select("id, name, status, starts_at, rumble_gender")
         .order("created_at", { ascending: false });
       setEvents(eventRows ?? []);
     } else {
@@ -94,11 +115,11 @@ export default function AdminPage() {
         await Promise.all([
           supabase
             .from("events")
-            .select("id, name, status, starts_at")
+            .select("id, name, status, starts_at, rumble_gender")
             .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
-            .select("id, name, promotion, active")
+            .select("id, name, promotion, gender, active")
             .order("name", { ascending: true }),
           supabase
             .from("rumble_entries")
@@ -165,7 +186,11 @@ export default function AdminPage() {
     }
     const { error } = await supabase
       .from("events")
-      .insert({ name: eventName.trim(), status: "draft" });
+      .insert({
+        name: eventName.trim(),
+        status: "draft",
+        rumble_gender: eventGender,
+      });
     if (error) {
       setMessage(error.message);
       return;
@@ -189,26 +214,6 @@ export default function AdminPage() {
       return;
     }
     setMessage("Entry updated.");
-    refreshData();
-  };
-
-  const handleCreateEntrant = async () => {
-    setMessage(null);
-    if (!entrantName.trim()) {
-      setMessage("Entrant name is required.");
-      return;
-    }
-    const { error } = await supabase.from("entrants").insert({
-      name: entrantName.trim(),
-      promotion: entrantPromotion.trim() || null,
-      active: true,
-    });
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-    setEntrantName("");
-    setEntrantPromotion("");
     refreshData();
   };
 
@@ -384,12 +389,12 @@ export default function AdminPage() {
           </div>
         )}
 
-        <section className="mt-10 grid gap-6 lg:grid-cols-3">
+        <section className="mt-10 grid gap-6 lg:grid-cols-2">
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <h2 className="text-lg font-semibold">Event</h2>
             <p className="mt-2 text-sm text-zinc-400">
               {activeEvent
-                ? `Active: ${activeEvent.name}`
+                ? `Active: ${activeEvent.name} (${activeEvent.rumble_gender ?? "unspecified"})`
                 : "No event yet."}
             </p>
             <div className="mt-4 space-y-3">
@@ -399,6 +404,14 @@ export default function AdminPage() {
                 value={eventName}
                 onChange={(event) => setEventName(event.target.value)}
               />
+              <select
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                value={eventGender}
+                onChange={(event) => setEventGender(event.target.value)}
+              >
+                <option value="men">Men's Rumble</option>
+                <option value="women">Women's Rumble</option>
+              </select>
               <button
                 className="inline-flex h-11 w-full items-center justify-center rounded-full bg-amber-400 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
                 type="button"
@@ -410,37 +423,11 @@ export default function AdminPage() {
           </div>
 
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <h2 className="text-lg font-semibold">Entrant</h2>
-            <p className="mt-2 text-sm text-zinc-400">
-              {entrants.length} total entrants
-            </p>
-            <div className="mt-4 space-y-3">
-              <input
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                placeholder="Entrant name"
-                value={entrantName}
-                onChange={(event) => setEntrantName(event.target.value)}
-              />
-              <input
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                placeholder="Promotion (optional)"
-                value={entrantPromotion}
-                onChange={(event) => setEntrantPromotion(event.target.value)}
-              />
-              <button
-                className="inline-flex h-11 w-full items-center justify-center rounded-full border border-amber-400 text-sm font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-200 hover:text-amber-100"
-                type="button"
-                onClick={handleCreateEntrant}
-              >
-                Add entrant
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <h2 className="text-lg font-semibold">Rumble Entry</h2>
             <p className="mt-2 text-sm text-zinc-400">
-              {entries.length} entries tracked
+              {entries.length} entries tracked •{" "}
+              {filteredEntrantOptions.length} eligible{" "}
+              {activeEvent?.rumble_gender ? `(${activeEvent.rumble_gender})` : ""}
             </p>
             <div className="mt-4 space-y-3">
               <select
@@ -449,11 +436,30 @@ export default function AdminPage() {
                 onChange={(event) => setEntryEntrantId(event.target.value)}
               >
                 <option value="">Select entrant</option>
-                {entrantOptions.map((entrant) => (
-                  <option key={entrant.id} value={entrant.id}>
-                    {entrant.name}
-                  </option>
-                ))}
+                {Object.entries(entrantsByPromotion)
+                  .sort(([a], [b]) => {
+                    const order = ["WWE", "TNA", "AAA"];
+                    const aIndex = order.indexOf(a);
+                    const bIndex = order.indexOf(b);
+                    if (aIndex !== -1 || bIndex !== -1) {
+                      return (
+                        (aIndex === -1 ? order.length : aIndex) -
+                        (bIndex === -1 ? order.length : bIndex)
+                      );
+                    }
+                    return a.localeCompare(b);
+                  })
+                  .map(([promotion, promotionEntrants]) => (
+                    <optgroup key={promotion} label={promotion}>
+                      {promotionEntrants.map((entrant) => (
+                        <option key={entrant.id} value={entrant.id}>
+                          {eventEntrantIdSet.has(entrant.id)
+                            ? `✓ ${entrant.name} — ADDED`
+                            : entrant.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
               </select>
               <input
                 className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
@@ -522,7 +528,7 @@ export default function AdminPage() {
           <p className="mt-2 text-sm text-zinc-400">
             Edit entry numbers, eliminations, or the credited eliminator.
           </p>
-          <div className="mt-6 space-y-4">
+          <div className="mt-6 max-h-[420px] space-y-4 overflow-y-auto pr-1">
             {entries.length === 0 ? (
               <p className="text-sm text-zinc-400">No entries yet.</p>
             ) : (

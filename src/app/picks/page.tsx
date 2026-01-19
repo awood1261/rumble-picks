@@ -9,12 +9,14 @@ type EventRow = {
   name: string;
   starts_at: string | null;
   status: string;
+  rumble_gender: string | null;
 };
 
 type EntrantRow = {
   id: string;
   name: string;
   promotion: string | null;
+  gender: string | null;
 };
 
 type PicksPayload = {
@@ -53,9 +55,17 @@ export default function PicksPage() {
     "entrants" | "final_four" | "key_picks" | null
   >(null);
 
+  const selectedEvent = useMemo(
+    () => events.find((event) => event.id === selectedEventId) ?? null,
+    [events, selectedEventId]
+  );
+
   const entrantOptions = useMemo(() => {
+    const gender = selectedEvent?.rumble_gender;
     const byName = new Map<string, EntrantRow>();
-    entrants.forEach((entrant) => {
+    entrants
+      .filter((entrant) => !gender || entrant.gender === gender)
+      .forEach((entrant) => {
       const nameKey = entrant.name.trim().toLowerCase();
       const current = byName.get(nameKey);
       if (!current) {
@@ -71,7 +81,7 @@ export default function PicksPage() {
     return Array.from(byName.values()).sort((a, b) =>
       a.name.localeCompare(b.name)
     );
-  }, [entrants]);
+  }, [entrants, selectedEvent?.rumble_gender]);
 
   const entrantById = useMemo(() => {
     return new Map(entrantOptions.map((entrant) => [entrant.id, entrant]));
@@ -114,7 +124,7 @@ export default function PicksPage() {
     if (!sessionEmail) return;
     supabase
       .from("events")
-      .select("id, name, starts_at, status")
+      .select("id, name, starts_at, status, rumble_gender")
       .order("starts_at", { ascending: true })
       .then(({ data, error }) => {
         if (error) {
@@ -146,7 +156,7 @@ export default function PicksPage() {
             .maybeSingle(),
           supabase
             .from("entrants")
-            .select("id, name, promotion")
+            .select("id, name, promotion, gender")
             .order("name", { ascending: true }),
         ]);
 
