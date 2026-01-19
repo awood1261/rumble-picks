@@ -13,6 +13,11 @@ type ScoreRow = {
   updated_at: string;
 };
 
+type EventRow = {
+  id: string;
+  name: string;
+};
+
 type ProfileRow = {
   id: string;
   display_name: string | null;
@@ -23,6 +28,8 @@ type ScoreboardRow = ScoreRow & { display_name: string };
 export default function ScoreboardPage() {
   const [scores, setScores] = useState<ScoreRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -51,8 +58,12 @@ export default function ScoreboardPage() {
       setLoading(false);
       return;
     }
+    const filteredScores = selectedEventId
+      ? (scoreRows ?? []).filter((row) => row.event_id === selectedEventId)
+      : scoreRows ?? [];
+
     const userIds = Array.from(
-      new Set((scoreRows ?? []).map((row) => row.user_id))
+      new Set(filteredScores.map((row) => row.user_id))
     );
     if (userIds.length === 0) {
       setScores(scoreRows ?? []);
@@ -67,12 +78,28 @@ export default function ScoreboardPage() {
     if (profileError) {
       setMessage(profileError.message);
     }
-    setScores(scoreRows ?? []);
+    setScores(filteredScores);
     setProfiles(profileRows ?? []);
     setLoading(false);
   };
 
   useEffect(() => {
+    const loadEvents = async () => {
+      const { data: eventRows, error } = await supabase
+        .from("events")
+        .select("id, name")
+        .order("starts_at", { ascending: true });
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+      setEvents(eventRows ?? []);
+      if (!selectedEventId && eventRows && eventRows.length > 0) {
+        setSelectedEventId(eventRows[0].id);
+      }
+    };
+
+    loadEvents();
     loadScores();
 
     const channel = supabase
@@ -89,7 +116,7 @@ export default function ScoreboardPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [selectedEventId]);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -111,6 +138,24 @@ export default function ScoreboardPage() {
         )}
 
         <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          {events.length > 1 && (
+            <div className="mb-6">
+              <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                Event
+                <select
+                  className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  value={selectedEventId}
+                  onChange={(event) => setSelectedEventId(event.target.value)}
+                >
+                  {events.map((event) => (
+                    <option key={event.id} value={event.id}>
+                      {event.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
           {loading ? (
             <p className="text-sm text-zinc-400">Loading scoreboard…</p>
           ) : scoreboard.length === 0 ? (
@@ -123,11 +168,23 @@ export default function ScoreboardPage() {
                 const content = (
                   <>
                     <div className="flex items-center gap-4">
-                      <span className="text-lg font-semibold text-amber-300">
+                      <span
+                        className={
+                          index === 0
+                            ? "text-2xl font-semibold text-amber-300"
+                            : "text-lg font-semibold text-amber-300"
+                        }
+                      >
                         #{index + 1}
                       </span>
                       <div>
-                        <p className="text-base font-semibold">
+                        <p
+                          className={
+                            index === 0
+                              ? "text-lg font-semibold"
+                              : "text-base font-semibold"
+                          }
+                        >
                           {row.display_name}
                         </p>
                         <p className="text-xs text-zinc-400">
@@ -146,11 +203,19 @@ export default function ScoreboardPage() {
                   </>
                 );
 
+                const rowClassName = `flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between ${
+                  index % 2 === 0 ? "bg-zinc-950/40" : "bg-zinc-900/30"
+                } ${
+                  index === 0
+                    ? "-mx-6 px-6 bg-amber-400/10 border border-amber-400/60 shadow-[0_0_24px_rgba(251,191,36,0.18)]"
+                    : ""
+                }`;
+
                 if (!row.event_id) {
                   return (
                     <div
                       key={row.id}
-                      className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"
+                      className={rowClassName}
                     >
                       {content}
                     </div>
@@ -160,7 +225,7 @@ export default function ScoreboardPage() {
                 return (
                   <Link
                     key={row.id}
-                    className="flex flex-col gap-2 py-4 transition hover:text-amber-200 sm:flex-row sm:items-center sm:justify-between"
+                    className={`${rowClassName} transition hover:text-amber-200`}
                     href={`/scoreboard/${row.user_id}?event=${row.event_id}`}
                   >
                     {content}

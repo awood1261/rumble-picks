@@ -49,13 +49,19 @@ export default function AdminPage() {
 
   const [eventName, setEventName] = useState("");
   const [eventGender, setEventGender] = useState("men");
+  const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [entryEntrantId, setEntryEntrantId] = useState("");
   const [entryNumber, setEntryNumber] = useState("");
   const [eliminateEntryId, setEliminateEntryId] = useState("");
   const [eliminatedById, setEliminatedById] = useState("");
   const [recalcBusy, setRecalcBusy] = useState(false);
 
-  const activeEvent = useMemo(() => events[0] ?? null, [events]);
+  const activeEvent = useMemo(() => {
+    if (selectedEventId) {
+      return events.find((event) => event.id === selectedEventId) ?? null;
+    }
+    return events[0] ?? null;
+  }, [events, selectedEventId]);
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
@@ -110,6 +116,9 @@ export default function AdminPage() {
         .select("id, name, status, starts_at, rumble_gender")
         .order("created_at", { ascending: false });
       setEvents(eventRows ?? []);
+      if (!selectedEventId && eventRows && eventRows.length > 0) {
+        setSelectedEventId(eventRows[0].id);
+      }
     } else {
       const [{ data: eventRows }, { data: entrantRows }, { data: entryRows }] =
         await Promise.all([
@@ -130,6 +139,9 @@ export default function AdminPage() {
             .order("entry_number", { ascending: true }),
         ]);
       setEvents(eventRows ?? []);
+      if (!selectedEventId && eventRows && eventRows.length > 0) {
+        setSelectedEventId(eventRows[0].id);
+      }
       setEntrants(entrantRows ?? []);
       setEntries(entryRows ?? []);
     }
@@ -176,7 +188,7 @@ export default function AdminPage() {
     if (isAdmin) {
       refreshData();
     }
-  }, [isAdmin, activeEvent?.id]);
+  }, [isAdmin, activeEvent?.id, selectedEventId]);
 
   const handleCreateEvent = async () => {
     setMessage(null);
@@ -196,6 +208,7 @@ export default function AdminPage() {
       return;
     }
     setEventName("");
+    setEventGender("men");
     refreshData();
   };
 
@@ -415,6 +428,24 @@ export default function AdminPage() {
                 ? `Active: ${activeEvent.name} (${activeEvent.rumble_gender ?? "unspecified"})`
                 : "No event yet."}
             </p>
+            {events.length > 1 && (
+              <div className="mt-4">
+                <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                  Select event
+                  <select
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    value={selectedEventId}
+                    onChange={(event) => setSelectedEventId(event.target.value)}
+                  >
+                    {events.map((event) => (
+                      <option key={event.id} value={event.id}>
+                        {event.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
             <div className="mt-4 space-y-3">
               <input
                 className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
