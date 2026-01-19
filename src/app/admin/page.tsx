@@ -12,6 +12,7 @@ type EventRow = {
   status: string;
   starts_at: string | null;
   rumble_gender: string | null;
+  roster_year: number | null;
 };
 
 type EntrantRow = {
@@ -21,6 +22,7 @@ type EntrantRow = {
   gender: string | null;
   active: boolean;
   image_url: string | null;
+  roster_year: number | null;
 };
 
 type RumbleEntryRow = {
@@ -51,6 +53,7 @@ export default function AdminPage() {
   const [eventName, setEventName] = useState("");
   const [eventGender, setEventGender] = useState("men");
   const [eventStartsAt, setEventStartsAt] = useState("");
+  const [eventRosterYear, setEventRosterYear] = useState("");
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [entryEntrantId, setEntryEntrantId] = useState("");
@@ -77,7 +80,10 @@ export default function AdminPage() {
   }, [events, selectedEventId]);
   useEffect(() => {
     setEventStartsAt(formatLocalDateTime(activeEvent?.starts_at ?? null));
-  }, [activeEvent?.starts_at]);
+    setEventRosterYear(
+      activeEvent?.roster_year ? String(activeEvent.roster_year) : ""
+    );
+  }, [activeEvent?.starts_at, activeEvent?.roster_year]);
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
@@ -102,9 +108,13 @@ export default function AdminPage() {
   }, [entrants]);
   const filteredEntrantOptions = useMemo(() => {
     const gender = activeEvent?.rumble_gender;
-    if (!gender) return entrantOptions;
-    return entrantOptions.filter((entrant) => entrant.gender === gender);
-  }, [activeEvent?.rumble_gender, entrantOptions]);
+    const rosterYear = activeEvent?.roster_year;
+    return entrantOptions.filter((entrant) => {
+      const matchesGender = !gender || entrant.gender === gender;
+      const matchesYear = !rosterYear || entrant.roster_year === rosterYear;
+      return matchesGender && matchesYear;
+    });
+  }, [activeEvent?.rumble_gender, activeEvent?.roster_year, entrantOptions]);
   const eventEntrantOptions = useMemo(() => {
     const eventEntrantIds = new Set(entries.map((entry) => entry.entrant_id));
     return filteredEntrantOptions.filter((entrant) =>
@@ -129,7 +139,7 @@ export default function AdminPage() {
     if (!activeEvent) {
       const { data: eventRows } = await supabase
         .from("events")
-        .select("id, name, status, starts_at, rumble_gender")
+        .select("id, name, status, starts_at, rumble_gender, roster_year")
         .order("created_at", { ascending: false });
       setEvents(eventRows ?? []);
       if (!selectedEventId && eventRows && eventRows.length > 0) {
@@ -140,11 +150,11 @@ export default function AdminPage() {
         await Promise.all([
           supabase
             .from("events")
-            .select("id, name, status, starts_at, rumble_gender")
+            .select("id, name, status, starts_at, rumble_gender, roster_year")
             .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
-            .select("id, name, promotion, gender, active, image_url")
+            .select("id, name, promotion, gender, active, image_url, roster_year")
             .order("name", { ascending: true }),
           supabase
             .from("rumble_entries")
@@ -218,6 +228,7 @@ export default function AdminPage() {
         name: eventName.trim(),
         status: "draft",
         rumble_gender: eventGender,
+        roster_year: eventRosterYear ? Number(eventRosterYear) : null,
         starts_at: eventStartsAt ? new Date(eventStartsAt).toISOString() : null,
       });
     if (error) {
@@ -227,6 +238,7 @@ export default function AdminPage() {
     setEventName("");
     setEventStartsAt("");
     setEventGender("men");
+    setEventRosterYear("");
     refreshData();
   };
 
@@ -474,7 +486,7 @@ export default function AdminPage() {
             <h2 className="text-lg font-semibold">Event</h2>
             <p className="mt-2 text-sm text-zinc-400">
               {activeEvent
-                ? `Active: ${activeEvent.name} (${activeEvent.rumble_gender ?? "unspecified"})`
+                ? `Active: ${activeEvent.name} (${activeEvent.rumble_gender ?? "unspecified"}${activeEvent.roster_year ? `, ${activeEvent.roster_year}` : ""})`
                 : "No event yet."}
             </p>
             {events.length > 1 && (
@@ -523,6 +535,15 @@ export default function AdminPage() {
                 <option value="men">Men's Rumble</option>
                 <option value="women">Women's Rumble</option>
               </select>
+              <input
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                type="number"
+                min="1900"
+                max="2100"
+                placeholder="Roster year (e.g. 2020)"
+                value={eventRosterYear}
+                onChange={(event) => setEventRosterYear(event.target.value)}
+              />
               <button
                 className="inline-flex h-11 w-full items-center justify-center rounded-full bg-amber-400 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
                 type="button"

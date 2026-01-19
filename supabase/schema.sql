@@ -42,6 +42,7 @@ create table if not exists public.events (
   starts_at timestamptz,
   rumble_gender text,
   status text not null default 'draft',
+  roster_year integer,
   created_at timestamptz not null default now()
 );
 
@@ -51,6 +52,7 @@ create table if not exists public.entrants (
   promotion text,
   gender text,
   image_url text,
+  roster_year integer,
   active boolean not null default true,
   notes text,
   created_at timestamptz not null default now()

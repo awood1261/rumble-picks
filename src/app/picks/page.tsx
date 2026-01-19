@@ -11,6 +11,7 @@ type EventRow = {
   starts_at: string | null;
   status: string;
   rumble_gender: string | null;
+  roster_year: number | null;
 };
 
 type EntrantRow = {
@@ -19,6 +20,7 @@ type EntrantRow = {
   promotion: string | null;
   gender: string | null;
   image_url: string | null;
+  roster_year: number | null;
 };
 
 type PicksPayload = {
@@ -81,7 +83,13 @@ export default function PicksPage() {
     const gender = selectedEvent?.rumble_gender;
     const byName = new Map<string, EntrantRow>();
     entrants
-      .filter((entrant) => !gender || entrant.gender === gender)
+      .filter((entrant) => {
+        const matchesGender = !gender || entrant.gender === gender;
+        const matchesYear =
+          !selectedEvent?.roster_year ||
+          entrant.roster_year === selectedEvent.roster_year;
+        return matchesGender && matchesYear;
+      })
       .forEach((entrant) => {
       const nameKey = entrant.name.trim().toLowerCase();
       const current = byName.get(nameKey);
@@ -236,7 +244,7 @@ export default function PicksPage() {
     if (!sessionEmail) return;
     supabase
       .from("events")
-      .select("id, name, starts_at, status, rumble_gender")
+      .select("id, name, starts_at, status, rumble_gender, roster_year")
       .order("starts_at", { ascending: true })
       .then(({ data, error }) => {
         if (error) {
@@ -271,7 +279,7 @@ export default function PicksPage() {
             .maybeSingle(),
           supabase
             .from("entrants")
-            .select("id, name, promotion, gender, image_url")
+            .select("id, name, promotion, gender, image_url, roster_year")
             .order("name", { ascending: true }),
           supabase
             .from("rumble_entries")
