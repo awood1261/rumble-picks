@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "../../../lib/supabaseClient";
 import { EntrantCard } from "../../../components/EntrantCard";
 import { scoringRules } from "../../../lib/scoringRules";
@@ -273,6 +274,12 @@ export default function ScoreboardPicksPage() {
           <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
             Picks
           </p>
+          <Link
+            className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200 hover:text-amber-100"
+            href={validEventId ? `/scoreboard?event=${validEventId}` : "/scoreboard"}
+          >
+            ← Back to scoreboard
+          </Link>
           <h1 className="text-3xl font-semibold">
             {profile?.display_name ?? "Rumble Fan"}
           </h1>

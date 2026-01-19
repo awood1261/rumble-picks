@@ -19,6 +19,17 @@ type EventRow = {
   name: string;
 };
 
+type RumbleEntryRow = {
+  entrant_id: string;
+  eliminated_at: string | null;
+};
+
+type EventEntrantRow = {
+  id: string;
+  name: string;
+  promotion: string | null;
+};
+
 type ProfileRow = {
   id: string;
   display_name: string | null;
@@ -34,6 +45,8 @@ export default function ScoreboardPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [rumbleEntries, setRumbleEntries] = useState<RumbleEntryRow[]>([]);
+  const [eventEntrants, setEventEntrants] = useState<EventEntrantRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -65,6 +78,24 @@ export default function ScoreboardPage() {
     );
     return idx >= 0 ? idx : null;
   }, [currentUserId, filteredScoreboard]);
+
+  const winnerEntrantId = useMemo(() => {
+    const remaining = rumbleEntries.filter((entry) => !entry.eliminated_at);
+    return remaining.length === 1 ? remaining[0].entrant_id : null;
+  }, [rumbleEntries]);
+
+  const entrantMap = useMemo(() => {
+    return new Map(eventEntrants.map((entrant) => [entrant.id, entrant]));
+  }, [eventEntrants]);
+
+  const remainingEntrants = useMemo(() => {
+    const remainingIds = new Set(
+      rumbleEntries
+        .filter((entry) => !entry.eliminated_at)
+        .map((entry) => entry.entrant_id)
+    );
+    return eventEntrants.filter((entrant) => remainingIds.has(entrant.id));
+  }, [eventEntrants, rumbleEntries]);
 
   const loadScores = async () => {
     setMessage(null);
@@ -146,6 +177,46 @@ export default function ScoreboardPage() {
     };
   }, [selectedEventId]);
 
+  useEffect(() => {
+    if (!selectedEventId) {
+      setRumbleEntries([]);
+      setEventEntrants([]);
+      return;
+    }
+    const loadRumbleEntries = async () => {
+      const { data: entryRows, error } = await supabase
+        .from("rumble_entries")
+        .select("entrant_id, eliminated_at")
+        .eq("event_id", selectedEventId);
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+      setRumbleEntries(entryRows ?? []);
+
+      const entrantIds = Array.from(
+        new Set((entryRows ?? []).map((entry) => entry.entrant_id))
+      );
+      if (entrantIds.length === 0) {
+        setEventEntrants([]);
+        return;
+      }
+
+      const { data: entrantRows, error: entrantError } = await supabase
+        .from("entrants")
+        .select("id, name, promotion")
+        .in("id", entrantIds)
+        .order("name", { ascending: true });
+      if (entrantError) {
+        setMessage(entrantError.message);
+        return;
+      }
+      setEventEntrants(entrantRows ?? []);
+    };
+
+    loadRumbleEntries();
+  }, [selectedEventId]);
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <main className="mx-auto w-full max-w-5xl px-6 py-16">
@@ -166,6 +237,44 @@ export default function ScoreboardPage() {
         )}
 
         <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <div className="mb-8 grid gap-6 lg:grid-cols-2">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
+                Entrants in Rumble
+              </p>
+              {eventEntrants.length === 0 ? (
+                <p className="mt-3 text-zinc-400">No entrants added yet.</p>
+              ) : (
+                <ul className="mt-3 max-h-28 space-y-2 overflow-y-auto pr-1 text-zinc-300">
+                  {eventEntrants.map((entrant) => (
+                    <li key={entrant.id}>
+                      {entrant.name}
+                      {entrant.promotion ? ` • ${entrant.promotion}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
+                Not Eliminated
+              </p>
+              {remainingEntrants.length === 0 ? (
+                <p className="mt-3 text-zinc-400">
+                  All entrants eliminated (winner determined).
+                </p>
+              ) : (
+                <ul className="mt-3 max-h-28 space-y-2 overflow-y-auto pr-1 text-zinc-300">
+                  {remainingEntrants.map((entrant) => (
+                    <li key={entrant.id}>
+                      {entrant.name}
+                      {entrant.promotion ? ` • ${entrant.promotion}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
           {events.length > 1 && (
             <div className="mb-6">
               <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
@@ -227,10 +336,10 @@ export default function ScoreboardPage() {
                       <span className="text-3xl font-semibold text-amber-300">
                         #{index + 1}
                       </span>
-                      {index === 0 && (
-                        <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200">
+                      {index === 0 && winnerEntrantId && (
+                        <span className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-amber-200">
                           <svg
-                            className="h-4 w-4"
+                            className="h-6 w-6"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
