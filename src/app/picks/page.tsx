@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import { EntrantCard } from "../../components/EntrantCard";
 
 type EventRow = {
   id: string;
@@ -259,8 +260,8 @@ export default function PicksPage() {
     setSaving(false);
   };
 
-  const getName = (id: string | null) =>
-    id ? entrantById.get(id)?.name ?? "Unknown" : "Not set";
+  const getEntrant = (id: string | null) =>
+    id ? entrantById.get(id) ?? null : null;
 
   const EditIcon = () => (
     <svg
@@ -363,14 +364,15 @@ export default function PicksPage() {
               </p>
               <ul className="mt-4 max-h-64 space-y-2 overflow-y-auto pr-1 text-sm text-zinc-200">
                 {payload.entrants
-                  .map((id) => ({ id, name: getName(id) }))
+                  .map((id) => ({
+                    id,
+                    entrant: getEntrant(id),
+                    name: getEntrant(id)?.name ?? "Unknown",
+                  }))
                   .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((entrant) => (
-                    <li
-                      key={entrant.id}
-                      className="rounded-xl border border-zinc-800 px-3 py-2"
-                    >
-                      {entrant.name}
+                  .map(({ id, entrant, name }) => (
+                    <li key={id} className="rounded-xl border border-zinc-800 px-3 py-2">
+                      <EntrantCard name={name} promotion={entrant?.promotion} />
                     </li>
                   ))}
               </ul>
@@ -392,11 +394,17 @@ export default function PicksPage() {
                 {payload.final_four.length} selected
               </p>
               <ul className="mt-4 space-y-2 text-sm text-zinc-200">
-                {payload.final_four.map((id) => (
-                  <li key={id} className="rounded-xl border border-zinc-800 px-3 py-2">
-                    {getName(id)}
-                  </li>
-                ))}
+                {payload.final_four.map((id) => {
+                  const entrant = getEntrant(id);
+                  return (
+                    <li key={id} className="rounded-xl border border-zinc-800 px-3 py-2">
+                      <EntrantCard
+                        name={entrant?.name ?? "Unknown"}
+                        promotion={entrant?.promotion}
+                      />
+                    </li>
+                  );
+                })}
               </ul>
             </div>
 
@@ -412,28 +420,50 @@ export default function PicksPage() {
                   Edit
                 </button>
               </div>
-              <div className="mt-4 space-y-3 text-sm text-zinc-200">
-                <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
-                  <span className="text-zinc-400">Winner</span>
-                  <span>{getName(payload.winner)}</span>
+                <div className="mt-4 space-y-3 text-sm text-zinc-200">
+                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
+                    <span className="text-zinc-400">Winner</span>
+                    <EntrantCard
+                      name={getEntrant(payload.winner)?.name ?? "Not set"}
+                      promotion={getEntrant(payload.winner)?.promotion}
+                      className="justify-end"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
+                    <span className="text-zinc-400">Entry #1</span>
+                    <EntrantCard
+                      name={getEntrant(payload.entry_1)?.name ?? "Not set"}
+                      promotion={getEntrant(payload.entry_1)?.promotion}
+                      className="justify-end"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
+                    <span className="text-zinc-400">Entry #2</span>
+                    <EntrantCard
+                      name={getEntrant(payload.entry_2)?.name ?? "Not set"}
+                      promotion={getEntrant(payload.entry_2)?.promotion}
+                      className="justify-end"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
+                    <span className="text-zinc-400">Entry #30</span>
+                    <EntrantCard
+                      name={getEntrant(payload.entry_30)?.name ?? "Not set"}
+                      promotion={getEntrant(payload.entry_30)?.promotion}
+                      className="justify-end"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
+                    <span className="text-zinc-400">Most eliminations</span>
+                    <EntrantCard
+                      name={
+                        getEntrant(payload.most_eliminations)?.name ?? "Not set"
+                      }
+                      promotion={getEntrant(payload.most_eliminations)?.promotion}
+                      className="justify-end"
+                    />
+                  </div>
                 </div>
-                <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
-                  <span className="text-zinc-400">Entry #1</span>
-                  <span>{getName(payload.entry_1)}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
-                  <span className="text-zinc-400">Entry #2</span>
-                  <span>{getName(payload.entry_2)}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
-                  <span className="text-zinc-400">Entry #30</span>
-                  <span>{getName(payload.entry_30)}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border border-zinc-800 px-3 py-2">
-                  <span className="text-zinc-400">Most eliminations</span>
-                  <span>{getName(payload.most_eliminations)}</span>
-                </div>
-              </div>
             </div>
           </section>
         ) : (
@@ -468,10 +498,11 @@ export default function PicksPage() {
                         checked={payload.entrants.includes(entrant.id)}
                         onChange={() => toggleEntrant(entrant.id)}
                       />
-                      <span className="flex-1">{entrant.name}</span>
-                      <span className="text-xs text-zinc-500">
-                        {entrant.promotion ?? "—"}
-                      </span>
+                      <EntrantCard
+                        name={entrant.name}
+                        promotion={entrant.promotion}
+                        className="flex-1"
+                      />
                     </label>
                   ))}
                 </div>
@@ -521,7 +552,11 @@ export default function PicksPage() {
                           checked={payload.final_four.includes(entrant.id)}
                           onChange={() => toggleFinalFour(entrant.id)}
                         />
-                        <span className="flex-1">{entrant.name}</span>
+                        <EntrantCard
+                          name={entrant.name}
+                          promotion={entrant.promotion}
+                          className="flex-1"
+                        />
                       </label>
                     ))}
                   </div>

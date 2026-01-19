@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import { EntrantCard } from "../../components/EntrantCard";
 import { calculateScore, type PicksPayload } from "../../lib/scoring";
 import { scoringRules } from "../../lib/scoringRules";
 
@@ -533,14 +534,10 @@ export default function AdminPage() {
                     className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <p className="text-base font-semibold">
-                          {entrant?.name ?? "Unknown entrant"}
-                        </p>
-                        <p className="text-xs text-zinc-500">
-                          {entrant?.promotion ?? "Unknown promotion"}
-                        </p>
-                      </div>
+                      <EntrantCard
+                        name={entrant?.name ?? "Unknown entrant"}
+                        promotion={entrant?.promotion ?? "Unknown promotion"}
+                      />
                       <div className="flex flex-wrap gap-3">
                         <label className="flex flex-col text-xs text-zinc-400">
                           Entry #
