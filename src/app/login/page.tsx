@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 
 type AuthMode = "sign-in" | "sign-up";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,14 +20,22 @@ export default function LoginPage() {
 
     supabase.auth.getSession().then(({ data }) => {
       if (!ignore) {
-        setSessionEmail(data.session?.user.email ?? null);
+        const email = data.session?.user.email ?? null;
+        setSessionEmail(email);
+        if (email) {
+          router.push("/picks");
+        }
       }
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSessionEmail(session?.user.email ?? null);
+      const email = session?.user.email ?? null;
+      setSessionEmail(email);
+      if (email) {
+        router.push("/picks");
+      }
     });
 
     return () => {
