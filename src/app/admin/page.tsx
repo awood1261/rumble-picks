@@ -49,6 +49,8 @@ export default function AdminPage() {
 
   const [eventName, setEventName] = useState("");
   const [eventGender, setEventGender] = useState("men");
+  const [eventStartsAt, setEventStartsAt] = useState("");
+  const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [entryEntrantId, setEntryEntrantId] = useState("");
   const [entryNumber, setEntryNumber] = useState("");
@@ -56,12 +58,25 @@ export default function AdminPage() {
   const [eliminatedById, setEliminatedById] = useState("");
   const [recalcBusy, setRecalcBusy] = useState(false);
 
+  const formatLocalDateTime = (value: string | null) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (num: number) => String(num).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+      date.getDate()
+    )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
   const activeEvent = useMemo(() => {
     if (selectedEventId) {
       return events.find((event) => event.id === selectedEventId) ?? null;
     }
     return events[0] ?? null;
   }, [events, selectedEventId]);
+  useEffect(() => {
+    setEventStartsAt(formatLocalDateTime(activeEvent?.starts_at ?? null));
+  }, [activeEvent?.starts_at]);
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
@@ -202,13 +217,38 @@ export default function AdminPage() {
         name: eventName.trim(),
         status: "draft",
         rumble_gender: eventGender,
+        starts_at: eventStartsAt ? new Date(eventStartsAt).toISOString() : null,
       });
     if (error) {
       setMessage(error.message);
       return;
     }
     setEventName("");
+    setEventStartsAt("");
     setEventGender("men");
+    refreshData();
+  };
+
+  const handleUpdateEvent = async () => {
+    if (!activeEvent) {
+      setMessage("Select an event to update.");
+      return;
+    }
+    setEventUpdateBusy(true);
+    setMessage(null);
+    const { error } = await supabase
+      .from("events")
+      .update({
+        starts_at: eventStartsAt ? new Date(eventStartsAt).toISOString() : null,
+      })
+      .eq("id", activeEvent.id);
+    if (error) {
+      setMessage(error.message);
+      setEventUpdateBusy(false);
+      return;
+    }
+    setMessage("Event updated.");
+    setEventUpdateBusy(false);
     refreshData();
   };
 
@@ -453,6 +493,19 @@ export default function AdminPage() {
                 value={eventName}
                 onChange={(event) => setEventName(event.target.value)}
               />
+              <input
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                type="datetime-local"
+                value={eventStartsAt}
+                onChange={(event) => setEventStartsAt(event.target.value)}
+              />
+              <button
+                className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-300 hover:text-amber-200"
+                type="button"
+                onClick={() => setEventStartsAt(formatLocalDateTime(new Date().toISOString()))}
+              >
+                Use current time
+              </button>
               <select
                 className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                 value={eventGender}
@@ -469,6 +522,36 @@ export default function AdminPage() {
                 Create event
               </button>
             </div>
+            {activeEvent && (
+              <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                  Update start time
+                </p>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                  <input
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    type="datetime-local"
+                    value={eventStartsAt}
+                    onChange={(event) => setEventStartsAt(event.target.value)}
+                  />
+                  <button
+                    className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-300 hover:text-amber-200"
+                    type="button"
+                    onClick={() => setEventStartsAt(formatLocalDateTime(new Date().toISOString()))}
+                  >
+                    Use current time
+                  </button>
+                  <button
+                    className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    type="button"
+                    onClick={handleUpdateEvent}
+                    disabled={eventUpdateBusy}
+                  >
+                    {eventUpdateBusy ? "Saving..." : "Save time"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">

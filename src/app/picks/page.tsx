@@ -59,6 +59,10 @@ export default function PicksPage() {
     () => events.find((event) => event.id === selectedEventId) ?? null,
     [events, selectedEventId]
   );
+  const isLocked = useMemo(() => {
+    if (!selectedEvent?.starts_at) return false;
+    return new Date() >= new Date(selectedEvent.starts_at);
+  }, [selectedEvent?.starts_at]);
 
   const entrantOptions = useMemo(() => {
     const gender = selectedEvent?.rumble_gender;
@@ -260,6 +264,10 @@ export default function PicksPage() {
 
   const handleSave = async () => {
     if (!userId || !selectedEventId) return;
+    if (isLocked) {
+      setMessage("Picks are locked for this event.");
+      return;
+    }
     setSaving(true);
     setMessage(null);
     const { error } = await supabase.from("picks").upsert(
@@ -335,6 +343,11 @@ export default function PicksPage() {
             Choose an event and lock in your rumble picks before bell time.
           </p>
         </header>
+        {isLocked && (
+          <div className="mt-6 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+            Picks are locked for this event.
+          </div>
+        )}
 
         {message && (
           <div className="mt-6 rounded-2xl border border-zinc-800 bg-black/50 px-4 py-3 text-sm text-zinc-200">
@@ -372,9 +385,10 @@ export default function PicksPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Entrants</h2>
                 <button
-                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
                   type="button"
                   onClick={() => setEditSection("entrants")}
+                  disabled={isLocked}
                 >
                   <EditIcon />
                   Edit
@@ -403,9 +417,10 @@ export default function PicksPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Final Four</h2>
                 <button
-                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
                   type="button"
                   onClick={() => setEditSection("final_four")}
+                  disabled={isLocked}
                 >
                   <EditIcon />
                   Edit
@@ -433,9 +448,10 @@ export default function PicksPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Key Picks</h2>
                 <button
-                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100"
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
                   type="button"
                   onClick={() => setEditSection("key_picks")}
+                  disabled={isLocked}
                 >
                   <EditIcon />
                   Edit
@@ -541,6 +557,7 @@ export default function PicksPage() {
                                 type="checkbox"
                                 checked={payload.entrants.includes(entrant.id)}
                                 onChange={() => toggleEntrant(entrant.id)}
+                                disabled={isLocked}
                               />
                               <EntrantCard
                                 name={entrant.name}
@@ -559,7 +576,7 @@ export default function PicksPage() {
                       className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
                       type="button"
                       onClick={handleSave}
-                      disabled={saving}
+                      disabled={saving || isLocked}
                     >
                       {saving ? "Saving…" : "Save entrants"}
                     </button>
@@ -602,6 +619,7 @@ export default function PicksPage() {
                           type="checkbox"
                           checked={payload.final_four.includes(entrant.id)}
                           onChange={() => toggleFinalFour(entrant.id)}
+                          disabled={isLocked}
                         />
                         <EntrantCard
                           name={entrant.name}
@@ -617,7 +635,7 @@ export default function PicksPage() {
                         className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
                         type="button"
                         onClick={handleSave}
-                        disabled={saving}
+                        disabled={saving || isLocked}
                       >
                         {saving ? "Saving…" : "Save final four"}
                       </button>
@@ -669,6 +687,7 @@ export default function PicksPage() {
                               [field.key]: event.target.value || null,
                             }))
                           }
+                          disabled={isLocked}
                         >
                           <option value="">Select</option>
                           {selectedEntrantOptions.map((entrant) => (
@@ -686,7 +705,7 @@ export default function PicksPage() {
                         className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
                         type="button"
                         onClick={handleSave}
-                        disabled={saving}
+                        disabled={saving || isLocked}
                       >
                         {saving ? "Saving…" : "Save key picks"}
                       </button>
@@ -702,7 +721,7 @@ export default function PicksPage() {
                   className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
                   type="button"
                   onClick={handleSave}
-                  disabled={saving}
+                  disabled={saving || isLocked}
                 >
                   {saving ? "Saving…" : "Save picks"}
                 </button>

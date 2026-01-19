@@ -10,12 +10,12 @@ export const NavBar = () => {
         >
           Rumble Picks
         </Link>
-        <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-wide text-zinc-300">
+        <div className="flex flex-nowrap items-center gap-3 text-xs font-semibold uppercase tracking-wide text-zinc-300">
           <Link className="transition hover:text-amber-200" href="/picks">
             Picks
           </Link>
           <Link className="transition hover:text-amber-200" href="/scoreboard">
-            Scoreboard
+            Scores
           </Link>
           <Link className="transition hover:text-amber-200" href="/admin">
             Admin
