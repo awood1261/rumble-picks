@@ -48,6 +48,11 @@ export default function ScoreboardPage() {
       .sort((a, b) => b.points - a.points);
   }, [scores, profiles]);
 
+  const filteredScoreboard = useMemo(() => {
+    if (!selectedEventId) return scoreboard;
+    return scoreboard.filter((row) => row.event_id === selectedEventId);
+  }, [scoreboard, selectedEventId]);
+
   const loadScores = async () => {
     setMessage(null);
     const { data: scoreRows, error: scoreError } = await supabase
@@ -58,12 +63,8 @@ export default function ScoreboardPage() {
       setLoading(false);
       return;
     }
-    const filteredScores = selectedEventId
-      ? (scoreRows ?? []).filter((row) => row.event_id === selectedEventId)
-      : scoreRows ?? [];
-
     const userIds = Array.from(
-      new Set(filteredScores.map((row) => row.user_id))
+      new Set((scoreRows ?? []).map((row) => row.user_id))
     );
     if (userIds.length === 0) {
       setScores(scoreRows ?? []);
@@ -78,7 +79,7 @@ export default function ScoreboardPage() {
     if (profileError) {
       setMessage(profileError.message);
     }
-    setScores(filteredScores);
+    setScores(scoreRows ?? []);
     setProfiles(profileRows ?? []);
     setLoading(false);
   };
@@ -158,13 +159,22 @@ export default function ScoreboardPage() {
           )}
           {loading ? (
             <p className="text-sm text-zinc-400">Loading scoreboard…</p>
-          ) : scoreboard.length === 0 ? (
-            <p className="text-sm text-zinc-400">
-              No scores yet. Once picks are in, they will appear here.
-            </p>
+          ) : filteredScoreboard.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/60 px-4 py-6 text-sm text-zinc-300">
+              <p>No picks yet for this event.</p>
+              <p className="mt-2 text-zinc-400">
+                Be the first to make picks and start the leaderboard.
+              </p>
+              <Link
+                className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                href="/picks"
+              >
+                Make picks
+              </Link>
+            </div>
           ) : (
             <div className="divide-y divide-zinc-800">
-              {scoreboard.map((row, index) => {
+              {filteredScoreboard.map((row, index) => {
                 const content = (
                   <>
                     <div className="flex items-center gap-4">
