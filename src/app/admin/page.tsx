@@ -352,6 +352,7 @@ export default function AdminPage() {
       .from("events")
       .update({
         starts_at: eventStartsAt ? new Date(eventStartsAt).toISOString() : null,
+        roster_year: eventRosterYear ? Number(eventRosterYear) : null,
       })
       .eq("id", activeEvent.id);
     if (error) {
@@ -669,15 +670,25 @@ export default function AdminPage() {
             {activeEvent && (
               <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
                 <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Update start time
+                  Update event
                 </p>
-                <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                <div className="mt-3 flex flex-col gap-3">
                   <input
                     className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                     type="datetime-local"
                     value={eventStartsAt}
                     onChange={(event) => setEventStartsAt(event.target.value)}
                   />
+                  <input
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    type="number"
+                    min="1900"
+                    max="2100"
+                    placeholder="Roster year (e.g. 2020)"
+                    value={eventRosterYear}
+                    onChange={(event) => setEventRosterYear(event.target.value)}
+                  />
+                  <div className="flex flex-col gap-3 sm:flex-row">
                   <button
                     className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-300 hover:text-amber-200"
                     type="button"
@@ -691,8 +702,9 @@ export default function AdminPage() {
                     onClick={handleUpdateEvent}
                     disabled={eventUpdateBusy}
                   >
-                    {eventUpdateBusy ? "Saving..." : "Save time"}
+                    {eventUpdateBusy ? "Saving..." : "Save updates"}
                   </button>
+                  </div>
                 </div>
               </div>
             )}
