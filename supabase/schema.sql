@@ -56,6 +56,7 @@ create table if not exists public.entrants (
   event_id uuid references public.events(id) on delete cascade,
   is_custom boolean not null default false,
   created_by uuid references auth.users(id) on delete set null,
+  status text not null default 'approved',
   active boolean not null default true,
   notes text,
   created_at timestamptz not null default now()
@@ -188,6 +189,7 @@ create policy "Custom entrants are insertable by authenticated users"
     and is_custom = true
     and created_by = auth.uid()
     and event_id is not null
+    and status = 'pending'
   );
 
 create policy "Matches are viewable by everyone"

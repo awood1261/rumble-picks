@@ -23,6 +23,8 @@ type EntrantRow = {
   roster_year: number | null;
   event_id: string | null;
   is_custom: boolean;
+  created_by: string | null;
+  status: string | null;
 };
 
 type PicksPayload = {
@@ -94,7 +96,15 @@ export default function PicksPage() {
         const matchesEvent =
           !selectedEvent?.id || entrant.event_id === selectedEvent.id;
         const isRosterEntrant = entrant.event_id === null;
-        return matchesGender && (matchesEvent || (isRosterEntrant && matchesYear));
+        const status = entrant.status ?? "approved";
+        const isApproved = status === "approved";
+        const isUserPending =
+          status === "pending" && entrant.created_by === userId;
+        return (
+          matchesGender &&
+          (matchesEvent || (isRosterEntrant && matchesYear)) &&
+          (isApproved || isUserPending)
+        );
       })
       .forEach((entrant) => {
       const nameKey = entrant.name.trim().toLowerCase();
@@ -289,7 +299,7 @@ export default function PicksPage() {
           supabase
             .from("entrants")
             .select(
-              "id, name, promotion, gender, image_url, roster_year, event_id, is_custom"
+              "id, name, promotion, gender, image_url, roster_year, event_id, is_custom, created_by, status"
             )
             .order("name", { ascending: true }),
           supabase
@@ -451,6 +461,7 @@ export default function PicksPage() {
         roster_year: selectedEvent?.roster_year ?? null,
         event_id: selectedEventId,
         is_custom: true,
+        status: "pending",
         created_by: userId,
         active: true,
       })
@@ -520,6 +531,13 @@ export default function PicksPage() {
           .sort((a, b) => a.name.localeCompare(b.name))
           .map(({ id, entrant, name }) => {
             const isCorrect = actuals.hasData && correctSet.has(id);
+            const status = entrant?.status ?? "approved";
+            const isPending =
+              status === "pending" && entrant?.created_by === userId;
+            const isApprovedCustom =
+              status === "approved" &&
+              entrant?.is_custom &&
+              entrant?.created_by === userId;
             return (
               <li
                 key={id}
@@ -536,6 +554,16 @@ export default function PicksPage() {
                   promotion={entrant?.promotion}
                   imageUrl={entrant?.image_url}
                 />
+                {isPending && (
+                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                    Pending approval
+                  </p>
+                )}
+                {isApprovedCustom && (
+                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                    Approved
+                  </p>
+                )}
                 {actuals.hasData && (
                   <p
                     className={`mt-2 text-[10px] font-semibold uppercase tracking-wide ${
@@ -858,6 +886,19 @@ export default function PicksPage() {
                                 imageUrl={entrant.image_url}
                                 className="flex-1"
                               />
+                              {(entrant.status ?? "approved") === "pending" &&
+                                entrant.created_by === userId && (
+                                  <span className="rounded-full border border-amber-400/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                                    Pending
+                                  </span>
+                                )}
+                              {(entrant.status ?? "approved") === "approved" &&
+                                entrant.is_custom &&
+                                entrant.created_by === userId && (
+                                  <span className="rounded-full border border-emerald-400/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                                    Approved
+                                  </span>
+                                )}
                             </label>
                           ))}
                         </div>

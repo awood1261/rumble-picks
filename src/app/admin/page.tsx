@@ -25,6 +25,8 @@ type EntrantRow = {
   roster_year: number | null;
   event_id: string | null;
   is_custom: boolean;
+  created_by: string | null;
+  status: string | null;
 };
 
 type RumbleEntryRow = {
@@ -102,7 +104,10 @@ export default function AdminPage() {
       const matchesYear = !rosterYear || entrant.roster_year === rosterYear;
       const matchesEvent = eventId ? entrant.event_id === eventId : false;
       const isRosterEntrant = entrant.event_id === null;
-      return matchesGender && (matchesEvent || (isRosterEntrant && matchesYear));
+      const isApproved = (entrant.status ?? "approved") === "approved";
+      return (
+        isApproved && matchesGender && (matchesEvent || (isRosterEntrant && matchesYear))
+      );
     });
     const byName = new Map<string, EntrantRow>();
     base.forEach((entrant) => {
@@ -148,6 +153,17 @@ export default function AdminPage() {
     }, {} as Record<string, EntrantRow[]>);
   }, [filteredEntrantOptions]);
 
+  const pendingEntrants = useMemo(() => {
+    if (!activeEvent?.id) return [];
+    return entrants
+      .filter(
+        (entrant) =>
+          entrant.event_id === activeEvent.id &&
+          (entrant.status ?? "approved") === "pending"
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeEvent?.id, entrants]);
+
   const refreshData = async () => {
     if (!activeEvent) {
       const { data: eventRows } = await supabase
@@ -168,7 +184,7 @@ export default function AdminPage() {
           supabase
             .from("entrants")
             .select(
-              "id, name, promotion, gender, active, image_url, roster_year, event_id, is_custom"
+              "id, name, promotion, gender, active, image_url, roster_year, event_id, is_custom, created_by, status"
             )
             .order("name", { ascending: true }),
           supabase
@@ -290,6 +306,7 @@ export default function AdminPage() {
       roster_year: activeEvent.roster_year,
       event_id: activeEvent.id,
       is_custom: true,
+      status: "approved",
       active: true,
     });
     if (error) {
@@ -298,6 +315,29 @@ export default function AdminPage() {
     }
     setCustomEntrantName("");
     setMessage("Custom entrant added.");
+    refreshData();
+  };
+
+  const handleApproveCustomEntrant = async (entrantId: string) => {
+    const { error } = await supabase
+      .from("entrants")
+      .update({ status: "approved" })
+      .eq("id", entrantId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage("Custom entrant approved.");
+    refreshData();
+  };
+
+  const handleRejectCustomEntrant = async (entrantId: string) => {
+    const { error } = await supabase.from("entrants").delete().eq("id", entrantId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage("Custom entrant rejected.");
     refreshData();
   };
 
@@ -878,6 +918,46 @@ export default function AdminPage() {
                   </div>
                 );
               })
+            )}
+          </div>
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <h2 className="text-lg font-semibold">Custom entrant approvals</h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              Review custom entrants added by users for this event.
+            </p>
+            {pendingEntrants.length === 0 ? (
+              <p className="mt-4 text-sm text-zinc-400">No pending entrants.</p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {pendingEntrants.map((entrant) => (
+                  <div
+                    key={entrant.id}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3"
+                  >
+                    <EntrantCard
+                      name={entrant.name}
+                      promotion={entrant.promotion}
+                      imageUrl={entrant.image_url}
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-emerald-400 px-4 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-300 hover:text-emerald-100"
+                        type="button"
+                        onClick={() => handleApproveCustomEntrant(entrant.id)}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-red-500/70 px-4 text-xs font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
+                        type="button"
+                        onClick={() => handleRejectCustomEntrant(entrant.id)}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </section>
