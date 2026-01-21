@@ -71,6 +71,7 @@ export default function PicksPage() {
     { rank: null, total: 0 }
   );
   const [customEntrantName, setCustomEntrantName] = useState("");
+  const [entrantSearch, setEntrantSearch] = useState("");
   const [editSection, setEditSection] = useState<
     "entrants" | "final_four" | "key_picks" | null
   >(null);
@@ -143,6 +144,28 @@ export default function PicksPage() {
       return groups;
     }, {} as Record<string, EntrantRow[]>);
   }, [entrantOptions]);
+
+  const filteredEntrantsByPromotion = useMemo(() => {
+    const query = entrantSearch.trim().toLowerCase();
+    if (!query) return entrantsByPromotion;
+    const filtered: Record<string, EntrantRow[]> = {};
+    Object.entries(entrantsByPromotion).forEach(([promotion, list]) => {
+      const matches = list.filter((entrant) =>
+        entrant.name.toLowerCase().includes(query)
+      );
+      if (matches.length > 0) {
+        filtered[promotion] = matches;
+      }
+    });
+    return filtered;
+  }, [entrantSearch, entrantsByPromotion]);
+
+  const filteredEntrantCount = useMemo(() => {
+    return Object.values(filteredEntrantsByPromotion).reduce(
+      (total, list) => total + list.length,
+      0
+    );
+  }, [filteredEntrantsByPromotion]);
 
   const sameArray = (a: string[], b: string[]) =>
     a.length === b.length && a.every((value, index) => value === b[index]);
@@ -845,21 +868,38 @@ export default function PicksPage() {
                     Add
                   </button>
                 </div>
+                <div className="mt-4">
+                  <input
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    placeholder="Search entrants"
+                    value={entrantSearch}
+                    onChange={(event) => setEntrantSearch(event.target.value)}
+                  />
+                  <p className="mt-2 text-xs text-zinc-500">
+                    {filteredEntrantCount} entrant{filteredEntrantCount === 1 ? "" : "s"}
+                    {entrantSearch ? " match your search." : " available."}
+                  </p>
+                </div>
                 <div className="mt-4 max-h-[520px] space-y-6 overflow-y-auto pr-1">
-                  {Object.entries(entrantsByPromotion)
-                    .sort(([a], [b]) => {
-                      const order = ["WWE", "TNA", "AAA"];
-                      const aIndex = order.indexOf(a);
-                      const bIndex = order.indexOf(b);
-                      if (aIndex !== -1 || bIndex !== -1) {
-                        return (
-                          (aIndex === -1 ? order.length : aIndex) -
-                          (bIndex === -1 ? order.length : bIndex)
-                        );
-                      }
-                      return a.localeCompare(b);
-                    })
-                    .map(([promotion, promotionEntrants]) => (
+                  {filteredEntrantCount === 0 ? (
+                    <p className="text-sm text-zinc-400">
+                      No entrants match your search.
+                    </p>
+                  ) : (
+                    Object.entries(filteredEntrantsByPromotion)
+                      .sort(([a], [b]) => {
+                        const order = ["WWE", "TNA", "AAA"];
+                        const aIndex = order.indexOf(a);
+                        const bIndex = order.indexOf(b);
+                        if (aIndex !== -1 || bIndex !== -1) {
+                          return (
+                            (aIndex === -1 ? order.length : aIndex) -
+                            (bIndex === -1 ? order.length : bIndex)
+                          );
+                        }
+                        return a.localeCompare(b);
+                      })
+                      .map(([promotion, promotionEntrants]) => (
                       <div key={promotion}>
                         <div className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">
                           {promotion}
@@ -903,7 +943,8 @@ export default function PicksPage() {
                           ))}
                         </div>
                       </div>
-                    ))}
+                      ))
+                  )}
                 </div>
                 {hasSaved && (
                   <div className="mt-6">
