@@ -581,32 +581,42 @@ export default function AdminPage() {
           </div>
         )}
 
-        <section className="mt-10 grid gap-6 lg:grid-cols-2">
+        <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Active event</h2>
+              <p className="mt-2 text-sm text-zinc-400">
+                {activeEvent
+                  ? `${activeEvent.name} (${activeEvent.rumble_gender ?? "unspecified"}${activeEvent.roster_year ? `, ${activeEvent.roster_year}` : ""})`
+                  : "No event yet."}
+              </p>
+            </div>
+            <div className="w-full sm:max-w-xs">
+              <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                Switch event
+                <select
+                  className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  value={selectedEventId}
+                  onChange={(event) => setSelectedEventId(event.target.value)}
+                >
+                  {events.length === 0 && <option value="">No events</option>}
+                  {events.map((event) => (
+                    <option key={event.id} value={event.id}>
+                      {event.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-6 grid gap-6 lg:grid-cols-2">
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <h2 className="text-lg font-semibold">Event</h2>
+            <h2 className="text-lg font-semibold">Create event</h2>
             <p className="mt-2 text-sm text-zinc-400">
-              {activeEvent
-                ? `Active: ${activeEvent.name} (${activeEvent.rumble_gender ?? "unspecified"}${activeEvent.roster_year ? `, ${activeEvent.roster_year}` : ""})`
-                : "No event yet."}
+              Add a new rumble event and define its roster settings.
             </p>
-            {events.length > 1 && (
-              <div className="mt-4">
-                <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Select event
-                  <select
-                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                    value={selectedEventId}
-                    onChange={(event) => setSelectedEventId(event.target.value)}
-                  >
-                    {events.map((event) => (
-                      <option key={event.id} value={event.id}>
-                        {event.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            )}
             <div className="mt-4 space-y-3">
               <input
                 className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
@@ -623,7 +633,9 @@ export default function AdminPage() {
               <button
                 className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-300 hover:text-amber-200"
                 type="button"
-                onClick={() => setEventStartsAt(formatLocalDateTime(new Date().toISOString()))}
+                onClick={() =>
+                  setEventStartsAt(formatLocalDateTime(new Date().toISOString()))
+                }
               >
                 Use current time
               </button>
@@ -644,21 +656,6 @@ export default function AdminPage() {
                 value={eventRosterYear}
                 onChange={(event) => setEventRosterYear(event.target.value)}
               />
-              <div className="flex items-center gap-2">
-                <input
-                  className="h-11 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  placeholder="Add custom entrant"
-                  value={customEntrantName}
-                  onChange={(event) => setCustomEntrantName(event.target.value)}
-                />
-                <button
-                  className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                  type="button"
-                  onClick={handleAddCustomEntrant}
-                >
-                  Add
-                </button>
-              </div>
               <button
                 className="inline-flex h-11 w-full items-center justify-center rounded-full bg-amber-400 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
                 type="button"
@@ -667,12 +664,24 @@ export default function AdminPage() {
                 Create event
               </button>
             </div>
-            {activeEvent && (
-              <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Update event
-                </p>
-                <div className="mt-3 flex flex-col gap-3">
+          </div>
+
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <h2 className="text-lg font-semibold">Edit event</h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              Update the active event, manage custom entrants, and approve user
+              submissions.
+            </p>
+            {!activeEvent ? (
+              <p className="mt-4 text-sm text-zinc-400">
+                Select an event to edit.
+              </p>
+            ) : (
+              <>
+                <div className="mt-4 space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                    Event details
+                  </p>
                   <input
                     className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                     type="datetime-local"
@@ -689,80 +698,152 @@ export default function AdminPage() {
                     onChange={(event) => setEventRosterYear(event.target.value)}
                   />
                   <div className="flex flex-col gap-3 sm:flex-row">
-                  <button
-                    className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-300 hover:text-amber-200"
-                    type="button"
-                    onClick={() => setEventStartsAt(formatLocalDateTime(new Date().toISOString()))}
-                  >
-                    Use current time
-                  </button>
-                  <button
-                    className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
-                    type="button"
-                    onClick={handleUpdateEvent}
-                    disabled={eventUpdateBusy}
-                  >
-                    {eventUpdateBusy ? "Saving..." : "Save updates"}
-                  </button>
+                    <button
+                      className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-300 hover:text-amber-200"
+                      type="button"
+                      onClick={() =>
+                        setEventStartsAt(
+                          formatLocalDateTime(new Date().toISOString())
+                        )
+                      }
+                    >
+                      Use current time
+                    </button>
+                    <button
+                      className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
+                      type="button"
+                      onClick={handleUpdateEvent}
+                      disabled={eventUpdateBusy}
+                    >
+                      {eventUpdateBusy ? "Saving..." : "Save updates"}
+                    </button>
                   </div>
                 </div>
-              </div>
+
+                <div className="mt-4 space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                    Add custom entrant
+                  </p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <input
+                      className="h-11 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                      placeholder="Custom entrant name"
+                      value={customEntrantName}
+                      onChange={(event) =>
+                        setCustomEntrantName(event.target.value)
+                      }
+                    />
+                    <button
+                      className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                      type="button"
+                      onClick={handleAddCustomEntrant}
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                    Custom entrant approvals
+                  </p>
+                  {pendingEntrants.length === 0 ? (
+                    <p className="mt-3 text-sm text-zinc-400">
+                      No pending entrants.
+                    </p>
+                  ) : (
+                    <div className="mt-3 space-y-3">
+                      {pendingEntrants.map((entrant) => (
+                        <div
+                          key={entrant.id}
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3"
+                        >
+                          <EntrantCard
+                            name={entrant.name}
+                            promotion={entrant.promotion}
+                            imageUrl={entrant.image_url}
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              className="inline-flex h-9 items-center justify-center rounded-full border border-emerald-400 px-4 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-300 hover:text-emerald-100"
+                              type="button"
+                              onClick={() =>
+                                handleApproveCustomEntrant(entrant.id)
+                              }
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className="inline-flex h-9 items-center justify-center rounded-full border border-red-500/70 px-4 text-xs font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
+                              type="button"
+                              onClick={() =>
+                                handleRejectCustomEntrant(entrant.id)
+                              }
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
+        </section>
 
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <h2 className="text-lg font-semibold">Rumble Entry</h2>
-            <p className="mt-2 text-sm text-zinc-400">
-              {entries.length} entries tracked •{" "}
-              {filteredEntrantOptions.length} eligible{" "}
-              {activeEvent?.rumble_gender ? `(${activeEvent.rumble_gender})` : ""}
-            </p>
-            <div className="mt-4 space-y-3">
-              <select
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                value={entryEntrantId}
-                onChange={(event) => setEntryEntrantId(event.target.value)}
-              >
-                <option value="">Select entrant</option>
-                {Object.entries(entrantsByPromotion)
-                  .sort(([a], [b]) => {
-                    const order = ["WWE", "TNA", "AAA"];
-                    const aIndex = order.indexOf(a);
-                    const bIndex = order.indexOf(b);
-                    if (aIndex !== -1 || bIndex !== -1) {
-                      return (
-                        (aIndex === -1 ? order.length : aIndex) -
-                        (bIndex === -1 ? order.length : bIndex)
-                      );
-                    }
-                    return a.localeCompare(b);
-                  })
-                  .map(([promotion, promotionEntrants]) => (
-                    <optgroup key={promotion} label={promotion}>
-                      {promotionEntrants.map((entrant) => (
-                        <option key={entrant.id} value={entrant.id}>
-                          {eventEntrantIdSet.has(entrant.id)
-                            ? `✓ ${entrant.name} — ADDED`
-                            : entrant.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-              </select>
-              <input
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                placeholder="Entry number (optional)"
-                value={entryNumber}
-                onChange={(event) => setEntryNumber(event.target.value)}
-              />
-              <button
-                className="inline-flex h-11 w-full items-center justify-center rounded-full border border-zinc-700 text-sm font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
-                type="button"
-                onClick={handleAddEntry}
-              >
-                Add entry
-              </button>
-            </div>
+        <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <h2 className="text-lg font-semibold">Rumble Entry</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            {entries.length} entries tracked • {filteredEntrantOptions.length} eligible{" "}
+            {activeEvent?.rumble_gender ? `(${activeEvent.rumble_gender})` : ""}
+          </p>
+          <div className="mt-4 space-y-3">
+            <select
+              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+              value={entryEntrantId}
+              onChange={(event) => setEntryEntrantId(event.target.value)}
+            >
+              <option value="">Select entrant</option>
+              {Object.entries(entrantsByPromotion)
+                .sort(([a], [b]) => {
+                  const order = ["WWE", "TNA", "AAA"];
+                  const aIndex = order.indexOf(a);
+                  const bIndex = order.indexOf(b);
+                  if (aIndex !== -1 || bIndex !== -1) {
+                    return (
+                      (aIndex === -1 ? order.length : aIndex) -
+                      (bIndex === -1 ? order.length : bIndex)
+                    );
+                  }
+                  return a.localeCompare(b);
+                })
+                .map(([promotion, promotionEntrants]) => (
+                  <optgroup key={promotion} label={promotion}>
+                    {promotionEntrants.map((entrant) => (
+                      <option key={entrant.id} value={entrant.id}>
+                        {eventEntrantIdSet.has(entrant.id)
+                          ? `✓ ${entrant.name} — ADDED`
+                          : entrant.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+            </select>
+            <input
+              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+              placeholder="Entry number (optional)"
+              value={entryNumber}
+              onChange={(event) => setEntryNumber(event.target.value)}
+            />
+            <button
+              className="inline-flex h-11 w-full items-center justify-center rounded-full border border-zinc-700 text-sm font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+              type="button"
+              onClick={handleAddEntry}
+            >
+              Add entry
+            </button>
           </div>
         </section>
 
@@ -930,46 +1011,6 @@ export default function AdminPage() {
                   </div>
                 );
               })
-            )}
-          </div>
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <h2 className="text-lg font-semibold">Custom entrant approvals</h2>
-            <p className="mt-2 text-sm text-zinc-400">
-              Review custom entrants added by users for this event.
-            </p>
-            {pendingEntrants.length === 0 ? (
-              <p className="mt-4 text-sm text-zinc-400">No pending entrants.</p>
-            ) : (
-              <div className="mt-4 space-y-3">
-                {pendingEntrants.map((entrant) => (
-                  <div
-                    key={entrant.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3"
-                  >
-                    <EntrantCard
-                      name={entrant.name}
-                      promotion={entrant.promotion}
-                      imageUrl={entrant.image_url}
-                    />
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="inline-flex h-9 items-center justify-center rounded-full border border-emerald-400 px-4 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-300 hover:text-emerald-100"
-                        type="button"
-                        onClick={() => handleApproveCustomEntrant(entrant.id)}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="inline-flex h-9 items-center justify-center rounded-full border border-red-500/70 px-4 text-xs font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
-                        type="button"
-                        onClick={() => handleRejectCustomEntrant(entrant.id)}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
             )}
           </div>
         </section>
