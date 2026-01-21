@@ -19,6 +19,10 @@ export const metadata: Metadata = {
     template: "Rumble Picks: %s",
   },
   description: "Royal Rumble prediction game and live scoreboard.",
+  icons: {
+    icon: "/images/rumble-picks-logo.png",
+    apple: "/images/rumble-picks-logo.png",
+  },
 };
 
 export default function RootLayout({

@@ -250,3 +250,181 @@ create policy "Scores are modifiable by admins"
   for all
   using (public.is_admin(auth.uid()))
   with check (public.is_admin(auth.uid()));
+
+-- Recalculate scores whenever rumble entries change.
+create or replace function public.recalculate_scores_for_event(p_event_id uuid)
+returns void
+language plpgsql
+as $$
+begin
+  with
+  actual_entrants as (
+    select entrant_id from public.rumble_entries where event_id = p_event_id
+  ),
+  final_four as (
+    select entrant_id
+    from public.rumble_entries
+    where event_id = p_event_id
+    order by eliminated_at desc nulls first
+    limit 4
+  ),
+  winner as (
+    select entrant_id
+    from public.rumble_entries
+    where event_id = p_event_id and eliminated_at is null
+    limit 1
+  ),
+  entry_1 as (
+    select entrant_id from public.rumble_entries
+    where event_id = p_event_id and entry_number = 1
+  ),
+  entry_2 as (
+    select entrant_id from public.rumble_entries
+    where event_id = p_event_id and entry_number = 2
+  ),
+  entry_30 as (
+    select entrant_id from public.rumble_entries
+    where event_id = p_event_id and entry_number = 30
+  ),
+  max_elims as (
+    select max(eliminations_count) as max_elims
+    from public.rumble_entries
+    where event_id = p_event_id
+  ),
+  top_elims as (
+    select re.entrant_id
+    from public.rumble_entries re
+    cross join max_elims
+    where re.event_id = p_event_id
+      and max_elims.max_elims is not null
+      and re.eliminations_count = max_elims.max_elims
+  ),
+  pick_rows as (
+    select user_id, payload
+    from public.picks
+    where event_id = p_event_id
+  ),
+  pick_entrants as (
+    select pr.user_id, count(*) as correct
+    from pick_rows pr
+    join lateral jsonb_array_elements_text(pr.payload->'entrants') as e(id) on true
+    join actual_entrants a on a.entrant_id::text = e.id
+    group by pr.user_id
+  ),
+  pick_final_four as (
+    select pr.user_id, count(*) as correct
+    from pick_rows pr
+    join lateral jsonb_array_elements_text(pr.payload->'final_four') as f(id) on true
+    join final_four ff on ff.entrant_id::text = f.id
+    group by pr.user_id
+  ),
+  pick_winner as (
+    select pr.user_id,
+      case
+        when (select count(*) from public.rumble_entries where event_id = p_event_id) >= 30
+         and (select count(*) from public.rumble_entries where event_id = p_event_id and eliminated_at is null) = 1
+         and pr.payload->>'winner' = (select entrant_id::text from winner)
+        then 1 else 0
+      end as correct
+    from pick_rows pr
+  ),
+  pick_entry_1 as (
+    select pr.user_id,
+      case
+        when pr.payload->>'entry_1' = (select entrant_id::text from entry_1 limit 1)
+        then 1 else 0
+      end as correct
+    from pick_rows pr
+  ),
+  pick_entry_2 as (
+    select pr.user_id,
+      case
+        when pr.payload->>'entry_2' = (select entrant_id::text from entry_2 limit 1)
+        then 1 else 0
+      end as correct
+    from pick_rows pr
+  ),
+  pick_entry_30 as (
+    select pr.user_id,
+      case
+        when pr.payload->>'entry_30' = (select entrant_id::text from entry_30 limit 1)
+        then 1 else 0
+      end as correct
+    from pick_rows pr
+  ),
+  pick_most_elims as (
+    select pr.user_id,
+      case
+        when pr.payload->>'most_eliminations' in (
+          select entrant_id::text from top_elims
+        )
+        then 1 else 0
+      end as correct
+    from pick_rows pr
+  ),
+  score_calc as (
+    select
+      pr.user_id,
+      coalesce(pe.correct, 0) as entrants_correct,
+      coalesce(pf.correct, 0) as final_four_correct,
+      coalesce(pw.correct, 0) as winner_correct,
+      coalesce(p1.correct, 0) as entry_1_correct,
+      coalesce(p2.correct, 0) as entry_2_correct,
+      coalesce(p30.correct, 0) as entry_30_correct,
+      coalesce(pme.correct, 0) as most_eliminations_correct
+    from pick_rows pr
+    left join pick_entrants pe on pe.user_id = pr.user_id
+    left join pick_final_four pf on pf.user_id = pr.user_id
+    left join pick_winner pw on pw.user_id = pr.user_id
+    left join pick_entry_1 p1 on p1.user_id = pr.user_id
+    left join pick_entry_2 p2 on p2.user_id = pr.user_id
+    left join pick_entry_30 p30 on p30.user_id = pr.user_id
+    left join pick_most_elims pme on pme.user_id = pr.user_id
+  )
+  insert into public.scores (user_id, event_id, points, breakdown, updated_at)
+  select
+    sc.user_id,
+    p_event_id,
+    (sc.entrants_correct * 1)
+      + (sc.final_four_correct * 6)
+      + (sc.winner_correct * 12)
+      + (sc.entry_1_correct * 6)
+      + (sc.entry_2_correct * 6)
+      + (sc.entry_30_correct * 5)
+      + (sc.most_eliminations_correct * 6) as points,
+    jsonb_build_object(
+      'entrants', sc.entrants_correct * 1,
+      'final_four', sc.final_four_correct * 6,
+      'winner', sc.winner_correct * 12,
+      'entry_1', sc.entry_1_correct * 6,
+      'entry_2', sc.entry_2_correct * 6,
+      'entry_30', sc.entry_30_correct * 5,
+      'most_eliminations', sc.most_eliminations_correct * 6
+    ),
+    now()
+  from score_calc sc
+  on conflict (user_id, event_id)
+  do update set
+    points = excluded.points,
+    breakdown = excluded.breakdown,
+    updated_at = excluded.updated_at;
+end;
+$$;
+
+create or replace function public.handle_rumble_entries_score_recalc()
+returns trigger
+language plpgsql
+as $$
+begin
+  perform public.recalculate_scores_for_event(coalesce(new.event_id, old.event_id));
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists rumble_entries_score_recalc on public.rumble_entries;
+create trigger rumble_entries_score_recalc
+  after insert or update or delete on public.rumble_entries
+  for each row execute procedure public.handle_rumble_entries_score_recalc();

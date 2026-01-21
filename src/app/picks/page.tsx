@@ -149,7 +149,10 @@ export default function PicksPage() {
       .slice(0, 4)
       .map((entry) => entry.entrant_id);
     const winners = rumbleEntries.filter((entry) => !entry.eliminated_at);
-    const winner = winners.length === 1 ? winners[0].entrant_id : null;
+    const winner =
+      rumbleEntries.length >= 30 && winners.length === 1
+        ? winners[0].entrant_id
+        : null;
     const entry1 =
       rumbleEntries.find((entry) => entry.entry_number === 1)?.entrant_id ??
       null;

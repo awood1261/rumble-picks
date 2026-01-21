@@ -81,6 +81,7 @@ export default function ScoreboardPage() {
   }, [currentUserId, filteredScoreboard]);
 
   const winnerEntrantId = useMemo(() => {
+    if (rumbleEntries.length < 30) return null;
     const remaining = rumbleEntries.filter((entry) => !entry.eliminated_at);
     return remaining.length === 1 ? remaining[0].entrant_id : null;
   }, [rumbleEntries]);
@@ -380,7 +381,7 @@ export default function ScoreboardPage() {
                       {index === 0 && winnerEntrantId && (
                         <span className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-amber-200">
                           <svg
-                            className="h-6 w-6"
+                            className="h-10 w-10"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"

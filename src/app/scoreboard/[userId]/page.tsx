@@ -77,7 +77,10 @@ export default function ScoreboardPicksPage() {
       .slice(0, 4)
       .map((entry) => entry.entrant_id);
     const winners = rumbleEntries.filter((entry) => !entry.eliminated_at);
-    const winner = winners.length === 1 ? winners[0].entrant_id : null;
+    const winner =
+      rumbleEntries.length >= 30 && winners.length === 1
+        ? winners[0].entrant_id
+        : null;
     const entry1 = rumbleEntries.find((entry) => entry.entry_number === 1)?.entrant_id ?? null;
     const entry2 = rumbleEntries.find((entry) => entry.entry_number === 2)?.entrant_id ?? null;
     const entry30 = rumbleEntries.find((entry) => entry.entry_number === 30)?.entrant_id ?? null;
