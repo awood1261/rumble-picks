@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { EntrantCard } from "../../components/EntrantCard";
 import { scoringRules } from "../../lib/scoringRules";
@@ -72,6 +72,8 @@ export default function PicksPage() {
   );
   const [customEntrantName, setCustomEntrantName] = useState("");
   const [entrantSearch, setEntrantSearch] = useState("");
+  const [customModalOpen, setCustomModalOpen] = useState(false);
+  const keyPicksRef = useRef<HTMLDivElement | null>(null);
   const [editSection, setEditSection] = useState<
     "entrants" | "final_four" | "key_picks" | null
   >(null);
@@ -421,6 +423,11 @@ export default function PicksPage() {
     });
   }, [payload.entrants]);
 
+  useEffect(() => {
+    if (editSection !== "key_picks") return;
+    keyPicksRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [editSection]);
+
   const toggleEntrant = (id: string) => {
     setPayload((prev) => {
       const exists = prev.entrants.includes(id);
@@ -503,6 +510,7 @@ export default function PicksPage() {
       setMessage("Custom entrant added.");
     }
     setCustomEntrantName("");
+    setCustomModalOpen(false);
   };
 
   const handleSave = async () => {
@@ -851,22 +859,20 @@ export default function PicksPage() {
                     </button>
                   )}
                 </div>
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <input
-                    className="h-11 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                    placeholder="Add custom entrant"
-                    value={customEntrantName}
-                    onChange={(event) => setCustomEntrantName(event.target.value)}
-                    disabled={isLocked}
-                  />
-                  <button
-                    className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    type="button"
-                    onClick={handleAddCustomEntrant}
-                    disabled={isLocked}
-                  >
-                    Add
-                  </button>
+                <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-300">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p>
+                      Don’t see an entrant? Add a custom one for this event.
+                    </p>
+                    <button
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      type="button"
+                      onClick={() => setCustomModalOpen(true)}
+                      disabled={isLocked}
+                    >
+                      Add custom
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-4">
                   <input
@@ -1022,7 +1028,10 @@ export default function PicksPage() {
               )}
 
               {(editSection === "key_picks" || !hasSaved) && (
-                <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                <div
+                  ref={keyPicksRef}
+                  className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6"
+                >
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-lg font-semibold">Key Picks</h2>
@@ -1108,6 +1117,50 @@ export default function PicksPage() {
               </section>
             )}
           </>
+        )}
+        {customModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
+            <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6 text-zinc-100 shadow-xl">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Add custom entrant</h3>
+                <button
+                  className="text-sm text-zinc-400 transition hover:text-zinc-200"
+                  type="button"
+                  onClick={() => setCustomModalOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <p className="mt-2 text-sm text-zinc-400">
+                Custom entrants require admin approval before they show up for
+                everyone.
+              </p>
+              <input
+                className="mt-4 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-base text-zinc-100"
+                placeholder="Entrant name"
+                value={customEntrantName}
+                onChange={(event) => setCustomEntrantName(event.target.value)}
+                autoFocus
+              />
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                  type="button"
+                  onClick={() => setCustomModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="inline-flex h-10 items-center justify-center rounded-full bg-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                  type="button"
+                  onClick={handleAddCustomEntrant}
+                  disabled={isLocked}
+                >
+                  Submit
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>
