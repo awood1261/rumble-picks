@@ -74,6 +74,7 @@ export default function PicksPage() {
   const [entrantSearch, setEntrantSearch] = useState("");
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [editSection, setEditSection] = useState<
     "entrants" | "final_four" | "key_picks" | null
   >(null);
@@ -86,6 +87,37 @@ export default function PicksPage() {
     if (!selectedEvent?.starts_at) return false;
     return new Date() >= new Date(selectedEvent.starts_at);
   }, [selectedEvent?.starts_at]);
+
+  const lockInfo = useMemo(() => {
+    if (!selectedEvent?.starts_at) {
+      return {
+        label: "Lock time not set",
+        detail: "Picks stay editable until a start time is added.",
+      };
+    }
+    const startTime = new Date(selectedEvent.starts_at).getTime();
+    const diffMs = startTime - now;
+    const absMs = Math.abs(diffMs);
+    const minutes = Math.floor(absMs / 60000) % 60;
+    const hours = Math.floor(absMs / 3600000) % 24;
+    const days = Math.floor(absMs / 86400000);
+    const parts = [
+      days ? `${days}d` : null,
+      hours ? `${hours}h` : null,
+      `${minutes}m`,
+    ].filter(Boolean);
+    const timeString = parts.join(" ");
+    if (diffMs > 0) {
+      return {
+        label: `Locks in ${timeString}`,
+        detail: "You can edit picks until the event start time.",
+      };
+    }
+    return {
+      label: `Locked ${timeString} ago`,
+      detail: "Picks are locked once the event starts.",
+    };
+  }, [selectedEvent?.starts_at, now]);
 
   const entrantOptions = useMemo(() => {
     const gender = selectedEvent?.rumble_gender;
@@ -301,6 +333,12 @@ export default function PicksPage() {
         }
       });
   }, [sessionEmail]);
+
+  useEffect(() => {
+    if (!selectedEvent?.starts_at) return;
+    const interval = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, [selectedEvent?.starts_at]);
 
   useEffect(() => {
     if (!selectedEventId || !userId) return;
@@ -659,21 +697,29 @@ export default function PicksPage() {
             Choose an event and lock in your rumble picks before bell time.
           </p>
         </header>
-        <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
-          {rankInfo.rank ? (
-            <span>
-              Your current rank:{" "}
-              <span className="font-semibold text-amber-200">
-                #{rankInfo.rank}
-              </span>{" "}
-              of {rankInfo.total}
-            </span>
-          ) : (
-            <span className="text-zinc-400">
-              Your rank will appear once scores are calculated for this event.
-            </span>
-          )}
-        </div>
+        {!isLocked && (
+          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
+            <p className="font-semibold text-amber-200">{lockInfo.label}</p>
+            <p className="mt-1 text-xs text-zinc-400">{lockInfo.detail}</p>
+          </div>
+        )}
+        {isLocked && (
+          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
+            {rankInfo.rank ? (
+              <span>
+                Your current rank:{" "}
+                <span className="font-semibold text-amber-200">
+                  #{rankInfo.rank}
+                </span>{" "}
+                of {rankInfo.total}
+              </span>
+            ) : (
+              <span className="text-zinc-400">
+                Your rank will appear once scores are calculated for this event.
+              </span>
+            )}
+          </div>
+        )}
         {isLocked && (
           <div className="mt-6 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
             Picks are locked for this event.
