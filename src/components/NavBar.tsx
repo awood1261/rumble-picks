@@ -89,6 +89,15 @@ export const NavBar = () => {
           >
             Picks
           </Link>
+          {isSignedIn && (
+            <Link
+              className={linkClass(pathname.startsWith("/profile"))}
+              href="/profile"
+              aria-current={pathname.startsWith("/profile") ? "page" : undefined}
+            >
+              Profile
+            </Link>
+          )}
           <Link
             className={linkClass(pathname.startsWith("/scoreboard"))}
             href="/scoreboard"

@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
@@ -61,6 +62,11 @@ export default function LoginPage() {
         const { error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              display_name: displayName,
+            },
+          },
         });
         if (error) throw error;
         setMessage("Check your inbox to confirm your account.");
@@ -83,6 +89,7 @@ export default function LoginPage() {
     setBusy(false);
   };
 
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center px-6 py-24">
@@ -98,6 +105,21 @@ export default function LoginPage() {
 
           {!sessionEmail && (
             <form className="mt-8 space-y-5" onSubmit={onSubmit}>
+              {mode === "sign-up" && (
+                <div className="space-y-2 text-sm">
+                  <label className="block text-zinc-300" htmlFor="displayName">
+                    Username
+                  </label>
+                  <input
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-amber-400"
+                    id="displayName"
+                    type="text"
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    required
+                  />
+                </div>
+              )}
               <div className="space-y-2 text-sm">
                 <label className="block text-zinc-300" htmlFor="email">
                   Email
