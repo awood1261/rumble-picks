@@ -21,6 +21,8 @@ type EntrantRow = {
   gender: string | null;
   image_url: string | null;
   roster_year: number | null;
+  event_id: string | null;
+  is_custom: boolean;
 };
 
 type PicksPayload = {
@@ -66,6 +68,7 @@ export default function PicksPage() {
   const [rankInfo, setRankInfo] = useState<{ rank: number | null; total: number }>(
     { rank: null, total: 0 }
   );
+  const [customEntrantName, setCustomEntrantName] = useState("");
   const [editSection, setEditSection] = useState<
     "entrants" | "final_four" | "key_picks" | null
   >(null);
@@ -88,7 +91,10 @@ export default function PicksPage() {
         const matchesYear =
           !selectedEvent?.roster_year ||
           entrant.roster_year === selectedEvent.roster_year;
-        return matchesGender && matchesYear;
+        const matchesEvent =
+          !selectedEvent?.id || entrant.event_id === selectedEvent.id;
+        const isRosterEntrant = entrant.event_id === null;
+        return matchesGender && (matchesEvent || (isRosterEntrant && matchesYear));
       })
       .forEach((entrant) => {
       const nameKey = entrant.name.trim().toLowerCase();
@@ -279,7 +285,9 @@ export default function PicksPage() {
             .maybeSingle(),
           supabase
             .from("entrants")
-            .select("id, name, promotion, gender, image_url, roster_year")
+            .select(
+              "id, name, promotion, gender, image_url, roster_year, event_id, is_custom"
+            )
             .order("name", { ascending: true }),
           supabase
             .from("rumble_entries")
@@ -408,6 +416,58 @@ export default function PicksPage() {
     });
   };
 
+  const handleAddCustomEntrant = async () => {
+    if (!userId || !selectedEventId) return;
+    if (isLocked) {
+      setMessage("Picks are locked for this event.");
+      return;
+    }
+    const trimmed = customEntrantName.trim();
+    if (!trimmed) {
+      setMessage("Custom entrant name is required.");
+      return;
+    }
+    const normalized = trimmed.toLowerCase();
+    const existing = entrantOptions.find(
+      (entrant) => entrant.name.trim().toLowerCase() === normalized
+    );
+    if (existing) {
+      setMessage("That entrant is already in the list.");
+      if (!payload.entrants.includes(existing.id)) {
+        toggleEntrant(existing.id);
+      }
+      setCustomEntrantName("");
+      return;
+    }
+    const { data, error } = await supabase
+      .from("entrants")
+      .insert({
+        name: trimmed,
+        promotion: "Custom",
+        gender: selectedEvent?.rumble_gender ?? null,
+        roster_year: selectedEvent?.roster_year ?? null,
+        event_id: selectedEventId,
+        is_custom: true,
+        created_by: userId,
+        active: true,
+      })
+      .select("id, name, promotion, gender, image_url, roster_year, event_id, is_custom")
+      .single();
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    if (data) {
+      setEntrants((prev) => [...prev, data]);
+      setPayload((prev) => {
+        if (prev.entrants.length >= 30) return prev;
+        return { ...prev, entrants: [...prev.entrants, data.id] };
+      });
+      setMessage("Custom entrant added.");
+    }
+    setCustomEntrantName("");
+  };
+
   const handleSave = async () => {
     if (!userId || !selectedEventId) return;
     if (isLocked) {
@@ -530,11 +590,8 @@ export default function PicksPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <main className="mx-auto w-full max-w-6xl px-6 py-16">
+      <main className="mx-auto w-full max-w-6xl px-6 py-10">
         <header className="flex flex-col gap-2">
-          <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-            Rumble Picks
-          </p>
           <h1 className="text-3xl font-semibold">Make your predictions</h1>
           <p className="text-sm text-zinc-400">
             Choose an event and lock in your rumble picks before bell time.
@@ -739,6 +796,23 @@ export default function PicksPage() {
                       Cancel
                     </button>
                   )}
+                </div>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <input
+                    className="h-11 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    placeholder="Add custom entrant"
+                    value={customEntrantName}
+                    onChange={(event) => setCustomEntrantName(event.target.value)}
+                    disabled={isLocked}
+                  />
+                  <button
+                    className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    type="button"
+                    onClick={handleAddCustomEntrant}
+                    disabled={isLocked}
+                  >
+                    Add
+                  </button>
                 </div>
                 <div className="mt-4 max-h-[520px] space-y-6 overflow-y-auto pr-1">
                   {Object.entries(entrantsByPromotion)

@@ -234,11 +234,8 @@ export default function ScoreboardPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <main className="mx-auto w-full max-w-5xl px-6 py-16">
+      <main className="mx-auto w-full max-w-5xl px-6 py-10">
         <header className="flex flex-col gap-2">
-          <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-            Live Scoreboard
-          </p>
           <h1 className="text-3xl font-semibold">Scoreboard</h1>
           <p className="text-sm text-zinc-400">
             Scores update as eliminations and results are recorded.

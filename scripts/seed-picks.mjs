@@ -27,7 +27,7 @@ const headers = {
   apikey: SUPABASE_SECRET_KEY,
   Authorization: `Bearer ${SUPABASE_SECRET_KEY}`,
   "Content-Type": "application/json",
-  Prefer: "return=representation",
+  Prefer: "return=representation,resolution=merge-duplicates",
 };
 
 const request = async (url, options) => {
@@ -58,6 +58,15 @@ const run = async () => {
     return `${EMAIL_PREFIX}${number}@${EMAIL_DOMAIN}`;
   });
 
+  const eventRows = await request(
+    `${SUPABASE_URL}/rest/v1/events?id=eq.${EVENT_ID}&select=id,rumble_gender,roster_year`,
+    { headers }
+  );
+  const eventRow = eventRows?.[0];
+  if (!eventRow) {
+    throw new Error(`Event not found for id ${EVENT_ID}`);
+  }
+
   const usersResponse = await request(
     `${SUPABASE_URL}/auth/v1/admin/users?per_page=1000`,
     { headers }
@@ -70,8 +79,14 @@ const run = async () => {
     throw new Error("No users found in profiles.");
   }
 
+  const gender = eventRow.rumble_gender ?? "men";
+  const rosterYear = eventRow.roster_year;
+  const yearFilter =
+    rosterYear === null || rosterYear === undefined
+      ? "roster_year=is.null"
+      : `roster_year=eq.${rosterYear}`;
   const entrantRows = await request(
-    `${SUPABASE_URL}/rest/v1/entrants?select=id&gender=eq.men&active=eq.true`,
+    `${SUPABASE_URL}/rest/v1/entrants?select=id&gender=eq.${gender}&active=eq.true&${yearFilter}&or=(event_id.is.null,event_id.eq.${EVENT_ID})`,
     { headers }
   );
   const entrantIds = (entrantRows ?? []).map((row) => row.id);
@@ -98,7 +113,7 @@ const run = async () => {
       most_eliminations: mostElims,
     };
 
-    await request(`${SUPABASE_URL}/rest/v1/picks`, {
+    await request(`${SUPABASE_URL}/rest/v1/picks?on_conflict=user_id,event_id`, {
       method: "POST",
       headers,
       body: JSON.stringify({

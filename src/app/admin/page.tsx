@@ -23,6 +23,8 @@ type EntrantRow = {
   active: boolean;
   image_url: string | null;
   roster_year: number | null;
+  event_id: string | null;
+  is_custom: boolean;
 };
 
 type RumbleEntryRow = {
@@ -61,6 +63,7 @@ export default function AdminPage() {
   const [eliminateEntryId, setEliminateEntryId] = useState("");
   const [eliminatedById, setEliminatedById] = useState("");
   const [recalcBusy, setRecalcBusy] = useState(false);
+  const [customEntrantName, setCustomEntrantName] = useState("");
 
   const formatLocalDateTime = (value: string | null) => {
     if (!value) return "";
@@ -88,11 +91,30 @@ export default function AdminPage() {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
   const entrantOptions = useMemo(() => {
+    return [...entrants].sort((a, b) => a.name.localeCompare(b.name));
+  }, [entrants]);
+  const filteredEntrantOptions = useMemo(() => {
+    const gender = activeEvent?.rumble_gender;
+    const rosterYear = activeEvent?.roster_year;
+    const eventId = activeEvent?.id ?? null;
+    const base = entrantOptions.filter((entrant) => {
+      const matchesGender = !gender || entrant.gender === gender;
+      const matchesYear = !rosterYear || entrant.roster_year === rosterYear;
+      const matchesEvent = eventId ? entrant.event_id === eventId : false;
+      const isRosterEntrant = entrant.event_id === null;
+      return matchesGender && (matchesEvent || (isRosterEntrant && matchesYear));
+    });
     const byName = new Map<string, EntrantRow>();
-    entrants.forEach((entrant) => {
+    base.forEach((entrant) => {
       const nameKey = entrant.name.trim().toLowerCase();
       const current = byName.get(nameKey);
       if (!current) {
+        byName.set(nameKey, entrant);
+        return;
+      }
+      const currentMatchesEvent = eventId && current.event_id === eventId;
+      const nextMatchesEvent = eventId && entrant.event_id === eventId;
+      if (!currentMatchesEvent && nextMatchesEvent) {
         byName.set(nameKey, entrant);
         return;
       }
@@ -105,16 +127,7 @@ export default function AdminPage() {
     return Array.from(byName.values()).sort((a, b) =>
       a.name.localeCompare(b.name)
     );
-  }, [entrants]);
-  const filteredEntrantOptions = useMemo(() => {
-    const gender = activeEvent?.rumble_gender;
-    const rosterYear = activeEvent?.roster_year;
-    return entrantOptions.filter((entrant) => {
-      const matchesGender = !gender || entrant.gender === gender;
-      const matchesYear = !rosterYear || entrant.roster_year === rosterYear;
-      return matchesGender && matchesYear;
-    });
-  }, [activeEvent?.rumble_gender, activeEvent?.roster_year, entrantOptions]);
+  }, [activeEvent?.rumble_gender, activeEvent?.roster_year, activeEvent?.id, entrantOptions]);
   const eventEntrantOptions = useMemo(() => {
     const eventEntrantIds = new Set(entries.map((entry) => entry.entrant_id));
     return filteredEntrantOptions.filter((entrant) =>
@@ -154,7 +167,9 @@ export default function AdminPage() {
             .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
-            .select("id, name, promotion, gender, active, image_url, roster_year")
+            .select(
+              "id, name, promotion, gender, active, image_url, roster_year, event_id, is_custom"
+            )
             .order("name", { ascending: true }),
           supabase
             .from("rumble_entries")
@@ -239,6 +254,50 @@ export default function AdminPage() {
     setEventStartsAt("");
     setEventGender("men");
     setEventRosterYear("");
+    refreshData();
+  };
+
+  const handleAddCustomEntrant = async () => {
+    if (!activeEvent) {
+      setMessage("Select an event before adding a custom entrant.");
+      return;
+    }
+    const trimmed = customEntrantName.trim();
+    if (!trimmed) {
+      setMessage("Custom entrant name is required.");
+      return;
+    }
+    const normalized = trimmed.toLowerCase();
+    const existing = filteredEntrantOptions.find(
+      (entrant) => entrant.name.trim().toLowerCase() === normalized
+    );
+    if (existing) {
+      setMessage("That entrant already exists on the roster.");
+      return;
+    }
+    const mismatched = entrants.find(
+      (entrant) => entrant.name.trim().toLowerCase() === normalized
+    );
+    if (mismatched) {
+      setMessage(
+        "That entrant exists on a different roster year. Adding as a custom entrant for this event."
+      );
+    }
+    const { error } = await supabase.from("entrants").insert({
+      name: trimmed,
+      promotion: "Custom",
+      gender: activeEvent.rumble_gender,
+      roster_year: activeEvent.roster_year,
+      event_id: activeEvent.id,
+      is_custom: true,
+      active: true,
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setCustomEntrantName("");
+    setMessage("Custom entrant added.");
     refreshData();
   };
 
@@ -544,6 +603,21 @@ export default function AdminPage() {
                 value={eventRosterYear}
                 onChange={(event) => setEventRosterYear(event.target.value)}
               />
+              <div className="flex items-center gap-2">
+                <input
+                  className="h-11 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  placeholder="Add custom entrant"
+                  value={customEntrantName}
+                  onChange={(event) => setCustomEntrantName(event.target.value)}
+                />
+                <button
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                  type="button"
+                  onClick={handleAddCustomEntrant}
+                >
+                  Add
+                </button>
+              </div>
               <button
                 className="inline-flex h-11 w-full items-center justify-center rounded-full bg-amber-400 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
                 type="button"

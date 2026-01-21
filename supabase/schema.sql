@@ -53,6 +53,9 @@ create table if not exists public.entrants (
   gender text,
   image_url text,
   roster_year integer,
+  event_id uuid references public.events(id) on delete cascade,
+  is_custom boolean not null default false,
+  created_by uuid references auth.users(id) on delete set null,
   active boolean not null default true,
   notes text,
   created_at timestamptz not null default now()
@@ -176,6 +179,16 @@ create policy "Entrants are modifiable by admins"
   for all
   using (public.is_admin(auth.uid()))
   with check (public.is_admin(auth.uid()));
+
+create policy "Custom entrants are insertable by authenticated users"
+  on public.entrants
+  for insert
+  with check (
+    auth.uid() is not null
+    and is_custom = true
+    and created_by = auth.uid()
+    and event_id is not null
+  );
 
 create policy "Matches are viewable by everyone"
   on public.matches

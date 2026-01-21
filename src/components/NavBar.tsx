@@ -71,10 +71,15 @@ export const NavBar = () => {
     <header className="sticky top-0 z-50 border-b border-zinc-900/80 bg-zinc-950/80 backdrop-blur">
       <nav className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
         <Link
-          className="text-sm font-semibold uppercase tracking-[0.3em] text-amber-300"
+          className="flex items-center"
           href="/"
+          aria-label="Rumble Picks"
         >
-          Rumble Picks
+          <img
+            className="h-20 w-auto sm:h-24"
+            src="/images/rumble-picks-logo.png"
+            alt="Rumble Picks"
+          />
         </Link>
         <div className="flex flex-nowrap items-center gap-3 text-xs font-semibold uppercase tracking-wide text-zinc-300">
           <Link
