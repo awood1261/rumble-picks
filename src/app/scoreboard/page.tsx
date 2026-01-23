@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
@@ -52,6 +52,8 @@ export default function ScoreboardPage() {
   const [eventEntrants, setEventEntrants] = useState<EventEntrantRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [rankDelta, setRankDelta] = useState<Record<string, number | null>>({});
+  const previousRanksRef = useRef<Record<string, number>>({});
 
   const scoreboard = useMemo(() => {
     const profileMap = new Map(
@@ -72,6 +74,28 @@ export default function ScoreboardPage() {
     if (!selectedEventId) return scoreboard;
     return scoreboard.filter((row) => row.event_id === selectedEventId);
   }, [scoreboard, selectedEventId]);
+
+  useEffect(() => {
+    const nextRankMap: Record<string, number> = {};
+    filteredScoreboard.forEach((row, index) => {
+      nextRankMap[row.user_id] = index + 1;
+    });
+
+    setRankDelta((prev) => {
+      const updated: Record<string, number | null> = { ...prev };
+      filteredScoreboard.forEach((row) => {
+        const prevRank = previousRanksRef.current[row.user_id];
+        if (prevRank) {
+          updated[row.user_id] = prevRank - nextRankMap[row.user_id];
+        } else {
+          updated[row.user_id] = null;
+        }
+      });
+      return updated;
+    });
+
+    previousRanksRef.current = nextRankMap;
+  }, [filteredScoreboard]);
 
   const topThree = useMemo(() => filteredScoreboard.slice(0, 3), [filteredScoreboard]);
   const currentUserIndex = useMemo(() => {
@@ -373,6 +397,19 @@ export default function ScoreboardPage() {
                       <span className="text-3xl font-semibold text-amber-300">
                         #{index + 1}
                       </span>
+                      {rankDelta[row.user_id] !== null && rankDelta[row.user_id] !== 0 && (
+                        <span
+                          className={`text-xs font-semibold uppercase tracking-wide ${
+                            (rankDelta[row.user_id] ?? 0) > 0
+                              ? "text-emerald-300"
+                              : "text-rose-300"
+                          }`}
+                        >
+                          {(rankDelta[row.user_id] ?? 0) > 0
+                            ? `▲ ${Math.abs(rankDelta[row.user_id] ?? 0)}`
+                            : `▼ ${Math.abs(rankDelta[row.user_id] ?? 0)}`}
+                        </span>
+                      )}
                       {index === 0 && winnerEntrantId && (
                         <span className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-amber-200">
                           <svg
@@ -403,6 +440,7 @@ export default function ScoreboardPage() {
 
               <div className="divide-y divide-zinc-800">
                 {filteredScoreboard.slice(3).map((row, index) => {
+                  const delta = rankDelta[row.user_id];
                   const content = (
                     <>
                       <div className="flex items-center gap-4">
@@ -428,6 +466,15 @@ export default function ScoreboardPage() {
                       </div>
                     </div>
                     <div className="text-right">
+                      {delta !== null && delta !== 0 && (
+                        <p
+                          className={`text-xs font-semibold uppercase tracking-wide ${
+                            delta > 0 ? "text-emerald-300" : "text-rose-300"
+                          }`}
+                        >
+                          {delta > 0 ? `▲ ${Math.abs(delta)}` : `▼ ${Math.abs(delta)}`}
+                        </p>
+                      )}
                       <p className="text-2xl font-semibold">{row.points}</p>
                       <p className="text-xs text-zinc-500">points</p>
                     </div>

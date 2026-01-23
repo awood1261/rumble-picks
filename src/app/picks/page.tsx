@@ -170,6 +170,11 @@ export default function PicksPage() {
     return entrantOptions.filter((entrant) => selected.has(entrant.id));
   }, [entrantOptions, payload.entrants]);
 
+  const selectedFinalFourOptions = useMemo(() => {
+    const selected = new Set(payload.final_four);
+    return entrantOptions.filter((entrant) => selected.has(entrant.id));
+  }, [entrantOptions, payload.final_four]);
+
   const entrantsByPromotion = useMemo(() => {
     return entrantOptions.reduce((groups, entrant) => {
       const key = entrant.promotion ?? "Other";
@@ -455,10 +460,13 @@ export default function PicksPage() {
   useEffect(() => {
     const selected = new Set(payload.entrants);
     setPayload((prev) => {
+      const finalFour = prev.final_four.filter((id) => selected.has(id));
+      const finalFourSet = new Set(finalFour);
       const next = {
         ...prev,
-        final_four: prev.final_four.filter((id) => selected.has(id)),
-        winner: prev.winner && selected.has(prev.winner) ? prev.winner : null,
+        final_four: finalFour,
+        winner:
+          prev.winner && finalFourSet.has(prev.winner) ? prev.winner : null,
         entry_1:
           prev.entry_1 && selected.has(prev.entry_1) ? prev.entry_1 : null,
         entry_2:
@@ -1157,7 +1165,10 @@ export default function PicksPage() {
                           disabled={isLocked}
                         >
                           <option value="">Select</option>
-                          {selectedEntrantOptions.map((entrant) => (
+                          {(field.key === "winner"
+                            ? selectedFinalFourOptions
+                            : selectedEntrantOptions
+                          ).map((entrant) => (
                             <option key={entrant.id} value={entrant.id}>
                               {entrant.name}
                             </option>

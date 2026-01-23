@@ -413,6 +413,18 @@ export default function AdminPage() {
     refreshData();
   };
 
+  useEffect(() => {
+    if (!entryEntrantId) {
+      if (entryNumber) {
+        setEntryNumber("");
+      }
+      return;
+    }
+    if (!entryNumber) {
+      setEntryNumber(String(entries.length + 1));
+    }
+  }, [entryEntrantId, entryNumber, entries.length]);
+
   const handleElimination = async () => {
     setMessage(null);
     if (!eliminateEntryId) {
