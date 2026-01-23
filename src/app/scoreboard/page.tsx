@@ -54,6 +54,9 @@ export default function ScoreboardPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [rankDelta, setRankDelta] = useState<Record<string, number | null>>({});
   const previousRanksRef = useRef<Record<string, number>>({});
+  const lastDeltaRef = useRef<Record<string, number>>({});
+  const [lastUpdateAt, setLastUpdateAt] = useState(Date.now());
+  const [countdownMs, setCountdownMs] = useState(SCOREBOARD_POLL_INTERVAL_MS);
 
   const scoreboard = useMemo(() => {
     const profileMap = new Map(
@@ -74,28 +77,6 @@ export default function ScoreboardPage() {
     if (!selectedEventId) return scoreboard;
     return scoreboard.filter((row) => row.event_id === selectedEventId);
   }, [scoreboard, selectedEventId]);
-
-  useEffect(() => {
-    const nextRankMap: Record<string, number> = {};
-    filteredScoreboard.forEach((row, index) => {
-      nextRankMap[row.user_id] = index + 1;
-    });
-
-    setRankDelta((prev) => {
-      const updated: Record<string, number | null> = { ...prev };
-      filteredScoreboard.forEach((row) => {
-        const prevRank = previousRanksRef.current[row.user_id];
-        if (prevRank) {
-          updated[row.user_id] = prevRank - nextRankMap[row.user_id];
-        } else {
-          updated[row.user_id] = null;
-        }
-      });
-      return updated;
-    });
-
-    previousRanksRef.current = nextRankMap;
-  }, [filteredScoreboard]);
 
   const topThree = useMemo(() => filteredScoreboard.slice(0, 3), [filteredScoreboard]);
   const currentUserIndex = useMemo(() => {
@@ -165,10 +146,42 @@ export default function ScoreboardPage() {
     if (profileError) {
       setMessage(profileError.message);
     }
+    if (selectedEventId) {
+      const eventScores = (scoreRows ?? [])
+        .filter((row) => row.event_id === selectedEventId)
+        .sort((a, b) => b.points - a.points);
+      const nextRankMap: Record<string, number> = {};
+      eventScores.forEach((row, index) => {
+        nextRankMap[row.user_id] = index + 1;
+      });
+      const updated: Record<string, number | null> = { ...lastDeltaRef.current };
+      eventScores.forEach((row) => {
+        const prevRank = previousRanksRef.current[row.user_id];
+        if (typeof prevRank === "number") {
+          const delta = prevRank - nextRankMap[row.user_id];
+          if (delta !== 0) {
+            updated[row.user_id] = delta;
+          }
+        } else if (!(row.user_id in updated)) {
+          updated[row.user_id] = null;
+        }
+      });
+      setRankDelta(updated);
+      previousRanksRef.current = nextRankMap;
+      lastDeltaRef.current = Object.fromEntries(
+        Object.entries(updated).filter(([, value]) => value !== null)
+      ) as Record<string, number>;
+    } else {
+      setRankDelta({});
+      previousRanksRef.current = {};
+      lastDeltaRef.current = {};
+    }
+
     setScores(scoreRows ?? []);
     setProfiles(profileRows ?? []);
     setLoading(false);
-  }, []);
+    setLastUpdateAt(Date.now());
+  }, [selectedEventId]);
 
   const loadRumbleEntries = useCallback(async () => {
     if (!selectedEventId) {
@@ -204,6 +217,7 @@ export default function ScoreboardPage() {
       return;
     }
     setEventEntrants(entrantRows ?? []);
+    setLastUpdateAt(Date.now());
   }, [selectedEventId]);
 
   useEffect(() => {
@@ -241,6 +255,12 @@ export default function ScoreboardPage() {
   }, [loadScores, queryEventId]);
 
   useEffect(() => {
+    previousRanksRef.current = {};
+    setRankDelta({});
+    lastDeltaRef.current = {};
+  }, [selectedEventId]);
+
+  useEffect(() => {
     loadRumbleEntries();
     loadScores();
 
@@ -252,6 +272,16 @@ export default function ScoreboardPage() {
     return () => clearInterval(interval);
   }, [loadRumbleEntries, loadScores]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - lastUpdateAt;
+      const remaining = Math.max(SCOREBOARD_POLL_INTERVAL_MS - elapsed, 0);
+      setCountdownMs(remaining);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lastUpdateAt]);
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <main className="mx-auto w-full max-w-5xl px-6 py-10">
@@ -261,6 +291,9 @@ export default function ScoreboardPage() {
             Scores update as eliminations and results are recorded.
           </p>
         </header>
+        <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-zinc-400">
+          Next update in {Math.ceil(countdownMs / 1000)}s
+        </div>
         {events.length > 1 && (
           <div className="mt-6">
             <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
@@ -383,7 +416,9 @@ export default function ScoreboardPage() {
           ) : (
             <>
               <div className="mb-6 grid gap-4 md:grid-cols-3">
-                {topThree.map((row, index) => (
+                {topThree.map((row, index) => {
+                  const delta = rankDelta[row.user_id];
+                  return (
                   <Link
                     key={row.id}
                     className={`rounded-2xl border px-4 py-4 transition hover:text-amber-200 ${
@@ -397,17 +432,17 @@ export default function ScoreboardPage() {
                       <span className="text-3xl font-semibold text-amber-300">
                         #{index + 1}
                       </span>
-                      {rankDelta[row.user_id] !== null && rankDelta[row.user_id] !== 0 && (
+                      {typeof delta === "number" && delta !== 0 && (
                         <span
-                          className={`text-xs font-semibold uppercase tracking-wide ${
-                            (rankDelta[row.user_id] ?? 0) > 0
+                          className={`hidden text-xs font-semibold uppercase tracking-wide sm:inline-flex ${
+                            delta > 0
                               ? "text-emerald-300"
                               : "text-rose-300"
                           }`}
                         >
-                          {(rankDelta[row.user_id] ?? 0) > 0
-                            ? `▲ ${Math.abs(rankDelta[row.user_id] ?? 0)}`
-                            : `▼ ${Math.abs(rankDelta[row.user_id] ?? 0)}`}
+                          {delta > 0
+                            ? `▲ ${Math.abs(delta)}`
+                            : `▼ ${Math.abs(delta)}`}
                         </span>
                       )}
                       {index === 0 && winnerEntrantId && (
@@ -431,11 +466,21 @@ export default function ScoreboardPage() {
                       )}
                     </div>
                     <p className="mt-3 text-lg font-semibold">{row.display_name}</p>
+                    {typeof delta === "number" && delta !== 0 && (
+                      <p
+                        className={`mt-2 text-sm font-semibold uppercase tracking-wide sm:hidden ${
+                          delta > 0 ? "text-emerald-300" : "text-rose-300"
+                        }`}
+                      >
+                        {delta > 0 ? `▲ ${Math.abs(delta)}` : `▼ ${Math.abs(delta)}`}
+                      </p>
+                    )}
                     <p className="mt-1 text-sm text-zinc-400">
                       {row.points} points
                     </p>
                   </Link>
-                ))}
+                );
+                })}
               </div>
 
               <div className="divide-y divide-zinc-800">
@@ -466,9 +511,9 @@ export default function ScoreboardPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      {delta !== null && delta !== 0 && (
+                      {typeof delta === "number" && delta !== 0 && (
                         <p
-                          className={`text-xs font-semibold uppercase tracking-wide ${
+                          className={`hidden text-xs font-semibold uppercase tracking-wide sm:block ${
                             delta > 0 ? "text-emerald-300" : "text-rose-300"
                           }`}
                         >
@@ -478,6 +523,15 @@ export default function ScoreboardPage() {
                       <p className="text-2xl font-semibold">{row.points}</p>
                       <p className="text-xs text-zinc-500">points</p>
                     </div>
+                    {typeof delta === "number" && delta !== 0 && (
+                      <p
+                        className={`text-xs font-semibold uppercase tracking-wide sm:hidden ${
+                          delta > 0 ? "text-emerald-300" : "text-rose-300"
+                        }`}
+                      >
+                        {delta > 0 ? `▲ ${Math.abs(delta)}` : `▼ ${Math.abs(delta)}`}
+                      </p>
+                    )}
                   </>
                 );
 
