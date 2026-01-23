@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
@@ -37,6 +37,8 @@ type ProfileRow = {
 };
 
 type ScoreboardRow = ScoreRow & { display_name: string };
+
+const SCOREBOARD_POLL_INTERVAL_MS = 15000;
 
 export default function ScoreboardPage() {
   const searchParams = useSearchParams();
@@ -113,7 +115,7 @@ export default function ScoreboardPage() {
     );
   }, [rumbleEntries]);
 
-  const loadScores = async () => {
+  const loadScores = useCallback(async () => {
     setMessage(null);
     const { data: scoreRows, error: scoreError } = await supabase
       .from("scores")
@@ -142,7 +144,43 @@ export default function ScoreboardPage() {
     setScores(scoreRows ?? []);
     setProfiles(profileRows ?? []);
     setLoading(false);
-  };
+  }, []);
+
+  const loadRumbleEntries = useCallback(async () => {
+    if (!selectedEventId) {
+      setRumbleEntries([]);
+      setEventEntrants([]);
+      return;
+    }
+    const { data: entryRows, error } = await supabase
+      .from("rumble_entries")
+      .select("entrant_id, entry_number, eliminated_at")
+      .eq("event_id", selectedEventId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setRumbleEntries(entryRows ?? []);
+
+    const entrantIds = Array.from(
+      new Set((entryRows ?? []).map((entry) => entry.entrant_id))
+    );
+    if (entrantIds.length === 0) {
+      setEventEntrants([]);
+      return;
+    }
+
+    const { data: entrantRows, error: entrantError } = await supabase
+      .from("entrants")
+      .select("id, name, promotion")
+      .in("id", entrantIds)
+      .order("name", { ascending: true });
+    if (entrantError) {
+      setMessage(entrantError.message);
+      return;
+    }
+    setEventEntrants(entrantRows ?? []);
+  }, [selectedEventId]);
 
   useEffect(() => {
     if (queryEventId && events.some((event) => event.id === queryEventId)) {
@@ -176,62 +214,19 @@ export default function ScoreboardPage() {
 
     loadEvents();
     loadScores();
-
-    const channel = supabase
-      .channel("scoreboard-live")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "scores" },
-        () => {
-          loadScores();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [selectedEventId]);
+  }, [loadScores, queryEventId]);
 
   useEffect(() => {
-    if (!selectedEventId) {
-      setRumbleEntries([]);
-      setEventEntrants([]);
-      return;
-    }
-    const loadRumbleEntries = async () => {
-      const { data: entryRows, error } = await supabase
-        .from("rumble_entries")
-        .select("entrant_id, entry_number, eliminated_at")
-        .eq("event_id", selectedEventId);
-      if (error) {
-        setMessage(error.message);
-        return;
-      }
-      setRumbleEntries(entryRows ?? []);
-
-      const entrantIds = Array.from(
-        new Set((entryRows ?? []).map((entry) => entry.entrant_id))
-      );
-      if (entrantIds.length === 0) {
-        setEventEntrants([]);
-        return;
-      }
-
-      const { data: entrantRows, error: entrantError } = await supabase
-        .from("entrants")
-        .select("id, name, promotion")
-        .in("id", entrantIds)
-        .order("name", { ascending: true });
-      if (entrantError) {
-        setMessage(entrantError.message);
-        return;
-      }
-      setEventEntrants(entrantRows ?? []);
-    };
-
     loadRumbleEntries();
-  }, [selectedEventId]);
+    loadScores();
+
+    const interval = setInterval(() => {
+      loadScores();
+      loadRumbleEntries();
+    }, SCOREBOARD_POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [loadRumbleEntries, loadScores]);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">

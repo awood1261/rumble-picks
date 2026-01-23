@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabaseClient";
@@ -40,6 +40,8 @@ type RumbleEntryRow = {
   eliminated_at: string | null;
   eliminations_count: number;
 };
+
+const PICKS_POLL_INTERVAL_MS = 15000;
 
 export default function ScoreboardPicksPage() {
   const params = useParams();
@@ -106,96 +108,105 @@ export default function ScoreboardPicksPage() {
     };
   }, [rumbleEntries]);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!validEventId) {
       setMessage("Missing event id.");
       setLoading(false);
       return;
     }
+    const [
+      { data: pickRow, error: pickError },
+      { data: eventRow },
+      { data: profileRow },
+      { data: entryRows, error: entryError },
+    ] =
+      await Promise.all([
+        supabase
+          .from("picks")
+          .select("payload")
+          .eq("event_id", validEventId)
+          .eq("user_id", userId)
+          .maybeSingle(),
+        supabase
+          .from("events")
+          .select("id, name")
+          .eq("id", validEventId)
+          .maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("id, display_name")
+          .eq("id", userId)
+          .maybeSingle(),
+        supabase
+          .from("rumble_entries")
+          .select("entrant_id, entry_number, eliminated_at, eliminations_count")
+          .eq("event_id", validEventId),
+      ]);
 
-    const load = async () => {
-      const [
-        { data: pickRow, error: pickError },
-        { data: eventRow },
-        { data: profileRow },
-        { data: entryRows, error: entryError },
-      ] =
-        await Promise.all([
-          supabase
-            .from("picks")
-            .select("payload")
-            .eq("event_id", validEventId)
-            .eq("user_id", userId)
-            .maybeSingle(),
-          supabase
-            .from("events")
-            .select("id, name")
-            .eq("id", validEventId)
-            .maybeSingle(),
-          supabase
-            .from("profiles")
-            .select("id, display_name")
-            .eq("id", userId)
-            .maybeSingle(),
-          supabase
-            .from("rumble_entries")
-            .select("entrant_id, entry_number, eliminated_at, eliminations_count")
-            .eq("event_id", validEventId),
-        ]);
-
-      if (pickError) {
-        setMessage(pickError.message);
-        setLoading(false);
-        return;
-      }
-
-      setPayload((pickRow?.payload as PicksPayload) ?? null);
-      setEvent(eventRow ?? null);
-      setProfile(profileRow ?? null);
-      setRumbleEntries(entryRows ?? []);
-
-      const ids = [
-        ...(pickRow?.payload?.entrants ?? []),
-        ...(pickRow?.payload?.final_four ?? []),
-        pickRow?.payload?.winner,
-        pickRow?.payload?.entry_1,
-        pickRow?.payload?.entry_2,
-        pickRow?.payload?.entry_30,
-        pickRow?.payload?.most_eliminations,
-      ]
-        .filter(Boolean)
-        .map(String);
-
-      const uniqueIds = Array.from(new Set(ids));
-      if (uniqueIds.length === 0) {
-        setEntrants([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data: entrantRows, error: entrantError } = await supabase
-        .from("entrants")
-        .select("id, name, promotion, image_url")
-        .in("id", uniqueIds);
-
-      if (entrantError) {
-        setMessage(entrantError.message);
-        setLoading(false);
-        return;
-      }
-
-      if (entryError) {
-        setMessage(entryError.message);
-        setLoading(false);
-        return;
-      }
-
-      setEntrants(entrantRows ?? []);
+    if (pickError) {
+      setMessage(pickError.message);
       setLoading(false);
-    };
+      return;
+    }
 
-    load();
+    setPayload((pickRow?.payload as PicksPayload) ?? null);
+    setEvent(eventRow ?? null);
+    setProfile(profileRow ?? null);
+    setRumbleEntries(entryRows ?? []);
+
+    const ids = [
+      ...(pickRow?.payload?.entrants ?? []),
+      ...(pickRow?.payload?.final_four ?? []),
+      pickRow?.payload?.winner,
+      pickRow?.payload?.entry_1,
+      pickRow?.payload?.entry_2,
+      pickRow?.payload?.entry_30,
+      pickRow?.payload?.most_eliminations,
+    ]
+      .filter(Boolean)
+      .map(String);
+
+    const uniqueIds = Array.from(new Set(ids));
+    if (uniqueIds.length === 0) {
+      setEntrants([]);
+      setLoading(false);
+      return;
+    }
+
+    const { data: entrantRows, error: entrantError } = await supabase
+      .from("entrants")
+      .select("id, name, promotion, image_url")
+      .in("id", uniqueIds);
+
+    if (entrantError) {
+      setMessage(entrantError.message);
+      setLoading(false);
+      return;
+    }
+
+    if (entryError) {
+      setMessage(entryError.message);
+      setLoading(false);
+      return;
+    }
+
+    setEntrants(entrantRows ?? []);
+    setLoading(false);
   }, [validEventId, userId]);
+
+  useEffect(() => {
+    load();
+
+    if (!validEventId) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      load();
+    }, PICKS_POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [load, validEventId]);
 
   const renderList = (
     ids: string[] | undefined,

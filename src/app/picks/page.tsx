@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { EntrantCard } from "../../components/EntrantCard";
 import { scoringRules } from "../../lib/scoringRules";
@@ -43,6 +43,8 @@ type RumbleEntryRow = {
   eliminated_at: string | null;
   eliminations_count: number;
 };
+
+const SCORING_POLL_INTERVAL_MS = 15000;
 
 const emptyPayload: PicksPayload = {
   entrants: [],
@@ -340,6 +342,21 @@ export default function PicksPage() {
     return () => clearInterval(interval);
   }, [selectedEvent?.starts_at]);
 
+  const loadRumbleEntries = useCallback(async () => {
+    if (!selectedEventId) return;
+    const { data: entryRows, error } = await supabase
+      .from("rumble_entries")
+      .select("entrant_id, entry_number, eliminated_at, eliminations_count")
+      .eq("event_id", selectedEventId);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setRumbleEntries(entryRows ?? []);
+  }, [selectedEventId]);
+
   useEffect(() => {
     if (!selectedEventId || !userId) return;
     setMessage(null);
@@ -402,33 +419,38 @@ export default function PicksPage() {
     loadEventData();
   }, [selectedEventId, userId]);
 
-  useEffect(() => {
+  const loadRank = useCallback(async () => {
     if (!selectedEventId || !userId) return;
 
-    let ignore = false;
-    const loadRank = async () => {
-      const { data, error } = await supabase
-        .from("scores")
-        .select("user_id, points")
-        .eq("event_id", selectedEventId)
-        .order("points", { ascending: false });
+    const { data, error } = await supabase
+      .from("scores")
+      .select("user_id, points")
+      .eq("event_id", selectedEventId)
+      .order("points", { ascending: false });
 
-      if (ignore) return;
-      if (error || !data) {
-        setRankInfo({ rank: null, total: 0 });
-        return;
-      }
+    if (error || !data) {
+      setRankInfo({ rank: null, total: 0 });
+      return;
+    }
 
-      const total = data.length;
-      const index = data.findIndex((row) => row.user_id === userId);
-      setRankInfo({ rank: index === -1 ? null : index + 1, total });
-    };
-
-    loadRank();
-    return () => {
-      ignore = true;
-    };
+    const total = data.length;
+    const index = data.findIndex((row) => row.user_id === userId);
+    setRankInfo({ rank: index === -1 ? null : index + 1, total });
   }, [selectedEventId, userId]);
+
+  useEffect(() => {
+    loadRank();
+  }, [loadRank]);
+
+  useEffect(() => {
+    if (!selectedEventId || !userId) return;
+    const interval = setInterval(() => {
+      loadRank();
+      loadRumbleEntries();
+    }, SCORING_POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [loadRank, loadRumbleEntries, selectedEventId, userId]);
 
   useEffect(() => {
     const selected = new Set(payload.entrants);
