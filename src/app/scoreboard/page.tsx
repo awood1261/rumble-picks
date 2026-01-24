@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
+import { ScoreboardCountdown } from "../../components/ScoreboardCountdown";
 
 type ScoreRow = {
   id: string;
@@ -56,8 +57,6 @@ export default function ScoreboardPage() {
   const previousRanksRef = useRef<Record<string, number>>({});
   const lastDeltaRef = useRef<Record<string, number>>({});
   const [lastUpdateAt, setLastUpdateAt] = useState(Date.now());
-  const [countdownMs, setCountdownMs] = useState(SCOREBOARD_POLL_INTERVAL_MS);
-  const [pulseCountdown, setPulseCountdown] = useState(false);
 
   const scoreboard = useMemo(() => {
     const profileMap = new Map(
@@ -273,34 +272,14 @@ export default function ScoreboardPage() {
     return () => clearInterval(interval);
   }, [loadRumbleEntries, loadScores]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - lastUpdateAt;
-      const remaining = Math.max(SCOREBOARD_POLL_INTERVAL_MS - elapsed, 0);
-      setCountdownMs(remaining);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [lastUpdateAt]);
-
-  useEffect(() => {
-    setPulseCountdown(true);
-    const timeout = setTimeout(() => setPulseCountdown(false), 900);
-    return () => clearTimeout(timeout);
-  }, [lastUpdateAt]);
-
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="fixed left-0 right-0 top-24 z-40 px-6 sm:top-28">
-        <div
-          className={`mx-auto w-full max-w-5xl rounded-2xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-zinc-300 shadow-lg shadow-black/30 ${
-            pulseCountdown ? "animate-pulse text-amber-200" : ""
-          }`}
-        >
-          Next update in {Math.ceil(countdownMs / 1000)}s
-        </div>
-      </div>
-      <main className="mx-auto w-full max-w-5xl px-6 pb-10 pt-36 sm:pt-40">
+      <ScoreboardCountdown
+        className="fixed left-0 right-0 top-24 z-40 px-6 sm:top-32"
+        intervalMs={SCOREBOARD_POLL_INTERVAL_MS}
+        lastUpdateAt={lastUpdateAt}
+      />
+      <main className="mx-auto w-full max-w-5xl px-6 pb-10 pt-36 sm:pt-20">
         <header className="flex flex-col gap-2">
           <h1 className="text-3xl font-semibold">Scoreboard</h1>
           <p className="text-sm text-zinc-400">
