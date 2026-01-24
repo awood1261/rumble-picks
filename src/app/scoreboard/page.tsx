@@ -275,7 +275,7 @@ export default function ScoreboardPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <ScoreboardCountdown
-        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+40px)] left-0 right-0 z-40 px-6 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+16px)]"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+4px)] left-0 right-0 z-40 px-6 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6px)]"
         intervalMs={SCOREBOARD_POLL_INTERVAL_MS}
         lastUpdateAt={lastUpdateAt}
       />
@@ -423,22 +423,22 @@ export default function ScoreboardPage() {
                     href={`/scoreboard/${row.user_id}?event=${row.event_id}`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-3xl font-semibold text-amber-300">
+                      <span className="flex items-center gap-2 text-3xl font-semibold text-amber-300">
                         #{index + 1}
+                        {typeof delta === "number" && delta !== 0 && (
+                          <span
+                            className={`text-xs font-semibold uppercase tracking-wide ${
+                              delta > 0
+                                ? "text-emerald-300"
+                                : "text-rose-300"
+                            }`}
+                          >
+                            {delta > 0
+                              ? `▲ ${Math.abs(delta)}`
+                              : `▼ ${Math.abs(delta)}`}
+                          </span>
+                        )}
                       </span>
-                      {typeof delta === "number" && delta !== 0 && (
-                        <span
-                          className={`hidden text-xs font-semibold uppercase tracking-wide sm:inline-flex ${
-                            delta > 0
-                              ? "text-emerald-300"
-                              : "text-rose-300"
-                          }`}
-                        >
-                          {delta > 0
-                            ? `▲ ${Math.abs(delta)}`
-                            : `▼ ${Math.abs(delta)}`}
-                        </span>
-                      )}
                       {index === 0 && winnerEntrantId && (
                         <span className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-amber-200">
                           <svg
@@ -460,15 +460,6 @@ export default function ScoreboardPage() {
                       )}
                     </div>
                     <p className="mt-3 text-lg font-semibold">{row.display_name}</p>
-                    {typeof delta === "number" && delta !== 0 && (
-                      <p
-                        className={`mt-2 text-sm font-semibold uppercase tracking-wide sm:hidden ${
-                          delta > 0 ? "text-emerald-300" : "text-rose-300"
-                        }`}
-                      >
-                        {delta > 0 ? `▲ ${Math.abs(delta)}` : `▼ ${Math.abs(delta)}`}
-                      </p>
-                    )}
                     <p className="mt-1 text-sm text-zinc-400">
                       {row.points} points
                     </p>
@@ -483,8 +474,19 @@ export default function ScoreboardPage() {
                   const content = (
                     <>
                       <div className="flex items-center gap-4">
-                        <span className="text-lg font-semibold text-amber-300">
+                        <span className="flex items-center gap-2 text-lg font-semibold text-amber-300">
                           #{index + 4}
+                          {typeof delta === "number" && delta !== 0 && (
+                            <span
+                              className={`text-xs font-semibold uppercase tracking-wide ${
+                                delta > 0 ? "text-emerald-300" : "text-rose-300"
+                              }`}
+                            >
+                              {delta > 0
+                                ? `▲ ${Math.abs(delta)}`
+                                : `▼ ${Math.abs(delta)}`}
+                            </span>
+                          )}
                         </span>
                         <div>
                           <p className="text-base font-semibold">
@@ -505,27 +507,9 @@ export default function ScoreboardPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      {typeof delta === "number" && delta !== 0 && (
-                        <p
-                          className={`hidden text-xs font-semibold uppercase tracking-wide sm:block ${
-                            delta > 0 ? "text-emerald-300" : "text-rose-300"
-                          }`}
-                        >
-                          {delta > 0 ? `▲ ${Math.abs(delta)}` : `▼ ${Math.abs(delta)}`}
-                        </p>
-                      )}
                       <p className="text-2xl font-semibold">{row.points}</p>
                       <p className="text-xs text-zinc-500">points</p>
                     </div>
-                    {typeof delta === "number" && delta !== 0 && (
-                      <p
-                        className={`text-xs font-semibold uppercase tracking-wide sm:hidden ${
-                          delta > 0 ? "text-emerald-300" : "text-rose-300"
-                        }`}
-                      >
-                        {delta > 0 ? `▲ ${Math.abs(delta)}` : `▼ ${Math.abs(delta)}`}
-                      </p>
-                    )}
                   </>
                 );
 

@@ -43,7 +43,7 @@ export const ScoreboardCountdown = ({
           pulse ? "countdown-glow" : ""
         }`}
       >
-        Next update in {Math.ceil(countdownMs / 1000)}s
+        Next update in <strong>{Math.ceil(countdownMs / 1000)}s</strong>
       </div>
       <style jsx>{`
         .countdown-banner {
