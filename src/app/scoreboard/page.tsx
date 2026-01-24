@@ -38,7 +38,7 @@ type ProfileRow = {
 
 type ScoreboardRow = ScoreRow & { display_name: string };
 
-const SCOREBOARD_POLL_INTERVAL_MS = 15000;
+const SCOREBOARD_POLL_INTERVAL_MS = 60000;
 
 export default function ScoreboardPage() {
   const searchParams = useSearchParams();
@@ -57,6 +57,7 @@ export default function ScoreboardPage() {
   const lastDeltaRef = useRef<Record<string, number>>({});
   const [lastUpdateAt, setLastUpdateAt] = useState(Date.now());
   const [countdownMs, setCountdownMs] = useState(SCOREBOARD_POLL_INTERVAL_MS);
+  const [pulseCountdown, setPulseCountdown] = useState(false);
 
   const scoreboard = useMemo(() => {
     const profileMap = new Map(
@@ -282,18 +283,30 @@ export default function ScoreboardPage() {
     return () => clearInterval(interval);
   }, [lastUpdateAt]);
 
+  useEffect(() => {
+    setPulseCountdown(true);
+    const timeout = setTimeout(() => setPulseCountdown(false), 900);
+    return () => clearTimeout(timeout);
+  }, [lastUpdateAt]);
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <main className="mx-auto w-full max-w-5xl px-6 py-10">
+      <div className="fixed left-0 right-0 top-24 z-40 px-6 sm:top-28">
+        <div
+          className={`mx-auto w-full max-w-5xl rounded-2xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-zinc-300 shadow-lg shadow-black/30 ${
+            pulseCountdown ? "animate-pulse text-amber-200" : ""
+          }`}
+        >
+          Next update in {Math.ceil(countdownMs / 1000)}s
+        </div>
+      </div>
+      <main className="mx-auto w-full max-w-5xl px-6 pb-10 pt-36 sm:pt-40">
         <header className="flex flex-col gap-2">
           <h1 className="text-3xl font-semibold">Scoreboard</h1>
           <p className="text-sm text-zinc-400">
             Scores update as eliminations and results are recorded.
           </p>
         </header>
-        <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-zinc-400">
-          Next update in {Math.ceil(countdownMs / 1000)}s
-        </div>
         {events.length > 1 && (
           <div className="mt-6">
             <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
@@ -327,10 +340,11 @@ export default function ScoreboardPage() {
 
         <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <div className="mb-8 grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
+            <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs">
+              <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
                 Entrants in Rumble
-              </p>
+                <span className="text-zinc-600 transition group-open:rotate-180">▾</span>
+              </summary>
               {eventEntrants.length === 0 ? (
                 <p className="mt-3 text-zinc-400">No entrants added yet.</p>
               ) : (
@@ -345,38 +359,39 @@ export default function ScoreboardPage() {
                       return aNum - bNum;
                     })
                     .map((entrant) => {
-                    const eliminated = eliminatedEntrantIds.has(entrant.id);
-                    return (
-                      <li
-                        key={entrant.id}
-                        className="flex items-center justify-between gap-2"
-                      >
-                        <span
-                          className={
-                            eliminated ? "text-red-200" : "text-zinc-300"
-                          }
+                      const eliminated = eliminatedEntrantIds.has(entrant.id);
+                      return (
+                        <li
+                          key={entrant.id}
+                          className="flex items-center justify-between gap-2"
                         >
-                          <span className="mr-2 text-[10px] font-semibold text-zinc-400">
-                            #{entryNumberMap.get(entrant.id) ?? "—"}
+                          <span
+                            className={
+                              eliminated ? "text-red-200" : "text-zinc-300"
+                            }
+                          >
+                            <span className="mr-2 text-[10px] font-semibold text-zinc-400">
+                              #{entryNumberMap.get(entrant.id) ?? "—"}
+                            </span>
+                            {entrant.name}
+                            {entrant.promotion ? ` • ${entrant.promotion}` : ""}
                           </span>
-                          {entrant.name}
-                          {entrant.promotion ? ` • ${entrant.promotion}` : ""}
-                        </span>
-                        {eliminated ? (
-                          <span className="rounded-full border border-red-500/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-200">
-                            Eliminated
-                          </span>
-                        ) : null}
-                      </li>
-                    );
-                  })}
+                          {eliminated ? (
+                            <span className="rounded-full border border-red-500/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-200">
+                              Eliminated
+                            </span>
+                          ) : null}
+                        </li>
+                      );
+                    })}
                 </ul>
               )}
-            </div>
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
+            </details>
+            <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs">
+              <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
                 Not Eliminated
-              </p>
+                <span className="text-zinc-600 transition group-open:rotate-180">▾</span>
+              </summary>
               {remainingEntrants.length === 0 ? (
                 <p className="mt-3 text-zinc-400">
                   All entrants eliminated (winner determined).
@@ -391,7 +406,7 @@ export default function ScoreboardPage() {
                   ))}
                 </ul>
               )}
-            </div>
+            </details>
           </div>
           {currentUserIndex !== null && (
             <div className="mb-6 rounded-2xl border border-sky-400/40 bg-sky-400/5 px-4 py-3 text-sm text-sky-100">
