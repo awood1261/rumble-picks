@@ -275,11 +275,11 @@ export default function ScoreboardPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <ScoreboardCountdown
-        className="fixed left-0 right-0 top-24 z-40 px-6 sm:top-32"
+        className="fixed bottom-0 left-0 right-0 z-40 px-6"
         intervalMs={SCOREBOARD_POLL_INTERVAL_MS}
         lastUpdateAt={lastUpdateAt}
       />
-      <main className="mx-auto w-full max-w-5xl px-6 pb-10 pt-36 sm:pt-20">
+      <main className="mx-auto w-full max-w-5xl pb-10 pt-10">
         <header className="flex flex-col gap-2">
           <h1 className="text-3xl font-semibold">Scoreboard</h1>
           <p className="text-sm text-zinc-400">
