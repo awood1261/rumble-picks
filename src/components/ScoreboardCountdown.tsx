@@ -39,12 +39,31 @@ export const ScoreboardCountdown = ({
   return (
     <div className={className}>
       <div
-        className={`mx-auto w-full max-w-5xl border border-amber-500/80 bg-[#fbc400] px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-black shadow-lg shadow-black/30 ${
-          pulse ? "animate-pulse text-zinc-900" : ""
+        className={`countdown-banner mx-auto w-full max-w-5xl border border-amber-500/80 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-black shadow-lg shadow-black/30 ${
+          pulse ? "countdown-glow" : ""
         }`}
       >
         Next update in {Math.ceil(countdownMs / 1000)}s
       </div>
+      <style jsx>{`
+        .countdown-banner {
+          background: linear-gradient(180deg, #fbc400 0%, #f2b200 100%);
+        }
+        .countdown-glow {
+          animation: countdownGlow 1s ease-in-out;
+        }
+        @keyframes countdownGlow {
+          0% {
+            filter: brightness(1);
+          }
+          50% {
+            filter: brightness(0.92);
+          }
+          100% {
+            filter: brightness(1);
+          }
+        }
+      `}</style>
     </div>
   );
 };
