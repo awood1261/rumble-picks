@@ -9,6 +9,10 @@ export type PicksPayload = {
   entry_30?: string;
   most_eliminations?: string;
   match_picks?: Record<string, string | null>;
+  match_finish_picks?: Record<
+    string,
+    { method: string | null; winner: string | null; loser: string | null }
+  >;
 };
 
 export type RumbleEntryRow = {
@@ -21,11 +25,22 @@ export type RumbleEntryRow = {
 export type MatchRow = {
   id: string;
   winner_entrant_id: string | null;
+  winner_side_id: string | null;
+  finish_method: string | null;
+  finish_winner_entrant_id: string | null;
+  finish_loser_entrant_id: string | null;
 };
 
 export type MatchEntrantRow = {
   match_id: string;
   entrant_id: string;
+  side_id: string | null;
+};
+
+export type MatchSideRow = {
+  id: string;
+  match_id: string;
+  label: string | null;
 };
 
 const getEliminationKey = (entry: RumbleEntryRow) =>
@@ -36,7 +51,8 @@ export const calculateScore = (
   rumbleEntries: RumbleEntryRow[],
   rules: ScoringRules,
   matches: MatchRow[] = [],
-  matchEntrants: MatchEntrantRow[] = []
+  matchEntrants: MatchEntrantRow[] = [],
+  matchSides: MatchSideRow[] = []
 ) => {
   const breakdown: Record<string, number> = {};
   let points = 0;
@@ -96,25 +112,63 @@ export const calculateScore = (
       : 0;
   points += breakdown.most_eliminations;
 
-  const matchEntrantMap = matchEntrants.reduce((map, item) => {
-    if (!map[item.match_id]) {
-      map[item.match_id] = new Set();
+  const matchSideSet = matchSides.reduce((map, side) => {
+    if (!map[side.match_id]) {
+      map[side.match_id] = new Set();
     }
-    map[item.match_id].add(item.entrant_id);
+    map[side.match_id].add(side.id);
     return map;
   }, {} as Record<string, Set<string>>);
 
   const matchPicks = payload.match_picks ?? {};
+  const matchFinishPicks = payload.match_finish_picks ?? {};
+  const entrantCountByMatch = matchEntrants.reduce((map, item) => {
+    map[item.match_id] = (map[item.match_id] ?? 0) + 1;
+    return map;
+  }, {} as Record<string, number>);
   const matchPoints = matches.reduce((total, match) => {
     const pick = matchPicks[match.id];
-    if (!match.winner_entrant_id || !pick) return total;
-    const allowed = matchEntrantMap[match.id];
+    if (!match.winner_side_id || !pick) return total;
+    const allowed = matchSideSet[match.id];
     if (allowed && !allowed.has(pick)) return total;
-    return pick === match.winner_entrant_id ? total + rules.match_winner : total;
+    return pick === match.winner_side_id ? total + rules.match_winner : total;
+  }, 0);
+
+  const matchFinishPoints = matches.reduce((total, match) => {
+    const entrantCount = entrantCountByMatch[match.id] ?? 0;
+    if (entrantCount <= 2) return total;
+    if (!match.finish_method) return total;
+    const pick = matchFinishPicks[match.id];
+    if (!pick) return total;
+    let subtotal = 0;
+    if (pick.method && pick.method === match.finish_method) {
+      subtotal += rules.match_finish_method;
+    }
+    if (
+      (match.finish_method === "pinfall" ||
+        match.finish_method === "submission") &&
+      pick.method === match.finish_method
+    ) {
+      if (
+        match.finish_winner_entrant_id &&
+        pick.winner === match.finish_winner_entrant_id
+      ) {
+        subtotal += rules.match_finish_winner;
+      }
+      if (
+        match.finish_loser_entrant_id &&
+        pick.loser === match.finish_loser_entrant_id
+      ) {
+        subtotal += rules.match_finish_loser;
+      }
+    }
+    return total + subtotal;
   }, 0);
 
   breakdown.matches = matchPoints;
+  breakdown.match_finish_method = matchFinishPoints;
   points += matchPoints;
+  points += matchFinishPoints;
 
   return { points, breakdown };
 };

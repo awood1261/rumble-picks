@@ -42,14 +42,26 @@ type MatchRow = {
   id: string;
   name: string;
   kind: string;
+  match_type: string;
   status: string;
   winner_entrant_id: string | null;
+  winner_side_id: string | null;
+  finish_method: string | null;
+  finish_winner_entrant_id: string | null;
+  finish_loser_entrant_id: string | null;
+};
+
+type MatchSideRow = {
+  id: string;
+  match_id: string;
+  label: string | null;
 };
 
 type MatchEntrantRow = {
   id: string;
   match_id: string;
   entrant_id: string;
+  side_id: string | null;
 };
 
 type PickRow = {
@@ -68,6 +80,7 @@ export default function AdminPage() {
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [entries, setEntries] = useState<RumbleEntryRow[]>([]);
   const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
 
   const [eventName, setEventName] = useState("");
@@ -84,8 +97,14 @@ export default function AdminPage() {
   const [customEntrantName, setCustomEntrantName] = useState("");
   const [matchName, setMatchName] = useState("");
   const [matchKind, setMatchKind] = useState("match");
+  const [matchType, setMatchType] = useState("singles");
   const [matchEntrantSelection, setMatchEntrantSelection] = useState<Record<string, string>>({});
+  const [matchSideSelection, setMatchSideSelection] = useState<Record<string, string>>({});
   const [matchNameEdits, setMatchNameEdits] = useState<Record<string, string>>({});
+  const [matchSideLabelEdits, setMatchSideLabelEdits] = useState<Record<string, string>>({});
+  const [matchFinishEdits, setMatchFinishEdits] = useState<
+    Record<string, { method: string; winner: string; loser: string }>
+  >({});
 
   const formatLocalDateTime = (value: string | null) => {
     if (!value) return "";
@@ -112,14 +131,23 @@ export default function AdminPage() {
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
+  const matchSidesByMatch = useMemo(() => {
+    return matchSides.reduce((map, side) => {
+      if (!map[side.match_id]) {
+        map[side.match_id] = [];
+      }
+      map[side.match_id].push(side);
+      return map;
+    }, {} as Record<string, MatchSideRow[]>);
+  }, [matchSides]);
   const matchEntrantsByMatch = useMemo(() => {
     return matchEntrants.reduce((map, row) => {
       if (!map[row.match_id]) {
         map[row.match_id] = [];
       }
-      map[row.match_id].push(row.entrant_id);
+      map[row.match_id].push(row);
       return map;
-    }, {} as Record<string, string[]>);
+    }, {} as Record<string, MatchEntrantRow[]>);
   }, [matchEntrants]);
   const entrantOptions = useMemo(() => {
     return [...entrants].sort((a, b) => a.name.localeCompare(b.name));
@@ -209,6 +237,7 @@ export default function AdminPage() {
         { data: entrantRows },
         { data: entryRows },
         { data: matchRows },
+        { data: matchSideRows },
         { data: matchEntrantRows },
       ] = await Promise.all([
           supabase
@@ -230,12 +259,17 @@ export default function AdminPage() {
             .order("entry_number", { ascending: true }),
           supabase
             .from("matches")
-            .select("id, name, kind, status, winner_entrant_id")
+            .select(
+              "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id"
+            )
             .eq("event_id", activeEvent.id)
             .order("created_at", { ascending: true }),
           supabase
+            .from("match_sides")
+            .select("id, match_id, label"),
+          supabase
             .from("match_entrants")
-            .select("id, match_id, entrant_id"),
+            .select("id, match_id, entrant_id, side_id"),
         ]);
       setEvents(eventRows ?? []);
       if (!selectedEventId && eventRows && eventRows.length > 0) {
@@ -245,16 +279,29 @@ export default function AdminPage() {
       setEntries(entryRows ?? []);
       const matchList = (matchRows ?? []) as MatchRow[];
       const matchIdSet = new Set(matchList.map((match) => match.id));
+      const matchSideList = (matchSideRows ?? []).filter((row) =>
+        matchIdSet.has(row.match_id)
+      ) as MatchSideRow[];
       const matchEntrantList = (matchEntrantRows ?? []).filter((row) =>
         matchIdSet.has(row.match_id)
       ) as MatchEntrantRow[];
       setMatches(matchList);
+      setMatchSides(matchSideList);
       setMatchEntrants(matchEntrantList);
       setMatchNameEdits((prev) => {
         const next = { ...prev };
         matchList.forEach((match) => {
           if (!next[match.id]) {
             next[match.id] = match.name;
+          }
+        });
+        return next;
+      });
+      setMatchSideLabelEdits((prev) => {
+        const next = { ...prev };
+        matchSideList.forEach((side) => {
+          if (!next[side.id]) {
+            next[side.id] = side.label ?? "";
           }
         });
         return next;
@@ -481,26 +528,58 @@ export default function AdminPage() {
       setMessage("Enter a match name.");
       return;
     }
-    const { error } = await supabase.from("matches").insert({
-      event_id: activeEvent.id,
-      name: matchName.trim(),
-      kind: matchKind.trim() || "match",
-    });
-    if (error) {
-      setMessage(error.message);
+    const { data: newMatch, error } = await supabase
+      .from("matches")
+      .insert({
+        event_id: activeEvent.id,
+        name: matchName.trim(),
+        kind: matchKind.trim() || "match",
+        match_type: matchType,
+      })
+      .select("id")
+      .single();
+    if (error || !newMatch) {
+      setMessage(error?.message ?? "Failed to create match.");
+      return;
+    }
+
+    const sideCounts: Record<string, number> = {
+      singles: 2,
+      tag: 2,
+      triple_threat: 3,
+      fatal_4_way: 4,
+      multi: 2,
+    };
+    const count = sideCounts[matchType] ?? 2;
+    const labels = ["Side A", "Side B", "Side C", "Side D", "Side E", "Side F"];
+    const sideRows = Array.from({ length: count }).map((_, index) => ({
+      match_id: newMatch.id,
+      label: labels[index] ?? `Side ${index + 1}`,
+    }));
+    const { error: sideError } = await supabase
+      .from("match_sides")
+      .insert(sideRows);
+    if (sideError) {
+      setMessage(sideError.message);
       return;
     }
     setMatchName("");
     setMatchKind("match");
+    setMatchType("singles");
     refreshData();
   };
 
-  const handleAddMatchEntrant = async (matchId: string, entrantId: string) => {
-    if (!matchId || !entrantId) return;
+  const handleAddMatchEntrant = async (
+    matchId: string,
+    entrantId: string,
+    sideId: string
+  ) => {
+    if (!matchId || !entrantId || !sideId) return;
     setMessage(null);
     const { error } = await supabase.from("match_entrants").insert({
       match_id: matchId,
       entrant_id: entrantId,
+      side_id: sideId,
     });
     if (error) {
       setMessage(error.message);
@@ -509,13 +588,19 @@ export default function AdminPage() {
     refreshData();
   };
 
-  const handleSetMatchWinner = async (matchId: string, winnerId: string) => {
+  const handleSetMatchWinner = async (matchId: string, winnerSideId: string) => {
     setMessage(null);
+    const sideEntrants = matchEntrants.filter(
+      (row) => row.match_id === matchId && row.side_id === winnerSideId
+    );
+    const winnerEntrantId =
+      sideEntrants.length === 1 ? sideEntrants[0].entrant_id : null;
     const { error } = await supabase
       .from("matches")
       .update({
-        winner_entrant_id: winnerId || null,
-        status: winnerId ? "completed" : "scheduled",
+        winner_side_id: winnerSideId || null,
+        winner_entrant_id: winnerSideId ? winnerEntrantId : null,
+        status: winnerSideId ? "completed" : "scheduled",
       })
       .eq("id", matchId);
     if (error) {
@@ -523,6 +608,33 @@ export default function AdminPage() {
       return;
     }
     await handleRecalculateScores({ silent: true });
+    refreshData();
+  };
+
+  const handleAddMatchSide = async (matchId: string) => {
+    if (!matchId) return;
+    setMessage(null);
+    const { error } = await supabase.from("match_sides").insert({
+      match_id: matchId,
+      label: "New side",
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    refreshData();
+  };
+
+  const handleUpdateMatchSideLabel = async (sideId: string, label: string) => {
+    setMessage(null);
+    const { error } = await supabase
+      .from("match_sides")
+      .update({ label: label.trim() || null })
+      .eq("id", sideId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
     refreshData();
   };
 
@@ -541,6 +653,44 @@ export default function AdminPage() {
       return;
     }
     setMessage("Match updated.");
+    refreshData();
+  };
+
+  const handleSetMatchFinish = async (
+    matchId: string,
+    method: string,
+    winnerId: string,
+    loserId: string
+  ) => {
+    setMessage(null);
+    const normalized = method || "";
+    const usesEntrants = normalized === "pinfall" || normalized === "submission";
+    const updates = {
+      finish_method: normalized || null,
+      finish_winner_entrant_id: usesEntrants ? winnerId || null : null,
+      finish_loser_entrant_id: usesEntrants ? loserId || null : null,
+    };
+    const { error } = await supabase
+      .from("matches")
+      .update(updates)
+      .eq("id", matchId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await handleRecalculateScores({ silent: true });
+    setMessage("Match finish updated.");
+    refreshData();
+  };
+
+  const handleDeleteMatch = async (matchId: string) => {
+    setMessage(null);
+    const { error } = await supabase.from("matches").delete().eq("id", matchId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage("Match deleted.");
     refreshData();
   };
 
@@ -613,6 +763,7 @@ export default function AdminPage() {
       { data: pickRows, error: pickError },
       { data: entryRows, error: entryError },
       { data: matchRows, error: matchError },
+      { data: matchSideRows, error: matchSideError },
       { data: matchEntrantRows, error: matchEntrantError },
     ] = await Promise.all([
       supabase
@@ -625,11 +776,16 @@ export default function AdminPage() {
         .eq("event_id", activeEvent.id),
       supabase
         .from("matches")
-        .select("id, winner_entrant_id")
+        .select(
+          "id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id"
+        )
         .eq("event_id", activeEvent.id),
       supabase
+        .from("match_sides")
+        .select("id, match_id, label"),
+      supabase
         .from("match_entrants")
-        .select("match_id, entrant_id"),
+        .select("match_id, entrant_id, side_id"),
     ]);
 
     if (pickError) {
@@ -644,6 +800,11 @@ export default function AdminPage() {
     }
     if (matchError) {
       setMessage(matchError.message);
+      setRecalcBusy(false);
+      return;
+    }
+    if (matchSideError) {
+      setMessage(matchSideError.message);
       setRecalcBusy(false);
       return;
     }
@@ -662,8 +823,24 @@ export default function AdminPage() {
       return;
     }
 
-    const matchList = (matchRows ?? []) as { id: string; winner_entrant_id: string | null }[];
-    const matchEntrantList = (matchEntrantRows ?? []) as { match_id: string; entrant_id: string }[];
+    const matchList = (matchRows ?? []) as {
+      id: string;
+      winner_entrant_id: string | null;
+      winner_side_id: string | null;
+    }[];
+    const matchIdSet = new Set(matchList.map((match) => match.id));
+    const matchEntrantList = (matchEntrantRows ?? [])
+      .filter((row) => matchIdSet.has(row.match_id)) as {
+      match_id: string;
+      entrant_id: string;
+      side_id: string | null;
+    }[];
+    const matchSideList = (matchSideRows ?? [])
+      .filter((row) => matchIdSet.has(row.match_id)) as {
+      id: string;
+      match_id: string;
+      label: string | null;
+    }[];
     const scoreRows = picks.map((pick) => {
       const payload = (pick.payload ?? {}) as PicksPayload;
       const { points, breakdown } = calculateScore(
@@ -671,7 +848,8 @@ export default function AdminPage() {
         entries,
         scoringRules,
         matchList,
-        matchEntrantList
+        matchEntrantList,
+        matchSideList
       );
       return {
         user_id: pick.user_id,
@@ -1024,7 +1202,7 @@ export default function AdminPage() {
           <p className="mt-2 text-sm text-zinc-400">
             Add matches for the event and assign participants.
           </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,auto]">
+          <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,1fr,auto]">
             <input
               className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
               placeholder="Match name"
@@ -1037,6 +1215,17 @@ export default function AdminPage() {
               value={matchKind}
               onChange={(event) => setMatchKind(event.target.value)}
             />
+            <select
+              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+              value={matchType}
+              onChange={(event) => setMatchType(event.target.value)}
+            >
+              <option value="singles">Singles (1 vs 1)</option>
+              <option value="tag">Tag (2 vs 2)</option>
+              <option value="triple_threat">Triple Threat</option>
+              <option value="fatal_4_way">Fatal 4-Way</option>
+              <option value="multi">Multi-person</option>
+            </select>
             <button
               className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
               type="button"
@@ -1051,11 +1240,33 @@ export default function AdminPage() {
           ) : (
             <div className="mt-6 space-y-4">
               {matches.map((match) => {
-                const participantIds = matchEntrantsByMatch[match.id] ?? [];
-                const participantOptions = participantIds
-                  .map((id) => entrantMap.get(id))
+                const sides = matchSidesByMatch[match.id] ?? [];
+                const participantRows = matchEntrantsByMatch[match.id] ?? [];
+                const sideEntries = sides.map((side, index) => {
+                  const entrantsForSide = participantRows
+                    .filter((row) => row.side_id === side.id)
+                    .map((row) => entrantMap.get(row.entrant_id))
+                    .filter(Boolean) as EntrantRow[];
+                  const label =
+                    side.label?.trim() || `Side ${index + 1}`;
+                  return { side, label, entrants: entrantsForSide };
+                });
+                const allEntrants = participantRows
+                  .map((row) => entrantMap.get(row.entrant_id))
                   .filter(Boolean) as EntrantRow[];
+                const sortedEntrants = [...allEntrants].sort((a, b) =>
+                  a.name.localeCompare(b.name)
+                );
+                const finishState = matchFinishEdits[match.id] ?? {
+                  method: match.finish_method ?? "",
+                  winner: match.finish_winner_entrant_id ?? "",
+                  loser: match.finish_loser_entrant_id ?? "",
+                };
+                const finishRequiresEntrants =
+                  finishState.method === "pinfall" ||
+                  finishState.method === "submission";
                 const selection = matchEntrantSelection[match.id] ?? "";
+                const sideSelection = matchSideSelection[match.id] ?? "";
                 return (
                   <div
                     key={match.id}
@@ -1064,7 +1275,7 @@ export default function AdminPage() {
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div className="flex flex-col gap-2">
                         <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                          {match.kind}
+                          {match.kind} · {match.match_type.replace("_", " ")}
                         </p>
                         <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                           Match name
@@ -1100,22 +1311,138 @@ export default function AdminPage() {
                       <div className="flex items-center gap-3">
                         <select
                           className="h-10 min-w-[220px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                          value={match.winner_entrant_id ?? ""}
+                          value={match.winner_side_id ?? ""}
                           onChange={(event) =>
                             handleSetMatchWinner(match.id, event.target.value)
                           }
                         >
                           <option value="">Select winner</option>
-                          {participantOptions.map((entrant) => (
+                          {sideEntries.map(({ side, label, entrants }) => (
+                            <option key={side.id} value={side.id}>
+                              {label}
+                              {entrants.length > 0
+                                ? ` — ${entrants.map((entrant) => entrant.name).join(", ")}`
+                                : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="inline-flex h-10 items-center justify-center rounded-full border border-red-500/60 px-4 text-[10px] font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
+                          type="button"
+                          onClick={() => handleDeleteMatch(match.id)}
+                        >
+                          Delete match
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-3">
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        Match finish (only for matches with 3+ entrants)
+                      </p>
+                      <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        <select
+                          className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                          value={finishState.method}
+                          onChange={(event) =>
+                            setMatchFinishEdits((prev) => ({
+                              ...prev,
+                              [match.id]: {
+                                ...finishState,
+                                method: event.target.value,
+                              },
+                            }))
+                          }
+                        >
+                          <option value="">Select finish</option>
+                          <option value="pinfall">Pinfall</option>
+                          <option value="submission">Submission</option>
+                          <option value="disqualification">Disqualification</option>
+                        </select>
+                        <select
+                          className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                          value={finishState.winner}
+                          onChange={(event) =>
+                            setMatchFinishEdits((prev) => ({
+                              ...prev,
+                              [match.id]: {
+                                ...finishState,
+                                winner: event.target.value,
+                              },
+                            }))
+                          }
+                          disabled={!finishRequiresEntrants}
+                        >
+                          <option value="">Winner (pin/sub)</option>
+                          {sortedEntrants.map((entrant) => (
+                            <option key={entrant.id} value={entrant.id}>
+                              {entrant.name}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                          value={finishState.loser}
+                          onChange={(event) =>
+                            setMatchFinishEdits((prev) => ({
+                              ...prev,
+                              [match.id]: {
+                                ...finishState,
+                                loser: event.target.value,
+                              },
+                            }))
+                          }
+                          disabled={!finishRequiresEntrants}
+                        >
+                          <option value="">Loser (pin/sub)</option>
+                          {sortedEntrants.map((entrant) => (
                             <option key={entrant.id} value={entrant.id}>
                               {entrant.name}
                             </option>
                           ))}
                         </select>
                       </div>
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+                        <span>
+                          {allEntrants.length <= 2
+                            ? "Finish scoring is disabled for singles/tag matches."
+                            : "Set the finish to score these picks."}
+                        </span>
+                        <button
+                          className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                          type="button"
+                          onClick={() =>
+                            handleSetMatchFinish(
+                              match.id,
+                              finishState.method,
+                              finishState.winner,
+                              finishState.loser
+                            )
+                          }
+                        >
+                          Save finish
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+                      <select
+                        className="h-10 min-w-[200px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                        value={sideSelection}
+                        onChange={(event) =>
+                          setMatchSideSelection((prev) => ({
+                            ...prev,
+                            [match.id]: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Select side</option>
+                        {sideEntries.map(({ side, label }) => (
+                          <option key={side.id} value={side.id}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
                       <select
                         className="h-10 min-w-[240px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
                         value={selection}
@@ -1137,9 +1464,13 @@ export default function AdminPage() {
                         className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
                         type="button"
                         onClick={() => {
-                          if (!selection) return;
-                          handleAddMatchEntrant(match.id, selection);
+                          if (!selection || !sideSelection) return;
+                          handleAddMatchEntrant(match.id, selection, sideSelection);
                           setMatchEntrantSelection((prev) => ({
+                            ...prev,
+                            [match.id]: "",
+                          }));
+                          setMatchSideSelection((prev) => ({
                             ...prev,
                             [match.id]: "",
                           }));
@@ -1147,24 +1478,70 @@ export default function AdminPage() {
                       >
                         Add participant
                       </button>
+                      <button
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+                        type="button"
+                        onClick={() => handleAddMatchSide(match.id)}
+                      >
+                        Add side
+                      </button>
                     </div>
 
-                    {participantOptions.length === 0 ? (
+                    {sideEntries.length === 0 ? (
                       <p className="mt-3 text-xs text-zinc-500">
-                        No participants added.
+                        No sides added yet.
                       </p>
                     ) : (
-                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                        {participantOptions.map((entrant) => (
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        {sideEntries.map(({ side, label, entrants }) => (
                           <div
-                            key={entrant.id}
-                            className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2"
+                            key={side.id}
+                            className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3"
                           >
-                            <EntrantCard
-                              name={entrant.name}
-                              promotion={entrant.promotion}
-                              imageUrl={entrant.image_url}
-                            />
+                            <div className="flex items-center justify-between gap-2">
+                              <input
+                                className="h-9 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100"
+                                value={matchSideLabelEdits[side.id] ?? label}
+                                onChange={(event) =>
+                                  setMatchSideLabelEdits((prev) => ({
+                                    ...prev,
+                                    [side.id]: event.target.value,
+                                  }))
+                                }
+                              />
+                              <button
+                                className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-3 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                                type="button"
+                                onClick={() =>
+                                  handleUpdateMatchSideLabel(
+                                    side.id,
+                                    matchSideLabelEdits[side.id] ?? label
+                                  )
+                                }
+                              >
+                                Save
+                              </button>
+                            </div>
+                            {entrants.length === 0 ? (
+                              <p className="mt-3 text-xs text-zinc-500">
+                                No participants yet.
+                              </p>
+                            ) : (
+                              <div className="mt-3 space-y-2">
+                                {entrants.map((entrant) => (
+                                  <div
+                                    key={entrant.id}
+                                    className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"
+                                  >
+                                    <EntrantCard
+                                      name={entrant.name}
+                                      promotion={entrant.promotion}
+                                      imageUrl={entrant.image_url}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

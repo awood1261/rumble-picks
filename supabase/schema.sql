@@ -67,8 +67,20 @@ create table if not exists public.matches (
   event_id uuid not null references public.events(id) on delete cascade,
   name text not null,
   kind text not null default 'match',
+  match_type text not null default 'singles',
   status text not null default 'scheduled',
   winner_entrant_id uuid references public.entrants(id),
+  winner_side_id uuid,
+  finish_method text,
+  finish_winner_entrant_id uuid references public.entrants(id),
+  finish_loser_entrant_id uuid references public.entrants(id),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.match_sides (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.matches(id) on delete cascade,
+  label text,
   created_at timestamptz not null default now()
 );
 
@@ -76,9 +88,15 @@ create table if not exists public.match_entrants (
   id uuid primary key default gen_random_uuid(),
   match_id uuid not null references public.matches(id) on delete cascade,
   entrant_id uuid not null references public.entrants(id) on delete cascade,
+  side_id uuid references public.match_sides(id) on delete set null,
   created_at timestamptz not null default now(),
   unique (match_id, entrant_id)
 );
+
+alter table public.matches
+  add constraint matches_winner_side_fk
+  foreign key (winner_side_id) references public.match_sides(id)
+  on delete set null;
 
 create table if not exists public.rumble_entries (
   id uuid primary key default gen_random_uuid(),
@@ -147,6 +165,8 @@ alter table public.entrants enable row level security;
 alter table public.matches enable row level security;
 alter table public.match_entrants enable row level security;
 alter table public.rumble_entries enable row level security;
+alter table public.match_sides enable row level security;
+alter table public.match_entrants enable row level security;
 alter table public.picks enable row level security;
 alter table public.scores enable row level security;
 
@@ -208,6 +228,17 @@ create policy "Matches are viewable by everyone"
 
 create policy "Matches are modifiable by admins"
   on public.matches
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+create policy "Match sides are viewable by everyone"
+  on public.match_sides
+  for select
+  using (true);
+
+create policy "Match sides are modifiable by admins"
+  on public.match_sides
   for all
   using (public.is_admin(auth.uid()))
   with check (public.is_admin(auth.uid()));

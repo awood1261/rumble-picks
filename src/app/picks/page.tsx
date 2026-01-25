@@ -36,6 +36,10 @@ type PicksPayload = {
   entry_30: string | null;
   most_eliminations: string | null;
   match_picks: Record<string, string | null>;
+  match_finish_picks: Record<
+    string,
+    { method: string | null; winner: string | null; loser: string | null }
+  >;
 };
 
 type RumbleEntryRow = {
@@ -49,13 +53,25 @@ type MatchRow = {
   id: string;
   name: string;
   kind: string;
+  match_type: string;
   status: string;
   winner_entrant_id: string | null;
+  winner_side_id: string | null;
+  finish_method: string | null;
+  finish_winner_entrant_id: string | null;
+  finish_loser_entrant_id: string | null;
 };
 
 type MatchEntrantRow = {
   match_id: string;
   entrant_id: string;
+  side_id: string | null;
+};
+
+type MatchSideRow = {
+  id: string;
+  match_id: string;
+  label: string | null;
 };
 
 const SCORING_POLL_INTERVAL_MS = 15000;
@@ -69,6 +85,7 @@ const emptyPayload: PicksPayload = {
   entry_30: null,
   most_eliminations: null,
   match_picks: {},
+  match_finish_picks: {},
 };
 
 export default function PicksPage() {
@@ -82,6 +99,7 @@ export default function PicksPage() {
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [rumbleEntries, setRumbleEntries] = useState<RumbleEntryRow[]>([]);
   const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
   const [payload, setPayload] = useState<PicksPayload>(emptyPayload);
   const [saving, setSaving] = useState(false);
@@ -186,18 +204,28 @@ export default function PicksPage() {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
 
+  const matchSidesByMatch = useMemo(() => {
+    return matchSides.reduce((map, side) => {
+      if (!map[side.match_id]) {
+        map[side.match_id] = [];
+      }
+      map[side.match_id].push(side);
+      return map;
+    }, {} as Record<string, MatchSideRow[]>);
+  }, [matchSides]);
+
   const matchEntrantsByMatch = useMemo(() => {
     return matchEntrants.reduce((map, row) => {
       if (!map[row.match_id]) {
         map[row.match_id] = [];
       }
-      map[row.match_id].push(row.entrant_id);
+      map[row.match_id].push(row);
       return map;
-    }, {} as Record<string, string[]>);
+    }, {} as Record<string, MatchEntrantRow[]>);
   }, [matchEntrants]);
 
   const matchWinnerMap = useMemo(() => {
-    return new Map(matches.map((match) => [match.id, match.winner_entrant_id]));
+    return new Map(matches.map((match) => [match.id, match.winner_side_id]));
   }, [matches]);
 
   const selectedEntrantOptions = useMemo(() => {
@@ -329,10 +357,35 @@ export default function PicksPage() {
 
     const matchPoints = matches.reduce((total, match) => {
       const pick = payload.match_picks[match.id];
-      if (!match.winner_entrant_id || !pick) return total;
-      return pick === match.winner_entrant_id
-        ? total + scoringRules.match_winner
-        : total;
+      if (match.winner_side_id && pick && pick === match.winner_side_id) {
+        total += scoringRules.match_winner;
+      }
+      const entrantCount = (matchEntrantsByMatch[match.id] ?? []).length;
+      if (entrantCount > 2 && match.finish_method) {
+        const finishPick = payload.match_finish_picks[match.id];
+        if (finishPick?.method === match.finish_method) {
+          total += scoringRules.match_finish_method;
+          if (
+            (match.finish_method === "pinfall" ||
+              match.finish_method === "submission") &&
+            finishPick.method === match.finish_method
+          ) {
+            if (
+              match.finish_winner_entrant_id &&
+              finishPick.winner === match.finish_winner_entrant_id
+            ) {
+              total += scoringRules.match_finish_winner;
+            }
+            if (
+              match.finish_loser_entrant_id &&
+              finishPick.loser === match.finish_loser_entrant_id
+            ) {
+              total += scoringRules.match_finish_loser;
+            }
+          }
+        }
+      }
+      return total;
     }, 0);
 
     return {
@@ -411,7 +464,9 @@ export default function PicksPage() {
     if (!selectedEventId) return;
     const { data: matchRows, error: matchError } = await supabase
       .from("matches")
-      .select("id, name, kind, status, winner_entrant_id")
+      .select(
+        "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id"
+      )
       .eq("event_id", selectedEventId)
       .order("created_at", { ascending: true });
     if (matchError) {
@@ -423,16 +478,29 @@ export default function PicksPage() {
 
     if (matchList.length > 0) {
       const matchIds = matchList.map((match) => match.id);
-      const { data: matchEntrantRows, error: matchEntrantError } = await supabase
-        .from("match_entrants")
-        .select("match_id, entrant_id")
-        .in("match_id", matchIds);
+      const [{ data: matchSideRows, error: matchSideError }, { data: matchEntrantRows, error: matchEntrantError }] =
+        await Promise.all([
+          supabase
+            .from("match_sides")
+            .select("id, match_id, label")
+            .in("match_id", matchIds),
+          supabase
+            .from("match_entrants")
+            .select("match_id, entrant_id, side_id")
+            .in("match_id", matchIds),
+        ]);
+      if (matchSideError) {
+        setMessage(matchSideError.message);
+        return;
+      }
       if (matchEntrantError) {
         setMessage(matchEntrantError.message);
         return;
       }
+      setMatchSides((matchSideRows ?? []) as MatchSideRow[]);
       setMatchEntrants((matchEntrantRows ?? []) as MatchEntrantRow[]);
     } else {
+      setMatchSides([]);
       setMatchEntrants([]);
     }
   }, [selectedEventId]);
@@ -492,6 +560,11 @@ export default function PicksPage() {
           entry_30: savedPayload.entry_30 ?? null,
           most_eliminations: savedPayload.most_eliminations ?? null,
           match_picks: (savedPayload.match_picks as Record<string, string | null>) ?? {},
+          match_finish_picks:
+            (savedPayload.match_finish_picks as Record<
+              string,
+              { method: string | null; winner: string | null; loser: string | null }
+            >) ?? {},
         });
         setHasSaved(true);
       }
@@ -545,6 +618,11 @@ export default function PicksPage() {
           matchIdSet.has(matchId)
         )
       );
+      const matchFinishPicks = Object.fromEntries(
+        Object.entries(prev.match_finish_picks ?? {}).filter(([matchId]) =>
+          matchIdSet.has(matchId)
+        )
+      );
       const next = {
         ...prev,
         final_four: finalFour,
@@ -561,6 +639,7 @@ export default function PicksPage() {
             ? prev.most_eliminations
             : null,
         match_picks: matchPicks,
+        match_finish_picks: matchFinishPicks,
       };
 
       const matchPickKeys = Object.keys(matchPicks);
@@ -568,6 +647,19 @@ export default function PicksPage() {
       const matchPicksSame =
         matchPickKeys.length === Object.keys(prevMatchPicks).length &&
         matchPickKeys.every((key) => prevMatchPicks[key] === matchPicks[key]);
+      const matchFinishKeys = Object.keys(matchFinishPicks);
+      const prevMatchFinish = prev.match_finish_picks ?? {};
+      const matchFinishSame =
+        matchFinishKeys.length === Object.keys(prevMatchFinish).length &&
+        matchFinishKeys.every((key) => {
+          const nextPick = matchFinishPicks[key];
+          const prevPick = prevMatchFinish[key];
+          return (
+            prevPick?.method === nextPick?.method &&
+            prevPick?.winner === nextPick?.winner &&
+            prevPick?.loser === nextPick?.loser
+          );
+        });
 
       const unchanged =
         sameArray(prev.final_four, next.final_four) &&
@@ -576,7 +668,8 @@ export default function PicksPage() {
         prev.entry_2 === next.entry_2 &&
         prev.entry_30 === next.entry_30 &&
         prev.most_eliminations === next.most_eliminations &&
-        matchPicksSame;
+        matchPicksSame &&
+        matchFinishSame;
 
       return unchanged ? prev : next;
     });
@@ -1034,7 +1127,41 @@ export default function PicksPage() {
                   {matches.map((match) => {
                     const pick = payload.match_picks[match.id] ?? null;
                     const winner = matchWinnerMap.get(match.id) ?? null;
-                    const entrant = pick ? getEntrant(String(pick)) : null;
+                    const sides = matchSidesByMatch[match.id] ?? [];
+                    const pickSide = pick
+                      ? sides.find((side) => side.id === pick)
+                      : null;
+                    const winnerSide = winner
+                      ? sides.find((side) => side.id === winner)
+                      : null;
+                    const pickLabel = pickSide?.label?.trim() || "Selected side";
+                    const pickEntrants = pick
+                      ? (matchEntrantsByMatch[match.id] ?? [])
+                          .filter((row) => row.side_id === pick)
+                          .map((row) => entrantByIdAll.get(row.entrant_id))
+                          .filter(Boolean)
+                      : [];
+                    const entrantCount = (matchEntrantsByMatch[match.id] ?? []).length;
+                    const finishPick = payload.match_finish_picks[match.id];
+                    const finishMethod = finishPick?.method ?? null;
+                    const finishWinner = finishPick?.winner
+                      ? entrantByIdAll.get(finishPick.winner)
+                      : null;
+                    const finishLoser = finishPick?.loser
+                      ? entrantByIdAll.get(finishPick.loser)
+                      : null;
+                    const finishMethodCorrect =
+                      match.finish_method && finishMethod
+                        ? match.finish_method === finishMethod
+                        : false;
+                    const finishWinnerCorrect =
+                      match.finish_winner_entrant_id && finishPick?.winner
+                        ? match.finish_winner_entrant_id === finishPick.winner
+                        : false;
+                    const finishLoserCorrect =
+                      match.finish_loser_entrant_id && finishPick?.loser
+                        ? match.finish_loser_entrant_id === finishPick.loser
+                        : false;
                     const isCorrect =
                       winner && pick ? winner === pick : false;
                     return (
@@ -1057,12 +1184,19 @@ export default function PicksPage() {
                               {match.name}
                             </p>
                           </div>
-                          <EntrantCard
-                            name={entrant?.name ?? "Not set"}
-                            promotion={entrant?.promotion}
-                            imageUrl={entrant?.image_url}
-                            className="justify-end"
-                          />
+                          <div className="flex flex-col items-end gap-1 text-right">
+                            <span className="text-xs font-semibold text-zinc-200">
+                              {pick ? pickLabel : "Not set"}
+                            </span>
+                            {pickEntrants.length > 0 && (
+                              <span className="text-xs text-zinc-500">
+                                {pickEntrants
+                                  .map((entrant) => entrant?.name)
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </span>
+                            )}
+                          </div>
                           {winner && (
                             <span
                               className={`text-[10px] font-semibold uppercase tracking-wide ${
@@ -1075,6 +1209,78 @@ export default function PicksPage() {
                             </span>
                           )}
                         </div>
+                        {entrantCount > 2 && (
+                          <div className="mt-3 space-y-2 text-xs text-zinc-400">
+                            <div className="flex items-center justify-between">
+                              <span>Finish</span>
+                              <span
+                                className={
+                                  !match.finish_method
+                                    ? "text-zinc-500"
+                                    : finishMethodCorrect
+                                      ? "text-emerald-200"
+                                      : "text-red-200"
+                                }
+                              >
+                                {finishMethod ?? "Not set"}
+                                {match.finish_method
+                                  ? ` • ${
+                                      finishMethodCorrect
+                                        ? `+${scoringRules.match_finish_method}`
+                                        : "0"
+                                    } pts`
+                                  : ""}
+                              </span>
+                            </div>
+                            {(finishMethod === "pinfall" ||
+                              finishMethod === "submission") && (
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <span>Winner</span>
+                                  <span
+                                    className={
+                                      match.finish_winner_entrant_id
+                                        ? finishWinnerCorrect
+                                          ? "text-emerald-200"
+                                          : "text-red-200"
+                                        : "text-zinc-500"
+                                    }
+                                  >
+                                    {finishWinner?.name ?? "Not set"}
+                                    {match.finish_winner_entrant_id
+                                      ? ` • ${
+                                          finishWinnerCorrect
+                                            ? `+${scoringRules.match_finish_winner}`
+                                            : "0"
+                                        } pts`
+                                      : ""}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span>Loser</span>
+                                  <span
+                                    className={
+                                      match.finish_loser_entrant_id
+                                        ? finishLoserCorrect
+                                          ? "text-emerald-200"
+                                          : "text-red-200"
+                                        : "text-zinc-500"
+                                    }
+                                  >
+                                    {finishLoser?.name ?? "Not set"}
+                                    {match.finish_loser_entrant_id
+                                      ? ` • ${
+                                          finishLoserCorrect
+                                            ? `+${scoringRules.match_finish_loser}`
+                                            : "0"
+                                        } pts`
+                                      : ""}
+                                  </span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1310,10 +1516,31 @@ export default function PicksPage() {
                   ) : (
                     <div className="mt-4 space-y-4">
                       {matches.map((match) => {
-                        const participantIds = matchEntrantsByMatch[match.id] ?? [];
-                        const participantOptions = participantIds
-                          .map((id) => entrantByIdAll.get(id))
+                        const sides = matchSidesByMatch[match.id] ?? [];
+                        const participantRows = matchEntrantsByMatch[match.id] ?? [];
+                        const sideEntries = sides.map((side, index) => {
+                          const entrantsForSide = participantRows
+                            .filter((row) => row.side_id === side.id)
+                            .map((row) => entrantByIdAll.get(row.entrant_id))
+                            .filter(Boolean) as EntrantRow[];
+                          const label =
+                            side.label?.trim() || `Side ${index + 1}`;
+                          return { side, label, entrants: entrantsForSide };
+                        });
+                        const allEntrants = participantRows
+                          .map((row) => entrantByIdAll.get(row.entrant_id))
                           .filter(Boolean) as EntrantRow[];
+                        const sortedEntrants = [...allEntrants].sort((a, b) =>
+                          a.name.localeCompare(b.name)
+                        );
+                        const finishPick = payload.match_finish_picks[match.id] ?? {
+                          method: null,
+                          winner: null,
+                          loser: null,
+                        };
+                        const finishRequiresEntrants =
+                          finishPick.method === "pinfall" ||
+                          finishPick.method === "submission";
                         return (
                           <div
                             key={match.id}
@@ -1340,39 +1567,148 @@ export default function PicksPage() {
                                     },
                                   }))
                                 }
-                                disabled={isLocked || participantOptions.length === 0}
+                                disabled={isLocked || sideEntries.length === 0}
                               >
                                 <option value="">Select winner</option>
-                                {participantOptions.map((entrant) => (
-                                  <option key={entrant.id} value={entrant.id}>
-                                    {entrant.name}
+                                {sideEntries.map(({ side, label, entrants }) => (
+                                  <option key={side.id} value={side.id}>
+                                    {label}
+                                    {entrants.length > 0
+                                      ? ` — ${entrants
+                                          .map((entrant) => entrant.name)
+                                          .join(", ")}`
+                                      : ""}
                                   </option>
                                 ))}
                               </select>
                             </div>
-                            {participantOptions.length === 0 && (
+                            {sideEntries.length === 0 && (
                               <p className="mt-2 text-xs text-zinc-500">
                                 Add match participants in admin to enable picks.
                               </p>
                             )}
-                            {participantOptions.length > 0 && (
-                              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                                {participantOptions.map((entrant) => (
+                            {sideEntries.length > 0 && (
+                              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                {sideEntries.map(({ side, label, entrants }) => (
                                   <div
-                                    key={entrant.id}
+                                    key={side.id}
                                     className={`rounded-xl border px-3 py-2 ${
-                                      payload.match_picks[match.id] === entrant.id
+                                      payload.match_picks[match.id] === side.id
                                         ? "border-amber-400/60 bg-amber-400/10"
                                         : "border-zinc-800 bg-zinc-900/60"
                                     }`}
                                   >
-                                    <EntrantCard
-                                      name={entrant.name}
-                                      promotion={entrant.promotion}
-                                      imageUrl={entrant.image_url}
-                                    />
+                                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                                      {label}
+                                    </p>
+                                    {entrants.length === 0 ? (
+                                      <p className="mt-2 text-xs text-zinc-500">
+                                        No participants.
+                                      </p>
+                                    ) : (
+                                      <div className="mt-2 space-y-2">
+                                        {entrants.map((entrant) => (
+                                          <EntrantCard
+                                            key={entrant.id}
+                                            name={entrant.name}
+                                            promotion={entrant.promotion}
+                                            imageUrl={entrant.image_url}
+                                          />
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
+                              </div>
+                            )}
+                            {allEntrants.length > 2 && (
+                              <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
+                                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                                  Finish prediction
+                                </p>
+                                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                                  <select
+                                    className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                                    value={finishPick.method ?? ""}
+                                    onChange={(event) => {
+                                      const method = event.target.value || null;
+                                      setPayload((prev) => ({
+                                        ...prev,
+                                        match_finish_picks: {
+                                          ...prev.match_finish_picks,
+                                          [match.id]: {
+                                            method,
+                                            winner:
+                                              method === "pinfall" || method === "submission"
+                                                ? finishPick.winner
+                                                : null,
+                                            loser:
+                                              method === "pinfall" || method === "submission"
+                                                ? finishPick.loser
+                                                : null,
+                                          },
+                                        },
+                                      }));
+                                    }}
+                                    disabled={isLocked}
+                                  >
+                                    <option value="">Select finish</option>
+                                    <option value="pinfall">Pinfall</option>
+                                    <option value="submission">Submission</option>
+                                    <option value="disqualification">Disqualification</option>
+                                  </select>
+                                  <select
+                                    className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                                    value={finishPick.winner ?? ""}
+                                    onChange={(event) =>
+                                      setPayload((prev) => ({
+                                        ...prev,
+                                        match_finish_picks: {
+                                          ...prev.match_finish_picks,
+                                          [match.id]: {
+                                            ...finishPick,
+                                            winner: event.target.value || null,
+                                          },
+                                        },
+                                      }))
+                                    }
+                                    disabled={isLocked || !finishRequiresEntrants}
+                                  >
+                                    <option value="">Winner (pin/sub)</option>
+                                    {sortedEntrants.map((entrant) => (
+                                      <option key={entrant.id} value={entrant.id}>
+                                        {entrant.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <select
+                                    className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                                    value={finishPick.loser ?? ""}
+                                    onChange={(event) =>
+                                      setPayload((prev) => ({
+                                        ...prev,
+                                        match_finish_picks: {
+                                          ...prev.match_finish_picks,
+                                          [match.id]: {
+                                            ...finishPick,
+                                            loser: event.target.value || null,
+                                          },
+                                        },
+                                      }))
+                                    }
+                                    disabled={isLocked || !finishRequiresEntrants}
+                                  >
+                                    <option value="">Loser (pin/sub)</option>
+                                    {sortedEntrants.map((entrant) => (
+                                      <option key={entrant.id} value={entrant.id}>
+                                        {entrant.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <p className="mt-2 text-xs text-zinc-500">
+                                  Only required for matches with more than two entrants.
+                                </p>
                               </div>
                             )}
                           </div>

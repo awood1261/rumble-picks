@@ -7,6 +7,9 @@ export type ScoringRules = {
   entry_30: number;
   most_eliminations: number;
   match_winner: number;
+  match_finish_method: number;
+  match_finish_winner: number;
+  match_finish_loser: number;
 };
 
 export const scoringRules: ScoringRules = {
@@ -18,4 +21,7 @@ export const scoringRules: ScoringRules = {
   entry_30: 5,
   most_eliminations: 6,
   match_winner: 5,
+  match_finish_method: 2,
+  match_finish_winner: 2,
+  match_finish_loser: 2,
 };
