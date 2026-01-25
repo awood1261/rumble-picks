@@ -1,4 +1,25 @@
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
+const loadEnvFile = async (filePath) => {
+  try {
+    const raw = await readFile(filePath, "utf-8");
+    raw.split(/\r?\n/).forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) return;
+      const equalsIndex = trimmed.indexOf("=");
+      if (equalsIndex === -1) return;
+      const key = trimmed.slice(0, equalsIndex).trim();
+      const value = trimmed.slice(equalsIndex + 1).trim();
+      if (!key || process.env[key]) return;
+      process.env[key] = value.replace(/^['"]|['"]$/g, "");
+    });
+  } catch {
+    // ignore missing .env
+  }
+};
+
+await loadEnvFile(resolve("scripts/.env"));
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
