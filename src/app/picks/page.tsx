@@ -35,6 +35,7 @@ type PicksPayload = {
   entry_2: string | null;
   entry_30: string | null;
   most_eliminations: string | null;
+  match_picks: Record<string, string | null>;
 };
 
 type RumbleEntryRow = {
@@ -42,6 +43,19 @@ type RumbleEntryRow = {
   entry_number: number | null;
   eliminated_at: string | null;
   eliminations_count: number;
+};
+
+type MatchRow = {
+  id: string;
+  name: string;
+  kind: string;
+  status: string;
+  winner_entrant_id: string | null;
+};
+
+type MatchEntrantRow = {
+  match_id: string;
+  entrant_id: string;
 };
 
 const SCORING_POLL_INTERVAL_MS = 15000;
@@ -54,6 +68,7 @@ const emptyPayload: PicksPayload = {
   entry_2: null,
   entry_30: null,
   most_eliminations: null,
+  match_picks: {},
 };
 
 export default function PicksPage() {
@@ -66,6 +81,8 @@ export default function PicksPage() {
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [rumbleEntries, setRumbleEntries] = useState<RumbleEntryRow[]>([]);
+  const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
   const [payload, setPayload] = useState<PicksPayload>(emptyPayload);
   const [saving, setSaving] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
@@ -78,7 +95,7 @@ export default function PicksPage() {
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [editSection, setEditSection] = useState<
-    "entrants" | "final_four" | "key_picks" | null
+    "entrants" | "final_four" | "key_picks" | "matches" | null
   >(null);
 
   const selectedEvent = useMemo(
@@ -164,6 +181,24 @@ export default function PicksPage() {
   const entrantById = useMemo(() => {
     return new Map(entrantOptions.map((entrant) => [entrant.id, entrant]));
   }, [entrantOptions]);
+
+  const entrantByIdAll = useMemo(() => {
+    return new Map(entrants.map((entrant) => [entrant.id, entrant]));
+  }, [entrants]);
+
+  const matchEntrantsByMatch = useMemo(() => {
+    return matchEntrants.reduce((map, row) => {
+      if (!map[row.match_id]) {
+        map[row.match_id] = [];
+      }
+      map[row.match_id].push(row.entrant_id);
+      return map;
+    }, {} as Record<string, string[]>);
+  }, [matchEntrants]);
+
+  const matchWinnerMap = useMemo(() => {
+    return new Map(matches.map((match) => [match.id, match.winner_entrant_id]));
+  }, [matches]);
 
   const selectedEntrantOptions = useMemo(() => {
     const selected = new Set(payload.entrants);
@@ -264,6 +299,7 @@ export default function PicksPage() {
         entrants: null,
         finalFour: null,
         keyPicks: null,
+        matches: null,
       };
     }
 
@@ -291,12 +327,21 @@ export default function PicksPage() {
         ? scoringRules.most_eliminations
         : 0);
 
+    const matchPoints = matches.reduce((total, match) => {
+      const pick = payload.match_picks[match.id];
+      if (!match.winner_entrant_id || !pick) return total;
+      return pick === match.winner_entrant_id
+        ? total + scoringRules.match_winner
+        : total;
+    }, 0);
+
     return {
       entrants: entrantsCorrect * scoringRules.entrants,
       finalFour: finalFourCorrect * scoringRules.final_four,
       keyPicks: keyPicksTotal,
+      matches: matches.length > 0 ? matchPoints : null,
     };
-  }, [actuals, payload]);
+  }, [actuals, payload, matches]);
 
   useEffect(() => {
     let ignore = false;
@@ -362,6 +407,36 @@ export default function PicksPage() {
     setRumbleEntries(entryRows ?? []);
   }, [selectedEventId]);
 
+  const loadMatches = useCallback(async () => {
+    if (!selectedEventId) return;
+    const { data: matchRows, error: matchError } = await supabase
+      .from("matches")
+      .select("id, name, kind, status, winner_entrant_id")
+      .eq("event_id", selectedEventId)
+      .order("created_at", { ascending: true });
+    if (matchError) {
+      setMessage(matchError.message);
+      return;
+    }
+    const matchList = (matchRows ?? []) as MatchRow[];
+    setMatches(matchList);
+
+    if (matchList.length > 0) {
+      const matchIds = matchList.map((match) => match.id);
+      const { data: matchEntrantRows, error: matchEntrantError } = await supabase
+        .from("match_entrants")
+        .select("match_id, entrant_id")
+        .in("match_id", matchIds);
+      if (matchEntrantError) {
+        setMessage(matchEntrantError.message);
+        return;
+      }
+      setMatchEntrants((matchEntrantRows ?? []) as MatchEntrantRow[]);
+    } else {
+      setMatchEntrants([]);
+    }
+  }, [selectedEventId]);
+
   useEffect(() => {
     if (!selectedEventId || !userId) return;
     setMessage(null);
@@ -402,9 +477,9 @@ export default function PicksPage() {
         setMessage(entryError.message);
         return;
       }
-
       setEntrants(entrantRows ?? []);
       setRumbleEntries(entryRows ?? []);
+      await loadMatches();
 
       const savedPayload = pickRows?.payload as Partial<PicksPayload> | null;
       if (savedPayload) {
@@ -416,13 +491,14 @@ export default function PicksPage() {
           entry_2: savedPayload.entry_2 ?? null,
           entry_30: savedPayload.entry_30 ?? null,
           most_eliminations: savedPayload.most_eliminations ?? null,
+          match_picks: (savedPayload.match_picks as Record<string, string | null>) ?? {},
         });
         setHasSaved(true);
       }
     };
 
     loadEventData();
-  }, [selectedEventId, userId]);
+  }, [selectedEventId, userId, loadMatches]);
 
   const loadRank = useCallback(async () => {
     if (!selectedEventId || !userId) return;
@@ -452,16 +528,23 @@ export default function PicksPage() {
     const interval = setInterval(() => {
       loadRank();
       loadRumbleEntries();
+      loadMatches();
     }, SCORING_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [loadRank, loadRumbleEntries, selectedEventId, userId]);
+  }, [loadRank, loadRumbleEntries, loadMatches, selectedEventId, userId]);
 
   useEffect(() => {
     const selected = new Set(payload.entrants);
     setPayload((prev) => {
       const finalFour = prev.final_four.filter((id) => selected.has(id));
       const finalFourSet = new Set(finalFour);
+      const matchIdSet = new Set(matches.map((match) => match.id));
+      const matchPicks = Object.fromEntries(
+        Object.entries(prev.match_picks ?? {}).filter(([matchId]) =>
+          matchIdSet.has(matchId)
+        )
+      );
       const next = {
         ...prev,
         final_four: finalFour,
@@ -477,7 +560,14 @@ export default function PicksPage() {
           prev.most_eliminations && selected.has(prev.most_eliminations)
             ? prev.most_eliminations
             : null,
+        match_picks: matchPicks,
       };
+
+      const matchPickKeys = Object.keys(matchPicks);
+      const prevMatchPicks = prev.match_picks ?? {};
+      const matchPicksSame =
+        matchPickKeys.length === Object.keys(prevMatchPicks).length &&
+        matchPickKeys.every((key) => prevMatchPicks[key] === matchPicks[key]);
 
       const unchanged =
         sameArray(prev.final_four, next.final_four) &&
@@ -485,11 +575,12 @@ export default function PicksPage() {
         prev.entry_1 === next.entry_1 &&
         prev.entry_2 === next.entry_2 &&
         prev.entry_30 === next.entry_30 &&
-        prev.most_eliminations === next.most_eliminations;
+        prev.most_eliminations === next.most_eliminations &&
+        matchPicksSame;
 
       return unchanged ? prev : next;
     });
-  }, [payload.entrants]);
+  }, [payload.entrants, matches]);
 
   useEffect(() => {
     if (editSection !== "key_picks") return;
@@ -787,8 +878,9 @@ export default function PicksPage() {
             </p>
           </section>
         ) : hasSaved && !editSection ? (
-          <section className="mt-8 grid gap-6 lg:grid-cols-3">
-            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <>
+            <section className="mt-8 grid gap-6 lg:grid-cols-3">
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Entrants</h2>
                 <button
@@ -814,9 +906,9 @@ export default function PicksPage() {
                 actuals.entrantSet,
                 scoringRules.entrants
               )}
-            </div>
+              </div>
 
-            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Final Four</h2>
                 <button
@@ -842,9 +934,9 @@ export default function PicksPage() {
                 actuals.finalFourSet,
                 scoringRules.final_four
               )}
-            </div>
+              </div>
 
-            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Key Picks</h2>
                 <button
@@ -912,8 +1004,84 @@ export default function PicksPage() {
                   );
                 })}
               </div>
-            </div>
-          </section>
+              </div>
+            </section>
+
+            <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Match Picks</h2>
+                <button
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
+                  type="button"
+                  onClick={() => setEditSection("matches")}
+                  disabled={isLocked}
+                >
+                  <EditIcon />
+                  Edit
+                </button>
+              </div>
+              {sectionPoints.matches !== null && (
+                <p className="mt-2 text-xs text-emerald-200">
+                  Points: {sectionPoints.matches}
+                </p>
+              )}
+              {matches.length === 0 ? (
+                <p className="mt-4 text-sm text-zinc-400">
+                  No matches available yet.
+                </p>
+              ) : (
+                <div className="mt-4 space-y-3 text-sm text-zinc-200">
+                  {matches.map((match) => {
+                    const pick = payload.match_picks[match.id] ?? null;
+                    const winner = matchWinnerMap.get(match.id) ?? null;
+                    const entrant = pick ? getEntrant(String(pick)) : null;
+                    const isCorrect =
+                      winner && pick ? winner === pick : false;
+                    return (
+                      <div
+                        key={match.id}
+                        className={`rounded-xl border px-3 py-2 ${
+                          !winner
+                            ? "border-zinc-800"
+                            : isCorrect
+                              ? "border-emerald-400/60 bg-emerald-400/10"
+                              : "border-red-500/50 bg-red-500/10"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                              {match.kind}
+                            </p>
+                            <p className="text-sm font-semibold text-zinc-100">
+                              {match.name}
+                            </p>
+                          </div>
+                          <EntrantCard
+                            name={entrant?.name ?? "Not set"}
+                            promotion={entrant?.promotion}
+                            imageUrl={entrant?.image_url}
+                            className="justify-end"
+                          />
+                          {winner && (
+                            <span
+                              className={`text-[10px] font-semibold uppercase tracking-wide ${
+                                isCorrect ? "text-emerald-200" : "text-red-200"
+                              }`}
+                            >
+                              {isCorrect
+                                ? `+${scoringRules.match_winner} pts`
+                                : "0 pts"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </>
         ) : (
           <>
             {(editSection === "entrants" || !hasSaved) && (
@@ -1110,6 +1278,117 @@ export default function PicksPage() {
                         disabled={saving || isLocked}
                       >
                         {saving ? "Saving…" : "Save final four"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(editSection === "matches" || !hasSaved) && (
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold">Match Picks</h2>
+                      <p className="mt-2 text-sm text-zinc-400">
+                        Pick winners for the matches on the card.
+                      </p>
+                    </div>
+                    {hasSaved && (
+                      <button
+                        className="text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200"
+                        type="button"
+                        onClick={() => setEditSection(null)}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                  {matches.length === 0 ? (
+                    <p className="mt-4 text-sm text-zinc-400">
+                      No matches available yet.
+                    </p>
+                  ) : (
+                    <div className="mt-4 space-y-4">
+                      {matches.map((match) => {
+                        const participantIds = matchEntrantsByMatch[match.id] ?? [];
+                        const participantOptions = participantIds
+                          .map((id) => entrantByIdAll.get(id))
+                          .filter(Boolean) as EntrantRow[];
+                        return (
+                          <div
+                            key={match.id}
+                            className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                          >
+                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                              <div>
+                                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                                  {match.kind}
+                                </p>
+                                <p className="text-sm font-semibold text-zinc-100">
+                                  {match.name}
+                                </p>
+                              </div>
+                              <select
+                                className="h-10 min-w-[220px] rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                                value={payload.match_picks[match.id] ?? ""}
+                                onChange={(event) =>
+                                  setPayload((prev) => ({
+                                    ...prev,
+                                    match_picks: {
+                                      ...prev.match_picks,
+                                      [match.id]: event.target.value || null,
+                                    },
+                                  }))
+                                }
+                                disabled={isLocked || participantOptions.length === 0}
+                              >
+                                <option value="">Select winner</option>
+                                {participantOptions.map((entrant) => (
+                                  <option key={entrant.id} value={entrant.id}>
+                                    {entrant.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            {participantOptions.length === 0 && (
+                              <p className="mt-2 text-xs text-zinc-500">
+                                Add match participants in admin to enable picks.
+                              </p>
+                            )}
+                            {participantOptions.length > 0 && (
+                              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                {participantOptions.map((entrant) => (
+                                  <div
+                                    key={entrant.id}
+                                    className={`rounded-xl border px-3 py-2 ${
+                                      payload.match_picks[match.id] === entrant.id
+                                        ? "border-amber-400/60 bg-amber-400/10"
+                                        : "border-zinc-800 bg-zinc-900/60"
+                                    }`}
+                                  >
+                                    <EntrantCard
+                                      name={entrant.name}
+                                      promotion={entrant.promotion}
+                                      imageUrl={entrant.image_url}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {hasSaved && (
+                    <div className="mt-6">
+                      <button
+                        className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                        type="button"
+                        onClick={handleSave}
+                        disabled={saving || isLocked}
+                      >
+                        {saving ? "Saving…" : "Save match picks"}
                       </button>
                     </div>
                   )}

@@ -72,6 +72,14 @@ create table if not exists public.matches (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.match_entrants (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.matches(id) on delete cascade,
+  entrant_id uuid not null references public.entrants(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (match_id, entrant_id)
+);
+
 create table if not exists public.rumble_entries (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null references public.events(id) on delete cascade,
@@ -137,6 +145,7 @@ alter table public.profiles enable row level security;
 alter table public.events enable row level security;
 alter table public.entrants enable row level security;
 alter table public.matches enable row level security;
+alter table public.match_entrants enable row level security;
 alter table public.rumble_entries enable row level security;
 alter table public.picks enable row level security;
 alter table public.scores enable row level security;
@@ -199,6 +208,17 @@ create policy "Matches are viewable by everyone"
 
 create policy "Matches are modifiable by admins"
   on public.matches
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+create policy "Match entrants are viewable by everyone"
+  on public.match_entrants
+  for select
+  using (true);
+
+create policy "Match entrants are modifiable by admins"
+  on public.match_entrants
   for all
   using (public.is_admin(auth.uid()))
   with check (public.is_admin(auth.uid()));

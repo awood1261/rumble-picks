@@ -15,6 +15,7 @@ type PicksPayload = {
   entry_2?: string | null;
   entry_30?: string | null;
   most_eliminations?: string | null;
+  match_picks?: Record<string, string | null>;
 };
 
 type EntrantRow = {
@@ -41,6 +42,18 @@ type RumbleEntryRow = {
   eliminations_count: number;
 };
 
+type MatchRow = {
+  id: string;
+  name: string;
+  kind: string;
+  winner_entrant_id: string | null;
+};
+
+type MatchEntrantRow = {
+  match_id: string;
+  entrant_id: string;
+};
+
 const PICKS_POLL_INTERVAL_MS = 15000;
 
 export default function ScoreboardPicksPage() {
@@ -62,12 +75,28 @@ export default function ScoreboardPicksPage() {
   const [payload, setPayload] = useState<PicksPayload | null>(null);
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [rumbleEntries, setRumbleEntries] = useState<RumbleEntryRow[]>([]);
+  const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
   const [event, setEvent] = useState<EventRow | null>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
 
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
+
+  const matchEntrantsByMatch = useMemo(() => {
+    return matchEntrants.reduce((map, row) => {
+      if (!map[row.match_id]) {
+        map[row.match_id] = [];
+      }
+      map[row.match_id].push(row.entrant_id);
+      return map;
+    }, {} as Record<string, string[]>);
+  }, [matchEntrants]);
+
+  const matchWinnerMap = useMemo(() => {
+    return new Map(matches.map((match) => [match.id, match.winner_entrant_id]));
+  }, [matches]);
 
   const getEliminationKey = (entry: RumbleEntryRow) =>
     entry.eliminated_at ? new Date(entry.eliminated_at).getTime() : Number.MAX_SAFE_INTEGER;
@@ -119,6 +148,7 @@ export default function ScoreboardPicksPage() {
       { data: eventRow },
       { data: profileRow },
       { data: entryRows, error: entryError },
+      { data: matchRows, error: matchError },
     ] =
       await Promise.all([
         supabase
@@ -141,6 +171,11 @@ export default function ScoreboardPicksPage() {
           .from("rumble_entries")
           .select("entrant_id, entry_number, eliminated_at, eliminations_count")
           .eq("event_id", validEventId),
+        supabase
+          .from("matches")
+          .select("id, name, kind, winner_entrant_id")
+          .eq("event_id", validEventId)
+          .order("created_at", { ascending: true }),
       ]);
 
     if (pickError) {
@@ -153,7 +188,32 @@ export default function ScoreboardPicksPage() {
     setEvent(eventRow ?? null);
     setProfile(profileRow ?? null);
     setRumbleEntries(entryRows ?? []);
+    const matchList = (matchRows ?? []) as MatchRow[];
+    setMatches(matchList);
 
+    if (matchError) {
+      setMessage(matchError.message);
+      setLoading(false);
+      return;
+    }
+
+    if (matchList.length > 0) {
+      const matchIds = matchList.map((match) => match.id);
+      const { data: matchEntrantRows, error: matchEntrantError } = await supabase
+        .from("match_entrants")
+        .select("match_id, entrant_id")
+        .in("match_id", matchIds);
+      if (matchEntrantError) {
+        setMessage(matchEntrantError.message);
+        setLoading(false);
+        return;
+      }
+      setMatchEntrants((matchEntrantRows ?? []) as MatchEntrantRow[]);
+    } else {
+      setMatchEntrants([]);
+    }
+
+    const matchPickIds = Object.values(pickRow?.payload?.match_picks ?? {}).filter(Boolean);
     const ids = [
       ...(pickRow?.payload?.entrants ?? []),
       ...(pickRow?.payload?.final_four ?? []),
@@ -162,6 +222,7 @@ export default function ScoreboardPicksPage() {
       pickRow?.payload?.entry_2,
       pickRow?.payload?.entry_30,
       pickRow?.payload?.most_eliminations,
+      ...matchPickIds,
     ]
       .filter(Boolean)
       .map(String);
@@ -373,6 +434,60 @@ export default function ScoreboardPicksPage() {
               })}
             </div>
           </div>
+        </section>
+
+        <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <h2 className="text-lg font-semibold">Match Picks</h2>
+          {matches.length === 0 ? (
+            <p className="mt-3 text-sm text-zinc-400">No matches available.</p>
+          ) : (
+            <div className="mt-4 space-y-3 text-sm text-zinc-200">
+              {matches.map((match) => {
+                const pick = payload.match_picks?.[match.id] ?? null;
+                const winner = matchWinnerMap.get(match.id) ?? null;
+                const entrant = pick ? entrantMap.get(String(pick)) : null;
+                const isCorrect = winner && pick ? winner === pick : false;
+                return (
+                  <div
+                    key={match.id}
+                    className={`rounded-xl border px-3 py-2 ${
+                      !winner
+                        ? "border-zinc-800"
+                        : isCorrect
+                          ? "border-emerald-400/60 bg-emerald-400/10"
+                          : "border-red-500/50 bg-red-500/10"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          {match.kind}
+                        </p>
+                        <p className="text-sm font-semibold text-zinc-100">
+                          {match.name}
+                        </p>
+                      </div>
+                      <EntrantCard
+                        name={entrant?.name ?? "Not set"}
+                        promotion={entrant?.promotion}
+                        imageUrl={entrant?.image_url}
+                        className="justify-end"
+                      />
+                      {winner && (
+                        <span
+                          className={`text-[10px] font-semibold uppercase tracking-wide ${
+                            isCorrect ? "text-emerald-200" : "text-red-200"
+                          }`}
+                        >
+                          {isCorrect ? `+${scoringRules.match_winner} pts` : "0 pts"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       </main>
     </div>

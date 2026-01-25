@@ -38,6 +38,20 @@ type RumbleEntryRow = {
   eliminations_count: number;
 };
 
+type MatchRow = {
+  id: string;
+  name: string;
+  kind: string;
+  status: string;
+  winner_entrant_id: string | null;
+};
+
+type MatchEntrantRow = {
+  id: string;
+  match_id: string;
+  entrant_id: string;
+};
+
 type PickRow = {
   id: string;
   user_id: string;
@@ -53,6 +67,8 @@ export default function AdminPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [entries, setEntries] = useState<RumbleEntryRow[]>([]);
+  const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
 
   const [eventName, setEventName] = useState("");
   const [eventGender, setEventGender] = useState("men");
@@ -66,6 +82,10 @@ export default function AdminPage() {
   const [eliminatedById, setEliminatedById] = useState("");
   const [recalcBusy, setRecalcBusy] = useState(false);
   const [customEntrantName, setCustomEntrantName] = useState("");
+  const [matchName, setMatchName] = useState("");
+  const [matchKind, setMatchKind] = useState("match");
+  const [matchEntrantSelection, setMatchEntrantSelection] = useState<Record<string, string>>({});
+  const [matchNameEdits, setMatchNameEdits] = useState<Record<string, string>>({});
 
   const formatLocalDateTime = (value: string | null) => {
     if (!value) return "";
@@ -92,6 +112,15 @@ export default function AdminPage() {
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
+  const matchEntrantsByMatch = useMemo(() => {
+    return matchEntrants.reduce((map, row) => {
+      if (!map[row.match_id]) {
+        map[row.match_id] = [];
+      }
+      map[row.match_id].push(row.entrant_id);
+      return map;
+    }, {} as Record<string, string[]>);
+  }, [matchEntrants]);
   const entrantOptions = useMemo(() => {
     return [...entrants].sort((a, b) => a.name.localeCompare(b.name));
   }, [entrants]);
@@ -175,8 +204,13 @@ export default function AdminPage() {
         setSelectedEventId(eventRows[0].id);
       }
     } else {
-      const [{ data: eventRows }, { data: entrantRows }, { data: entryRows }] =
-        await Promise.all([
+      const [
+        { data: eventRows },
+        { data: entrantRows },
+        { data: entryRows },
+        { data: matchRows },
+        { data: matchEntrantRows },
+      ] = await Promise.all([
           supabase
             .from("events")
             .select("id, name, status, starts_at, rumble_gender, roster_year")
@@ -194,6 +228,14 @@ export default function AdminPage() {
             )
             .eq("event_id", activeEvent.id)
             .order("entry_number", { ascending: true }),
+          supabase
+            .from("matches")
+            .select("id, name, kind, status, winner_entrant_id")
+            .eq("event_id", activeEvent.id)
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("match_entrants")
+            .select("id, match_id, entrant_id"),
         ]);
       setEvents(eventRows ?? []);
       if (!selectedEventId && eventRows && eventRows.length > 0) {
@@ -201,6 +243,22 @@ export default function AdminPage() {
       }
       setEntrants(entrantRows ?? []);
       setEntries(entryRows ?? []);
+      const matchList = (matchRows ?? []) as MatchRow[];
+      const matchIdSet = new Set(matchList.map((match) => match.id));
+      const matchEntrantList = (matchEntrantRows ?? []).filter((row) =>
+        matchIdSet.has(row.match_id)
+      ) as MatchEntrantRow[];
+      setMatches(matchList);
+      setMatchEntrants(matchEntrantList);
+      setMatchNameEdits((prev) => {
+        const next = { ...prev };
+        matchList.forEach((match) => {
+          if (!next[match.id]) {
+            next[match.id] = match.name;
+          }
+        });
+        return next;
+      });
     }
   };
 
@@ -413,6 +471,79 @@ export default function AdminPage() {
     refreshData();
   };
 
+  const handleAddMatch = async () => {
+    setMessage(null);
+    if (!activeEvent) {
+      setMessage("Create an event first.");
+      return;
+    }
+    if (!matchName.trim()) {
+      setMessage("Enter a match name.");
+      return;
+    }
+    const { error } = await supabase.from("matches").insert({
+      event_id: activeEvent.id,
+      name: matchName.trim(),
+      kind: matchKind.trim() || "match",
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMatchName("");
+    setMatchKind("match");
+    refreshData();
+  };
+
+  const handleAddMatchEntrant = async (matchId: string, entrantId: string) => {
+    if (!matchId || !entrantId) return;
+    setMessage(null);
+    const { error } = await supabase.from("match_entrants").insert({
+      match_id: matchId,
+      entrant_id: entrantId,
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    refreshData();
+  };
+
+  const handleSetMatchWinner = async (matchId: string, winnerId: string) => {
+    setMessage(null);
+    const { error } = await supabase
+      .from("matches")
+      .update({
+        winner_entrant_id: winnerId || null,
+        status: winnerId ? "completed" : "scheduled",
+      })
+      .eq("id", matchId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await handleRecalculateScores({ silent: true });
+    refreshData();
+  };
+
+  const handleUpdateMatchName = async (matchId: string, name: string) => {
+    setMessage(null);
+    if (!name.trim()) {
+      setMessage("Match name cannot be empty.");
+      return;
+    }
+    const { error } = await supabase
+      .from("matches")
+      .update({ name: name.trim() })
+      .eq("id", matchId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage("Match updated.");
+    refreshData();
+  };
+
   useEffect(() => {
     if (!entryEntrantId) {
       if (entryNumber) {
@@ -478,17 +609,28 @@ export default function AdminPage() {
       setMessage(null);
     }
 
-    const [{ data: pickRows, error: pickError }, { data: entryRows, error: entryError }] =
-      await Promise.all([
-        supabase
-          .from("picks")
-          .select("id, user_id, payload")
-          .eq("event_id", activeEvent.id),
-        supabase
-          .from("rumble_entries")
-          .select("id, entrant_id, entry_number, eliminated_at, eliminations_count")
-          .eq("event_id", activeEvent.id),
-      ]);
+    const [
+      { data: pickRows, error: pickError },
+      { data: entryRows, error: entryError },
+      { data: matchRows, error: matchError },
+      { data: matchEntrantRows, error: matchEntrantError },
+    ] = await Promise.all([
+      supabase
+        .from("picks")
+        .select("id, user_id, payload")
+        .eq("event_id", activeEvent.id),
+      supabase
+        .from("rumble_entries")
+        .select("id, entrant_id, entry_number, eliminated_at, eliminations_count")
+        .eq("event_id", activeEvent.id),
+      supabase
+        .from("matches")
+        .select("id, winner_entrant_id")
+        .eq("event_id", activeEvent.id),
+      supabase
+        .from("match_entrants")
+        .select("match_id, entrant_id"),
+    ]);
 
     if (pickError) {
       setMessage(pickError.message);
@@ -497,6 +639,16 @@ export default function AdminPage() {
     }
     if (entryError) {
       setMessage(entryError.message);
+      setRecalcBusy(false);
+      return;
+    }
+    if (matchError) {
+      setMessage(matchError.message);
+      setRecalcBusy(false);
+      return;
+    }
+    if (matchEntrantError) {
+      setMessage(matchEntrantError.message);
       setRecalcBusy(false);
       return;
     }
@@ -510,9 +662,17 @@ export default function AdminPage() {
       return;
     }
 
+    const matchList = (matchRows ?? []) as { id: string; winner_entrant_id: string | null }[];
+    const matchEntrantList = (matchEntrantRows ?? []) as { match_id: string; entrant_id: string }[];
     const scoreRows = picks.map((pick) => {
       const payload = (pick.payload ?? {}) as PicksPayload;
-      const { points, breakdown } = calculateScore(payload, entries, scoringRules);
+      const { points, breakdown } = calculateScore(
+        payload,
+        entries,
+        scoringRules,
+        matchList,
+        matchEntrantList
+      );
       return {
         user_id: pick.user_id,
         event_id: activeEvent.id,
@@ -857,6 +1017,163 @@ export default function AdminPage() {
               Add entry
             </button>
           </div>
+        </section>
+
+        <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <h2 className="text-lg font-semibold">Matches</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Add matches for the event and assign participants.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,auto]">
+            <input
+              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+              placeholder="Match name"
+              value={matchName}
+              onChange={(event) => setMatchName(event.target.value)}
+            />
+            <input
+              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+              placeholder="Kind (match, title, tag)"
+              value={matchKind}
+              onChange={(event) => setMatchKind(event.target.value)}
+            />
+            <button
+              className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+              type="button"
+              onClick={handleAddMatch}
+            >
+              Add match
+            </button>
+          </div>
+
+          {matches.length === 0 ? (
+            <p className="mt-6 text-sm text-zinc-400">No matches added yet.</p>
+          ) : (
+            <div className="mt-6 space-y-4">
+              {matches.map((match) => {
+                const participantIds = matchEntrantsByMatch[match.id] ?? [];
+                const participantOptions = participantIds
+                  .map((id) => entrantMap.get(id))
+                  .filter(Boolean) as EntrantRow[];
+                const selection = matchEntrantSelection[match.id] ?? "";
+                return (
+                  <div
+                    key={match.id}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                  >
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          {match.kind}
+                        </p>
+                        <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Match name
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <input
+                              className="h-10 min-w-[220px] flex-1 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                              value={matchNameEdits[match.id] ?? match.name}
+                              onChange={(event) =>
+                                setMatchNameEdits((prev) => ({
+                                  ...prev,
+                                  [match.id]: event.target.value,
+                                }))
+                              }
+                            />
+                            <button
+                              className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                              type="button"
+                              onClick={() =>
+                                handleUpdateMatchName(
+                                  match.id,
+                                  matchNameEdits[match.id] ?? match.name
+                                )
+                              }
+                            >
+                              Save match
+                            </button>
+                          </div>
+                        </label>
+                        <p className="text-xs text-zinc-500">
+                          Edit the match name and click “Save match”.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <select
+                          className="h-10 min-w-[220px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                          value={match.winner_entrant_id ?? ""}
+                          onChange={(event) =>
+                            handleSetMatchWinner(match.id, event.target.value)
+                          }
+                        >
+                          <option value="">Select winner</option>
+                          {participantOptions.map((entrant) => (
+                            <option key={entrant.id} value={entrant.id}>
+                              {entrant.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+                      <select
+                        className="h-10 min-w-[240px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                        value={selection}
+                        onChange={(event) =>
+                          setMatchEntrantSelection((prev) => ({
+                            ...prev,
+                            [match.id]: event.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Add participant</option>
+                        {filteredEntrantOptions.map((entrant) => (
+                          <option key={entrant.id} value={entrant.id}>
+                            {entrant.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+                        type="button"
+                        onClick={() => {
+                          if (!selection) return;
+                          handleAddMatchEntrant(match.id, selection);
+                          setMatchEntrantSelection((prev) => ({
+                            ...prev,
+                            [match.id]: "",
+                          }));
+                        }}
+                      >
+                        Add participant
+                      </button>
+                    </div>
+
+                    {participantOptions.length === 0 ? (
+                      <p className="mt-3 text-xs text-zinc-500">
+                        No participants added.
+                      </p>
+                    ) : (
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                        {participantOptions.map((entrant) => (
+                          <div
+                            key={entrant.id}
+                            className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2"
+                          >
+                            <EntrantCard
+                              name={entrant.name}
+                              promotion={entrant.promotion}
+                              imageUrl={entrant.image_url}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">

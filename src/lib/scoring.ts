@@ -8,6 +8,7 @@ export type PicksPayload = {
   entry_2?: string;
   entry_30?: string;
   most_eliminations?: string;
+  match_picks?: Record<string, string | null>;
 };
 
 export type RumbleEntryRow = {
@@ -17,13 +18,25 @@ export type RumbleEntryRow = {
   eliminations_count: number;
 };
 
+export type MatchRow = {
+  id: string;
+  winner_entrant_id: string | null;
+};
+
+export type MatchEntrantRow = {
+  match_id: string;
+  entrant_id: string;
+};
+
 const getEliminationKey = (entry: RumbleEntryRow) =>
   entry.eliminated_at ? new Date(entry.eliminated_at).getTime() : Number.MAX_SAFE_INTEGER;
 
 export const calculateScore = (
   payload: PicksPayload,
   rumbleEntries: RumbleEntryRow[],
-  rules: ScoringRules
+  rules: ScoringRules,
+  matches: MatchRow[] = [],
+  matchEntrants: MatchEntrantRow[] = []
 ) => {
   const breakdown: Record<string, number> = {};
   let points = 0;
@@ -82,6 +95,26 @@ export const calculateScore = (
       ? rules.most_eliminations
       : 0;
   points += breakdown.most_eliminations;
+
+  const matchEntrantMap = matchEntrants.reduce((map, item) => {
+    if (!map[item.match_id]) {
+      map[item.match_id] = new Set();
+    }
+    map[item.match_id].add(item.entrant_id);
+    return map;
+  }, {} as Record<string, Set<string>>);
+
+  const matchPicks = payload.match_picks ?? {};
+  const matchPoints = matches.reduce((total, match) => {
+    const pick = matchPicks[match.id];
+    if (!match.winner_entrant_id || !pick) return total;
+    const allowed = matchEntrantMap[match.id];
+    if (allowed && !allowed.has(pick)) return total;
+    return pick === match.winner_entrant_id ? total + rules.match_winner : total;
+  }, 0);
+
+  breakdown.matches = matchPoints;
+  points += matchPoints;
 
   return { points, breakdown };
 };

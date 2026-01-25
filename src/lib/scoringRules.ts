@@ -6,6 +6,7 @@ export type ScoringRules = {
   entry_2: number;
   entry_30: number;
   most_eliminations: number;
+  match_winner: number;
 };
 
 export const scoringRules: ScoringRules = {
@@ -16,4 +17,5 @@ export const scoringRules: ScoringRules = {
   entry_2: 6,
   entry_30: 5,
   most_eliminations: 6,
+  match_winner: 5,
 };
