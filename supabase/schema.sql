@@ -36,8 +36,17 @@ as $$
   );
 $$;
 
+create table if not exists public.shows (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  starts_at timestamptz,
+  status text not null default 'draft',
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
+  show_id uuid references public.shows(id) on delete set null,
   name text not null,
   starts_at timestamptz,
   rumble_gender text,
@@ -65,6 +74,7 @@ create table if not exists public.entrants (
 create table if not exists public.matches (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null references public.events(id) on delete cascade,
+  show_id uuid references public.shows(id) on delete set null,
   name text not null,
   kind text not null default 'match',
   match_type text not null default 'singles',
@@ -114,21 +124,25 @@ create table if not exists public.rumble_entries (
 create table if not exists public.picks (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  event_id uuid not null references public.events(id) on delete cascade,
+  event_id uuid references public.events(id) on delete cascade,
+  show_id uuid references public.shows(id) on delete cascade,
   payload jsonb not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (user_id, event_id)
+  unique (user_id, event_id),
+  unique (user_id, show_id)
 );
 
 create table if not exists public.scores (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  event_id uuid not null references public.events(id) on delete cascade,
+  event_id uuid references public.events(id) on delete cascade,
+  show_id uuid references public.shows(id) on delete cascade,
   points integer not null default 0,
   breakdown jsonb,
   updated_at timestamptz not null default now(),
-  unique (user_id, event_id)
+  unique (user_id, event_id),
+  unique (user_id, show_id)
 );
 
 alter table public.entrants
@@ -160,6 +174,7 @@ create trigger set_scores_updated_at
   for each row execute procedure public.set_updated_at();
 
 alter table public.profiles enable row level security;
+alter table public.shows enable row level security;
 alter table public.events enable row level security;
 alter table public.entrants enable row level security;
 alter table public.matches enable row level security;
@@ -188,6 +203,17 @@ create policy "Profiles are updateable by owner"
   with check (auth.uid() = id);
 
 -- Public read access for event data; admin-only writes.
+create policy "Shows are viewable by everyone"
+  on public.shows
+  for select
+  using (true);
+
+create policy "Shows are modifiable by admins"
+  on public.shows
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
 create policy "Events are viewable by everyone"
   on public.events
   for select

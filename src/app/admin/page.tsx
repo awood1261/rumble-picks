@@ -13,6 +13,14 @@ type EventRow = {
   starts_at: string | null;
   rumble_gender: string | null;
   roster_year: number | null;
+  show_id: string | null;
+};
+
+type ShowRow = {
+  id: string;
+  name: string;
+  starts_at: string | null;
+  status: string;
 };
 
 type EntrantRow = {
@@ -77,6 +85,7 @@ export default function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [shows, setShows] = useState<ShowRow[]>([]);
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [entries, setEntries] = useState<RumbleEntryRow[]>([]);
   const [matches, setMatches] = useState<MatchRow[]>([]);
@@ -87,6 +96,9 @@ export default function AdminPage() {
   const [eventGender, setEventGender] = useState("men");
   const [eventStartsAt, setEventStartsAt] = useState("");
   const [eventRosterYear, setEventRosterYear] = useState("");
+  const [eventShowId, setEventShowId] = useState("");
+  const [showName, setShowName] = useState("");
+  const [showStartsAt, setShowStartsAt] = useState("");
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [entryEntrantId, setEntryEntrantId] = useState("");
@@ -127,6 +139,7 @@ export default function AdminPage() {
     setEventRosterYear(
       activeEvent?.roster_year ? String(activeEvent.roster_year) : ""
     );
+    setEventShowId(activeEvent?.show_id ?? "");
   }, [activeEvent?.starts_at, activeEvent?.roster_year]);
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
@@ -223,26 +236,38 @@ export default function AdminPage() {
 
   const refreshData = async () => {
     if (!activeEvent) {
-      const { data: eventRows } = await supabase
-        .from("events")
-        .select("id, name, status, starts_at, rumble_gender, roster_year")
-        .order("created_at", { ascending: false });
+      const [{ data: showRows }, { data: eventRows }] = await Promise.all([
+        supabase
+          .from("shows")
+          .select("id, name, status, starts_at")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("events")
+          .select("id, name, status, starts_at, rumble_gender, roster_year, show_id")
+          .order("created_at", { ascending: false }),
+      ]);
+      setShows(showRows ?? []);
       setEvents(eventRows ?? []);
       if (!selectedEventId && eventRows && eventRows.length > 0) {
         setSelectedEventId(eventRows[0].id);
       }
     } else {
-      const [
-        { data: eventRows },
-        { data: entrantRows },
-        { data: entryRows },
-        { data: matchRows },
-        { data: matchSideRows },
-        { data: matchEntrantRows },
-      ] = await Promise.all([
+        const [
+          { data: showRows },
+          { data: eventRows },
+          { data: entrantRows },
+          { data: entryRows },
+          { data: matchRows },
+          { data: matchSideRows },
+          { data: matchEntrantRows },
+        ] = await Promise.all([
+          supabase
+            .from("shows")
+            .select("id, name, status, starts_at")
+            .order("created_at", { ascending: false }),
           supabase
             .from("events")
-            .select("id, name, status, starts_at, rumble_gender, roster_year")
+            .select("id, name, status, starts_at, rumble_gender, roster_year, show_id")
             .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
@@ -271,6 +296,7 @@ export default function AdminPage() {
             .from("match_entrants")
             .select("id, match_id, entrant_id, side_id"),
         ]);
+      setShows(showRows ?? []);
       setEvents(eventRows ?? []);
       if (!selectedEventId && eventRows && eventRows.length > 0) {
         setSelectedEventId(eventRows[0].id);
@@ -366,6 +392,7 @@ export default function AdminPage() {
         rumble_gender: eventGender,
         roster_year: eventRosterYear ? Number(eventRosterYear) : null,
         starts_at: eventStartsAt ? new Date(eventStartsAt).toISOString() : null,
+        show_id: eventShowId || null,
       });
     if (error) {
       setMessage(error.message);
@@ -375,6 +402,27 @@ export default function AdminPage() {
     setEventStartsAt("");
     setEventGender("men");
     setEventRosterYear("");
+    setEventShowId("");
+    refreshData();
+  };
+
+  const handleCreateShow = async () => {
+    setMessage(null);
+    if (!showName.trim()) {
+      setMessage("Show name is required.");
+      return;
+    }
+    const { error } = await supabase.from("shows").insert({
+      name: showName.trim(),
+      status: "draft",
+      starts_at: showStartsAt ? new Date(showStartsAt).toISOString() : null,
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setShowName("");
+    setShowStartsAt("");
     refreshData();
   };
 
@@ -458,6 +506,7 @@ export default function AdminPage() {
       .update({
         starts_at: eventStartsAt ? new Date(eventStartsAt).toISOString() : null,
         roster_year: eventRosterYear ? Number(eventRosterYear) : null,
+        show_id: eventShowId || null,
       })
       .eq("id", activeEvent.id);
     if (error) {
@@ -532,6 +581,7 @@ export default function AdminPage() {
       .from("matches")
       .insert({
         event_id: activeEvent.id,
+        show_id: activeEvent.show_id ?? null,
         name: matchName.trim(),
         kind: matchKind.trim() || "match",
         match_type: matchType,
@@ -962,6 +1012,59 @@ export default function AdminPage() {
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 lg:col-span-2">
+            <h2 className="text-lg font-semibold">Shows</h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              Create a show (card) to group multiple rumbles and matches.
+            </p>
+            <div className="mt-4 grid gap-4 lg:grid-cols-[2fr,1fr]">
+              <div className="space-y-3">
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  placeholder="Show name"
+                  value={showName}
+                  onChange={(event) => setShowName(event.target.value)}
+                />
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  type="datetime-local"
+                  value={showStartsAt}
+                  onChange={(event) => setShowStartsAt(event.target.value)}
+                />
+                <button
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                  type="button"
+                  onClick={handleCreateShow}
+                >
+                  Create show
+                </button>
+              </div>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                  Existing shows
+                </p>
+                {shows.length === 0 ? (
+                  <p className="mt-3 text-sm text-zinc-400">
+                    No shows yet.
+                  </p>
+                ) : (
+                  <ul className="mt-3 space-y-2 text-sm text-zinc-200">
+                    {shows.map((show) => (
+                      <li key={show.id} className="flex items-center justify-between">
+                        <span>{show.name}</span>
+                        <span className="text-xs text-zinc-500">
+                          {show.starts_at
+                            ? new Date(show.starts_at).toLocaleString()
+                            : "No date"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <h2 className="text-lg font-semibold">Create event</h2>
             <p className="mt-2 text-sm text-zinc-400">
@@ -980,6 +1083,18 @@ export default function AdminPage() {
                 value={eventStartsAt}
                 onChange={(event) => setEventStartsAt(event.target.value)}
               />
+              <select
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                value={eventShowId}
+                onChange={(event) => setEventShowId(event.target.value)}
+              >
+                <option value="">Assign to show (optional)</option>
+                {shows.map((show) => (
+                  <option key={show.id} value={show.id}>
+                    {show.name}
+                  </option>
+                ))}
+              </select>
               <button
                 className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-300 hover:text-amber-200"
                 type="button"
@@ -1047,6 +1162,18 @@ export default function AdminPage() {
                     value={eventRosterYear}
                     onChange={(event) => setEventRosterYear(event.target.value)}
                   />
+                  <select
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    value={eventShowId}
+                    onChange={(event) => setEventShowId(event.target.value)}
+                  >
+                    <option value="">Assign to show (optional)</option>
+                    {shows.map((show) => (
+                      <option key={show.id} value={show.id}>
+                        {show.name}
+                      </option>
+                    ))}
+                  </select>
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <button
                       className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-300 hover:text-amber-200"

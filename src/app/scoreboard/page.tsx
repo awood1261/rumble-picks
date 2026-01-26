@@ -9,18 +9,26 @@ import { ScoreboardCountdown } from "../../components/ScoreboardCountdown";
 type ScoreRow = {
   id: string;
   user_id: string;
-  event_id: string | null;
+  show_id: string | null;
   points: number;
   breakdown: Record<string, number> | null;
   updated_at: string;
 };
 
-type EventRow = {
+type ShowRow = {
   id: string;
   name: string;
 };
 
+type EventRow = {
+  id: string;
+  name: string;
+  show_id: string | null;
+  rumble_gender: string | null;
+};
+
 type RumbleEntryRow = {
+  event_id: string;
   entrant_id: string;
   entry_number: number | null;
   eliminated_at: string | null;
@@ -43,11 +51,12 @@ const SCOREBOARD_POLL_INTERVAL_MS = 60000;
 
 export default function ScoreboardPage() {
   const searchParams = useSearchParams();
-  const queryEventId = searchParams.get("event");
+  const queryShowId = searchParams.get("show");
   const [scores, setScores] = useState<ScoreRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [shows, setShows] = useState<ShowRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState<string>("");
+  const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [rumbleEntries, setRumbleEntries] = useState<RumbleEntryRow[]>([]);
   const [eventEntrants, setEventEntrants] = useState<EventEntrantRow[]>([]);
@@ -73,10 +82,15 @@ export default function ScoreboardPage() {
       .sort((a, b) => b.points - a.points);
   }, [scores, profiles]);
 
+  const showEvents = useMemo(
+    () => events.filter((event) => event.show_id === selectedShowId),
+    [events, selectedShowId]
+  );
+
   const filteredScoreboard = useMemo(() => {
-    if (!selectedEventId) return scoreboard;
-    return scoreboard.filter((row) => row.event_id === selectedEventId);
-  }, [scoreboard, selectedEventId]);
+    if (!selectedShowId) return scoreboard;
+    return scoreboard.filter((row) => row.show_id === selectedShowId);
+  }, [scoreboard, selectedShowId]);
 
   const topThree = useMemo(() => filteredScoreboard.slice(0, 3), [filteredScoreboard]);
   const currentUserIndex = useMemo(() => {
@@ -87,11 +101,19 @@ export default function ScoreboardPage() {
     return idx >= 0 ? idx : null;
   }, [currentUserId, filteredScoreboard]);
 
-  const winnerEntrantId = useMemo(() => {
-    if (rumbleEntries.length < 30) return null;
-    const remaining = rumbleEntries.filter((entry) => !entry.eliminated_at);
-    return remaining.length === 1 ? remaining[0].entrant_id : null;
-  }, [rumbleEntries]);
+  const winnerEntrantsByEvent = useMemo(() => {
+    const winners: Record<string, string | null> = {};
+    showEvents.forEach((event) => {
+      const entries = rumbleEntries.filter((entry) => entry.event_id === event.id);
+      if (entries.length < 30) {
+        winners[event.id] = null;
+        return;
+      }
+      const remaining = entries.filter((entry) => !entry.eliminated_at);
+      winners[event.id] = remaining.length === 1 ? remaining[0].entrant_id : null;
+    });
+    return winners;
+  }, [rumbleEntries, showEvents]);
 
   const entrantMap = useMemo(() => {
     return new Map(eventEntrants.map((entrant) => [entrant.id, entrant]));
@@ -103,28 +125,42 @@ export default function ScoreboardPage() {
     );
   }, [rumbleEntries]);
 
-  const remainingEntrants = useMemo(() => {
-    const remainingIds = new Set(
-      rumbleEntries
-        .filter((entry) => !entry.eliminated_at)
-        .map((entry) => entry.entrant_id)
-    );
-    return eventEntrants.filter((entrant) => remainingIds.has(entrant.id));
-  }, [eventEntrants, rumbleEntries]);
+  const entriesByEvent = useMemo(() => {
+    const byEvent: Record<string, RumbleEntryRow[]> = {};
+    showEvents.forEach((event) => {
+      byEvent[event.id] = rumbleEntries.filter(
+        (entry) => entry.event_id === event.id
+      );
+    });
+    return byEvent;
+  }, [rumbleEntries, showEvents]);
 
-  const eliminatedEntrantIds = useMemo(() => {
-    return new Set(
-      rumbleEntries
-        .filter((entry) => entry.eliminated_at)
-        .map((entry) => entry.entrant_id)
-    );
-  }, [rumbleEntries]);
+  const remainingEntrantsByEvent = useMemo(() => {
+    const map: Record<string, EventEntrantRow[]> = {};
+    Object.entries(entriesByEvent).forEach(([eventId, entries]) => {
+      const remainingIds = new Set(
+        entries.filter((entry) => !entry.eliminated_at).map((entry) => entry.entrant_id)
+      );
+      map[eventId] = eventEntrants.filter((entrant) => remainingIds.has(entrant.id));
+    });
+    return map;
+  }, [entriesByEvent, eventEntrants]);
+
+  const eliminatedEntrantIdsByEvent = useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    Object.entries(entriesByEvent).forEach(([eventId, entries]) => {
+      map[eventId] = new Set(
+        entries.filter((entry) => entry.eliminated_at).map((entry) => entry.entrant_id)
+      );
+    });
+    return map;
+  }, [entriesByEvent]);
 
   const loadScores = useCallback(async () => {
     setMessage(null);
     const { data: scoreRows, error: scoreError } = await supabase
       .from("scores")
-      .select("id, user_id, event_id, points, breakdown, updated_at");
+      .select("id, user_id, show_id, points, breakdown, updated_at");
     if (scoreError) {
       setMessage(scoreError.message);
       setLoading(false);
@@ -146,9 +182,9 @@ export default function ScoreboardPage() {
     if (profileError) {
       setMessage(profileError.message);
     }
-    if (selectedEventId) {
+    if (selectedShowId) {
       const eventScores = (scoreRows ?? [])
-        .filter((row) => row.event_id === selectedEventId)
+        .filter((row) => row.show_id === selectedShowId)
         .sort((a, b) => b.points - a.points);
       const nextRankMap: Record<string, number> = {};
       eventScores.forEach((row, index) => {
@@ -181,23 +217,24 @@ export default function ScoreboardPage() {
     setProfiles(profileRows ?? []);
     setLoading(false);
     setLastUpdateAt(Date.now());
-  }, [selectedEventId]);
+  }, [selectedShowId]);
 
   const loadRumbleEntries = useCallback(async () => {
-    if (!selectedEventId) {
+    if (!selectedShowId || showEvents.length === 0) {
       setRumbleEntries([]);
       setEventEntrants([]);
       return;
     }
-    const { data: entryRows, error } = await supabase
+    const eventIds = showEvents.map((event) => event.id);
+      const { data: entryRows, error } = await supabase
       .from("rumble_entries")
-      .select("entrant_id, entry_number, eliminated_at")
-      .eq("event_id", selectedEventId);
+      .select("event_id, entrant_id, entry_number, eliminated_at")
+      .in("event_id", eventIds);
     if (error) {
       setMessage(error.message);
       return;
     }
-    setRumbleEntries(entryRows ?? []);
+    setRumbleEntries((entryRows ?? []) as RumbleEntryRow[]);
 
     const entrantIds = Array.from(
       new Set((entryRows ?? []).map((entry) => entry.entrant_id))
@@ -218,47 +255,60 @@ export default function ScoreboardPage() {
     }
     setEventEntrants(entrantRows ?? []);
     setLastUpdateAt(Date.now());
-  }, [selectedEventId]);
+  }, [selectedShowId, showEvents]);
 
   useEffect(() => {
-    if (queryEventId && events.some((event) => event.id === queryEventId)) {
-      setSelectedEventId(queryEventId);
+    if (queryShowId && shows.some((show) => show.id === queryShowId)) {
+      setSelectedShowId(queryShowId);
     }
-  }, [queryEventId, events]);
+  }, [queryShowId, shows]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setCurrentUserId(data.session?.user.id ?? null);
     });
 
+    const loadShows = async () => {
+      const { data: showRows, error: showError } = await supabase
+        .from("shows")
+        .select("id, name")
+        .order("starts_at", { ascending: true });
+      if (showError) {
+        setMessage(showError.message);
+        return;
+      }
+      setShows(showRows ?? []);
+      if (showRows && showRows.length > 0) {
+        const defaultId =
+          queryShowId && showRows.some((show) => show.id === queryShowId)
+            ? queryShowId
+            : showRows[0].id;
+        setSelectedShowId((current) => current || defaultId);
+      }
+    };
+
     const loadEvents = async () => {
       const { data: eventRows, error } = await supabase
         .from("events")
-        .select("id, name")
+        .select("id, name, show_id, rumble_gender")
         .order("starts_at", { ascending: true });
       if (error) {
         setMessage(error.message);
         return;
       }
       setEvents(eventRows ?? []);
-      if (eventRows && eventRows.length > 0) {
-        const defaultId =
-          queryEventId && eventRows.some((event) => event.id === queryEventId)
-            ? queryEventId
-            : eventRows[0].id;
-        setSelectedEventId((current) => current || defaultId);
-      }
     };
 
+    loadShows();
     loadEvents();
     loadScores();
-  }, [loadScores, queryEventId]);
+  }, [loadScores, queryShowId]);
 
   useEffect(() => {
     previousRanksRef.current = {};
     setRankDelta({});
     lastDeltaRef.current = {};
-  }, [selectedEventId]);
+  }, [selectedShowId]);
 
   useEffect(() => {
     loadRumbleEntries();
@@ -286,24 +336,24 @@ export default function ScoreboardPage() {
             Scores update as eliminations and results are recorded.
           </p>
         </header>
-        {events.length > 1 && (
+        {shows.length > 1 && (
           <div className="mt-6">
             <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-              Event
+              Show
               <select
                 className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                value={selectedEventId}
+                value={selectedShowId}
                 onChange={(event) => {
                   const value = event.target.value;
-                  setSelectedEventId(value);
+                  setSelectedShowId(value);
                   const url = new URL(window.location.href);
-                  url.searchParams.set("event", value);
+                  url.searchParams.set("show", value);
                   window.history.replaceState({}, "", url.toString());
                 }}
               >
-                {events.map((event) => (
-                  <option key={event.id} value={event.id}>
-                    {event.name}
+                {shows.map((show) => (
+                  <option key={show.id} value={show.id}>
+                    {show.name}
                   </option>
                 ))}
               </select>
@@ -318,85 +368,113 @@ export default function ScoreboardPage() {
         )}
 
         <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          <div className="mb-8 grid gap-6 lg:grid-cols-2">
-            <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs">
-              <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
-                Entrants in Rumble
-                <span className="text-zinc-600 transition group-open:rotate-180">▾</span>
-              </summary>
-              {eventEntrants.length === 0 ? (
-                <p className="mt-3 text-zinc-400">No entrants added yet.</p>
-              ) : (
-                <ul className="mt-3 max-h-28 space-y-2 overflow-y-auto pr-1 text-zinc-300">
-                  {[...eventEntrants]
-                    .sort((a, b) => {
-                      const aNum = entryNumberMap.get(a.id);
-                      const bNum = entryNumberMap.get(b.id);
-                      if (aNum == null && bNum == null) return a.name.localeCompare(b.name);
-                      if (aNum == null) return 1;
-                      if (bNum == null) return -1;
-                      return aNum - bNum;
-                    })
-                    .map((entrant) => {
-                      const eliminated = eliminatedEntrantIds.has(entrant.id);
-                      return (
-                        <li
-                          key={entrant.id}
-                          className="flex items-center justify-between gap-2"
-                        >
-                          <span
-                            className={
-                              eliminated ? "text-red-200" : "text-zinc-300"
-                            }
-                          >
-                            <span className="mr-2 text-[10px] font-semibold text-zinc-400">
-                              #{entryNumberMap.get(entrant.id) ?? "—"}
-                            </span>
-                            {entrant.name}
-                            {entrant.promotion ? ` • ${entrant.promotion}` : ""}
-                          </span>
-                          {eliminated ? (
-                            <span className="rounded-full border border-red-500/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-200">
-                              Eliminated
-                            </span>
-                          ) : null}
-                        </li>
-                      );
-                    })}
-                </ul>
-              )}
-            </details>
-            <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs">
-              <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
-                Not Eliminated
-                <span className="text-zinc-600 transition group-open:rotate-180">▾</span>
-              </summary>
-              {remainingEntrants.length === 0 ? (
-                <p className="mt-3 text-zinc-400">
-                  All entrants eliminated (winner determined).
-                </p>
-              ) : (
-                <ul className="mt-3 max-h-28 space-y-2 overflow-y-auto pr-1 text-zinc-300">
-                  {remainingEntrants.map((entrant) => (
-                    <li key={entrant.id}>
-                      {entrant.name}
-                      {entrant.promotion ? ` • ${entrant.promotion}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </details>
+          <div className="mb-6 space-y-4">
+            {showEvents.length === 0 ? (
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-400">
+                No rumble events added yet.
+              </div>
+            ) : (
+              showEvents.map((event) => {
+                const eventEntries = entriesByEvent[event.id] ?? [];
+                const eliminatedSet = eliminatedEntrantIdsByEvent[event.id] ?? new Set();
+                const remainingEntrants = remainingEntrantsByEvent[event.id] ?? [];
+                const winnerEntrantId = winnerEntrantsByEvent[event.id];
+                const entrantsForEvent = eventEntrants.filter((entrant) =>
+                  eventEntries.some((entry) => entry.entrant_id === entrant.id)
+                );
+                return (
+                  <div
+                    key={event.id}
+                    className="grid gap-4 lg:grid-cols-2"
+                  >
+                    <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-[11px]">
+                      <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
+                        {event.name} entrants
+                        <span className="text-zinc-600 transition group-open:rotate-180">
+                          ▾
+                        </span>
+                      </summary>
+                      {entrantsForEvent.length === 0 ? (
+                        <p className="mt-3 text-zinc-400">No entrants added yet.</p>
+                      ) : (
+                        <ul className="mt-3 max-h-28 space-y-2 overflow-y-auto pr-1 text-zinc-300">
+                          {[...entrantsForEvent]
+                            .sort((a, b) => {
+                              const aNum = entryNumberMap.get(a.id);
+                              const bNum = entryNumberMap.get(b.id);
+                              if (aNum == null && bNum == null) return a.name.localeCompare(b.name);
+                              if (aNum == null) return 1;
+                              if (bNum == null) return -1;
+                              return aNum - bNum;
+                            })
+                            .map((entrant) => {
+                              const eliminated = eliminatedSet.has(entrant.id);
+                              return (
+                                <li
+                                  key={entrant.id}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span
+                                    className={
+                                      eliminated ? "text-red-200" : "text-zinc-300"
+                                    }
+                                  >
+                                    <span className="mr-2 text-[10px] font-semibold text-zinc-400">
+                                      #{entryNumberMap.get(entrant.id) ?? "—"}
+                                    </span>
+                                    {entrant.name}
+                                    {entrant.promotion ? ` • ${entrant.promotion}` : ""}
+                                  </span>
+                                  {eliminated ? (
+                                    <span className="rounded-full border border-red-500/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-200">
+                                      Eliminated
+                                    </span>
+                                  ) : null}
+                                </li>
+                              );
+                            })}
+                        </ul>
+                      )}
+                    </details>
+                    <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-[11px]">
+                      <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
+                        {event.name} remaining
+                        <span className="text-zinc-600 transition group-open:rotate-180">
+                          ▾
+                        </span>
+                      </summary>
+                      {remainingEntrants.length === 0 ? (
+                        <p className="mt-3 text-zinc-400">
+                          {winnerEntrantId
+                            ? "Winner determined."
+                            : "All entrants eliminated."}
+                        </p>
+                      ) : (
+                        <ul className="mt-3 max-h-28 space-y-2 overflow-y-auto pr-1 text-zinc-300">
+                          {remainingEntrants.map((entrant) => (
+                            <li key={entrant.id}>
+                              {entrant.name}
+                              {entrant.promotion ? ` • ${entrant.promotion}` : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </details>
+                  </div>
+                );
+              })
+            )}
           </div>
           {currentUserIndex !== null && (
             <div className="mb-6 rounded-2xl border border-sky-400/40 bg-sky-400/5 px-4 py-3 text-sm text-sky-100">
-              You are currently <span className="font-semibold">#{currentUserIndex + 1}</span> in this event.
+              You are currently <span className="font-semibold">#{currentUserIndex + 1}</span> in this show.
             </div>
           )}
           {loading ? (
             <p className="text-sm text-zinc-400">Loading scoreboard…</p>
           ) : filteredScoreboard.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/60 px-4 py-6 text-sm text-zinc-300">
-              <p>No picks yet for this event.</p>
+              <p>No picks yet for this show.</p>
               <p className="mt-2 text-zinc-400">
                 Be the first to make picks and start the leaderboard.
               </p>
@@ -420,7 +498,7 @@ export default function ScoreboardPage() {
                         ? "border-amber-400/60 bg-amber-400/10"
                         : "border-zinc-800 bg-zinc-950/50"
                     }`}
-                    href={`/scoreboard/${row.user_id}?event=${row.event_id}`}
+                    href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-2 text-3xl font-semibold text-amber-300">
@@ -439,7 +517,8 @@ export default function ScoreboardPage() {
                           </span>
                         )}
                       </span>
-                      {index === 0 && winnerEntrantId && (
+                      {index === 0 &&
+                        showEvents.some((event) => winnerEntrantsByEvent[event.id]) && (
                         <span className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-amber-200">
                           <svg
                             className="h-10 w-10"
@@ -521,7 +600,7 @@ export default function ScoreboardPage() {
                     : ""
                 }`;
 
-                if (!row.event_id) {
+                if (!row.show_id) {
                   return (
                     <div
                       key={row.id}
@@ -536,7 +615,7 @@ export default function ScoreboardPage() {
                   <Link
                     key={row.id}
                     className={`${rowClassName} transition hover:text-amber-200`}
-                    href={`/scoreboard/${row.user_id}?event=${row.event_id}`}
+                    href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
                   >
                     {content}
                   </Link>
