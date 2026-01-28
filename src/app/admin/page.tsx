@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { EntrantCard } from "../../components/EntrantCard";
 import { ShowEditor } from "../../components/ShowEditor";
@@ -114,6 +114,7 @@ export default function AdminPage() {
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [adminTab, setAdminTab] = useState<"events" | "matches">("events");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
   const [entryEntrantId, setEntryEntrantId] = useState("");
   const [entryNumber, setEntryNumber] = useState("");
   const [eliminateEntryId, setEliminateEntryId] = useState("");
@@ -133,6 +134,8 @@ export default function AdminPage() {
   const [matchFinishEdits, setMatchFinishEdits] = useState<
     Record<string, { method: string; winner: string; loser: string }>
   >({});
+  const [scrollMatchId, setScrollMatchId] = useState<string | null>(null);
+  const matchRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const formatLocalDateTime = (value: string | null) => {
     if (!value) return "";
@@ -201,6 +204,24 @@ export default function AdminPage() {
       setSelectedEventId(showEvents[0]?.id ?? "");
     }
   }, [activeShow, selectedEventId, showEvents]);
+  useEffect(() => {
+    if (!toastMessage) return;
+    setToastVisible(true);
+    const hideTimer = setTimeout(() => setToastVisible(false), 2600);
+    const clearTimer = setTimeout(() => setToastMessage(null), 3300);
+    return () => {
+      clearTimeout(hideTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [toastMessage]);
+  useEffect(() => {
+    if (adminTab !== "matches" || !scrollMatchId) return;
+    const element = matchRefs.current[scrollMatchId];
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setScrollMatchId(null);
+    }
+  }, [adminTab, scrollMatchId]);
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
@@ -504,12 +525,6 @@ export default function AdminPage() {
       refreshData();
     }
   }, [isAdmin, activeEvent?.id, selectedEventId, selectedShowId]);
-
-  useEffect(() => {
-    if (!toastMessage) return;
-    const timer = setTimeout(() => setToastMessage(null), 3200);
-    return () => clearTimeout(timer);
-  }, [toastMessage]);
 
   const handleCreateEvent = async () => {
     setMessage(null);
@@ -911,7 +926,7 @@ export default function AdminPage() {
       return;
     }
     await handleRecalculateScores({ silent: true });
-    setMessage("Match finish updated.");
+    setToastMessage("Match finish updated.");
     refreshData();
   };
 
@@ -1164,7 +1179,11 @@ export default function AdminPage() {
         )}
 
         {toastMessage && (
-          <div className="fixed right-6 top-24 z-50 rounded-2xl border border-amber-400/60 bg-zinc-950/95 px-4 py-3 text-sm text-amber-100 shadow-lg shadow-black/40">
+          <div
+            className={`fixed left-0 right-0 top-16 z-50 mx-auto w-[min(92vw,720px)] rounded-2xl border border-amber-400/60 bg-zinc-950/95 px-4 py-3 text-sm text-amber-100 shadow-lg shadow-black/40 transition-all duration-300 ${
+              toastVisible ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0"
+            }`}
+          >
             {toastMessage}
           </div>
         )}
@@ -1279,18 +1298,19 @@ export default function AdminPage() {
                               : ""}
                           </p>
                         </div>
-                        <button
-                          className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                          type="button"
-                          onClick={() => {
-                            if (match.event_id) {
-                              setSelectedEventId(match.event_id);
-                            }
-                            setAdminTab("matches");
-                          }}
-                        >
-                          Edit match
-                        </button>
+                      <button
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                        type="button"
+                        onClick={() => {
+                          if (match.event_id) {
+                            setSelectedEventId(match.event_id);
+                          }
+                          setAdminTab("matches");
+                          setScrollMatchId(match.id);
+                        }}
+                      >
+                        Edit match
+                      </button>
                       </div>
                     ))}
                   </div>
@@ -1741,6 +1761,9 @@ export default function AdminPage() {
                 return (
                   <div
                     key={match.id}
+                    ref={(element) => {
+                      matchRefs.current[match.id] = element;
+                    }}
                     className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
                   >
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
