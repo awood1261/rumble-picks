@@ -57,6 +57,10 @@ type MatchRow = {
   finish_method: string | null;
   finish_winner_entrant_id: string | null;
   finish_loser_entrant_id: string | null;
+  roster_year: number | null;
+  roster_gender: string | null;
+  event_id: string | null;
+  show_id: string | null;
 };
 
 type MatchSideRow = {
@@ -89,6 +93,7 @@ export default function AdminPage() {
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [entries, setEntries] = useState<RumbleEntryRow[]>([]);
   const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [showMatches, setShowMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
 
@@ -99,8 +104,12 @@ export default function AdminPage() {
   const [eventShowId, setEventShowId] = useState("");
   const [showName, setShowName] = useState("");
   const [showStartsAt, setShowStartsAt] = useState("");
+  const [showModalOpen, setShowModalOpen] = useState(false);
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
+  const [selectedShowId, setSelectedShowId] = useState<string>("");
+  const [adminTab, setAdminTab] = useState<"events" | "matches">("events");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [entryEntrantId, setEntryEntrantId] = useState("");
   const [entryNumber, setEntryNumber] = useState("");
   const [eliminateEntryId, setEliminateEntryId] = useState("");
@@ -110,6 +119,9 @@ export default function AdminPage() {
   const [matchName, setMatchName] = useState("");
   const [matchKind, setMatchKind] = useState("match");
   const [matchType, setMatchType] = useState("singles");
+  const [matchRosterYear, setMatchRosterYear] = useState("");
+  const [matchRosterGender, setMatchRosterGender] = useState("men");
+  const [matchCreateOpen, setMatchCreateOpen] = useState(false);
   const [matchEntrantSelection, setMatchEntrantSelection] = useState<Record<string, string>>({});
   const [matchSideSelection, setMatchSideSelection] = useState<Record<string, string>>({});
   const [matchNameEdits, setMatchNameEdits] = useState<Record<string, string>>({});
@@ -128,12 +140,31 @@ export default function AdminPage() {
     )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   };
 
-  const activeEvent = useMemo(() => {
-    if (selectedEventId) {
-      return events.find((event) => event.id === selectedEventId) ?? null;
+  const activeShow = useMemo(() => {
+    if (selectedShowId) {
+      return shows.find((show) => show.id === selectedShowId) ?? null;
     }
-    return events[0] ?? null;
-  }, [events, selectedEventId]);
+    return shows[0] ?? null;
+  }, [shows, selectedShowId]);
+  const showEvents = useMemo(() => {
+    if (!activeShow) return [];
+    return events
+      .filter((event) => event.show_id === activeShow.id)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeShow, events]);
+  const activeEventId = useMemo(() => {
+    if (selectedEventId && showEvents.some((event) => event.id === selectedEventId)) {
+      return selectedEventId;
+    }
+    return showEvents[0]?.id ?? "";
+  }, [selectedEventId, showEvents]);
+  const activeEvent = useMemo(() => {
+    if (!activeEventId) return null;
+    return events.find((event) => event.id === activeEventId) ?? null;
+  }, [activeEventId, events]);
+  const eventNameById = useMemo(() => {
+    return new Map(events.map((event) => [event.id, event.name]));
+  }, [events]);
   useEffect(() => {
     setEventStartsAt(formatLocalDateTime(activeEvent?.starts_at ?? null));
     setEventRosterYear(
@@ -141,6 +172,22 @@ export default function AdminPage() {
     );
     setEventShowId(activeEvent?.show_id ?? "");
   }, [activeEvent?.starts_at, activeEvent?.roster_year]);
+  useEffect(() => {
+    if (!selectedShowId && activeShow?.id) {
+      setSelectedShowId(activeShow.id);
+    }
+  }, [activeShow?.id, selectedShowId]);
+  useEffect(() => {
+    if (selectedShowId && !eventShowId) {
+      setEventShowId(selectedShowId);
+    }
+  }, [eventShowId, selectedShowId]);
+  useEffect(() => {
+    if (!activeShow) return;
+    if (!showEvents.find((event) => event.id === selectedEventId)) {
+      setSelectedEventId(showEvents[0]?.id ?? "");
+    }
+  }, [activeShow, selectedEventId, showEvents]);
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
@@ -236,7 +283,15 @@ export default function AdminPage() {
 
   const refreshData = async () => {
     if (!activeEvent) {
-      const [{ data: showRows }, { data: eventRows }] = await Promise.all([
+      const showIdForQuery = selectedShowId || null;
+      const [
+        { data: showRows },
+        { data: eventRows },
+        { data: entrantRows },
+        { data: matchRows },
+        { data: matchSideRows },
+        { data: matchEntrantRows },
+      ] = await Promise.all([
         supabase
           .from("shows")
           .select("id, name, status, starts_at")
@@ -245,22 +300,75 @@ export default function AdminPage() {
           .from("events")
           .select("id, name, status, starts_at, rumble_gender, roster_year, show_id")
           .order("created_at", { ascending: false }),
+        supabase
+          .from("entrants")
+          .select(
+            "id, name, promotion, gender, active, image_url, roster_year, event_id, is_custom, created_by, status"
+          )
+          .order("name", { ascending: true }),
+        (() => {
+          const query = supabase
+            .from("matches")
+            .select(
+              "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, roster_year, roster_gender, event_id, show_id"
+            )
+            .order("created_at", { ascending: true });
+          if (showIdForQuery) {
+            return query.eq("show_id", showIdForQuery);
+          }
+          return query;
+        })(),
+        supabase
+          .from("match_sides")
+          .select("id, match_id, label"),
+        supabase
+          .from("match_entrants")
+          .select("id, match_id, entrant_id, side_id"),
       ]);
       setShows(showRows ?? []);
       setEvents(eventRows ?? []);
-      if (!selectedEventId && eventRows && eventRows.length > 0) {
-        setSelectedEventId(eventRows[0].id);
-      }
+      setEntrants(entrantRows ?? []);
+      const matchListAll = (matchRows ?? []) as MatchRow[];
+      const matchIdSet = new Set(matchListAll.map((match) => match.id));
+      const matchSideList = (matchSideRows ?? []).filter((row) =>
+        matchIdSet.has(row.match_id)
+      ) as MatchSideRow[];
+      const matchEntrantList = (matchEntrantRows ?? []).filter((row) =>
+        matchIdSet.has(row.match_id)
+      ) as MatchEntrantRow[];
+      setShowMatches(matchListAll);
+      setMatches(matchListAll);
+      setMatchSides(matchSideList);
+      setMatchEntrants(matchEntrantList);
+      setMatchNameEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (!next[match.id]) {
+            next[match.id] = match.name;
+          }
+        });
+        return next;
+      });
+      setMatchSideLabelEdits((prev) => {
+        const next = { ...prev };
+        matchSideList.forEach((side) => {
+          if (!next[side.id]) {
+            next[side.id] = side.label ?? "";
+          }
+        });
+        return next;
+      });
     } else {
+        const showIdForQuery = selectedShowId || activeEvent.show_id || null;
         const [
           { data: showRows },
           { data: eventRows },
           { data: entrantRows },
           { data: entryRows },
-          { data: matchRows },
-          { data: matchSideRows },
-          { data: matchEntrantRows },
-        ] = await Promise.all([
+        { data: matchRows },
+        { data: matchSideRows },
+        { data: matchEntrantRows },
+      ] = await Promise.all([
           supabase
             .from("shows")
             .select("id, name, status, starts_at")
@@ -282,13 +390,18 @@ export default function AdminPage() {
             )
             .eq("event_id", activeEvent.id)
             .order("entry_number", { ascending: true }),
-          supabase
-            .from("matches")
-            .select(
-              "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id"
-            )
-            .eq("event_id", activeEvent.id)
-            .order("created_at", { ascending: true }),
+          (() => {
+            const query = supabase
+              .from("matches")
+              .select(
+                "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, roster_year, roster_gender, event_id, show_id"
+              )
+              .order("created_at", { ascending: true });
+            if (showIdForQuery) {
+              return query.eq("show_id", showIdForQuery);
+            }
+            return query.eq("event_id", activeEvent.id);
+          })(),
           supabase
             .from("match_sides")
             .select("id, match_id, label"),
@@ -298,20 +411,21 @@ export default function AdminPage() {
         ]);
       setShows(showRows ?? []);
       setEvents(eventRows ?? []);
-      if (!selectedEventId && eventRows && eventRows.length > 0) {
-        setSelectedEventId(eventRows[0].id);
+      if (!selectedShowId && showRows && showRows.length > 0) {
+        setSelectedShowId(showRows[0].id);
       }
       setEntrants(entrantRows ?? []);
       setEntries(entryRows ?? []);
-      const matchList = (matchRows ?? []) as MatchRow[];
-      const matchIdSet = new Set(matchList.map((match) => match.id));
+      const matchListAll = (matchRows ?? []) as MatchRow[];
+      const matchIdSet = new Set(matchListAll.map((match) => match.id));
       const matchSideList = (matchSideRows ?? []).filter((row) =>
         matchIdSet.has(row.match_id)
       ) as MatchSideRow[];
       const matchEntrantList = (matchEntrantRows ?? []).filter((row) =>
         matchIdSet.has(row.match_id)
       ) as MatchEntrantRow[];
-      setMatches(matchList);
+      setShowMatches(matchListAll);
+      setMatches(matchListAll);
       setMatchSides(matchSideList);
       setMatchEntrants(matchEntrantList);
       setMatchNameEdits((prev) => {
@@ -376,7 +490,13 @@ export default function AdminPage() {
     if (isAdmin) {
       refreshData();
     }
-  }, [isAdmin, activeEvent?.id, selectedEventId]);
+  }, [isAdmin, activeEvent?.id, selectedEventId, selectedShowId]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(() => setToastMessage(null), 3200);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
 
   const handleCreateEvent = async () => {
     setMessage(null);
@@ -412,17 +532,25 @@ export default function AdminPage() {
       setMessage("Show name is required.");
       return;
     }
-    const { error } = await supabase.from("shows").insert({
-      name: showName.trim(),
-      status: "draft",
-      starts_at: showStartsAt ? new Date(showStartsAt).toISOString() : null,
-    });
-    if (error) {
-      setMessage(error.message);
+    const { data: newShow, error } = await supabase
+      .from("shows")
+      .insert({
+        name: showName.trim(),
+        status: "draft",
+        starts_at: showStartsAt ? new Date(showStartsAt).toISOString() : null,
+      })
+      .select("id, name")
+      .single();
+    if (error || !newShow) {
+      setMessage(error?.message ?? "Failed to create show.");
       return;
     }
     setShowName("");
     setShowStartsAt("");
+    setSelectedShowId(newShow.id);
+    setEventShowId(newShow.id);
+    setShowModalOpen(false);
+    setToastMessage(`Show created: ${newShow.name}. Active show updated.`);
     refreshData();
   };
 
@@ -569,8 +697,8 @@ export default function AdminPage() {
 
   const handleAddMatch = async () => {
     setMessage(null);
-    if (!activeEvent) {
-      setMessage("Create an event first.");
+    if (!selectedShowId) {
+      setMessage("Select a show before adding matches.");
       return;
     }
     if (!matchName.trim()) {
@@ -580,11 +708,13 @@ export default function AdminPage() {
     const { data: newMatch, error } = await supabase
       .from("matches")
       .insert({
-        event_id: activeEvent.id,
-        show_id: activeEvent.show_id ?? null,
+        event_id: null,
+        show_id: selectedShowId,
         name: matchName.trim(),
         kind: matchKind.trim() || "match",
         match_type: matchType,
+        roster_year: matchRosterYear ? Number(matchRosterYear) : null,
+        roster_gender: matchRosterGender || null,
       })
       .select("id")
       .single();
@@ -616,6 +746,9 @@ export default function AdminPage() {
     setMatchName("");
     setMatchKind("match");
     setMatchType("singles");
+    setMatchRosterYear("");
+    setMatchRosterGender("men");
+    setMatchCreateOpen(false);
     refreshData();
   };
 
@@ -981,91 +1114,192 @@ export default function AdminPage() {
           </div>
         )}
 
+        {toastMessage && (
+          <div className="fixed right-6 top-24 z-50 rounded-2xl border border-amber-400/60 bg-zinc-950/95 px-4 py-3 text-sm text-amber-100 shadow-lg shadow-black/40">
+            {toastMessage}
+          </div>
+        )}
+
         <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Active event</h2>
+              <h2 className="text-lg font-semibold">Shows</h2>
               <p className="mt-2 text-sm text-zinc-400">
-                {activeEvent
-                  ? `${activeEvent.name} (${activeEvent.rumble_gender ?? "unspecified"}${activeEvent.roster_year ? `, ${activeEvent.roster_year}` : ""})`
-                  : "No event yet."}
+                Pick the card you want to manage. Events and matches below sync
+                to the active show.
               </p>
+              {activeShow ? (
+                <p className="mt-3 text-xs uppercase tracking-[0.3em] text-amber-200">
+                  Active show: {activeShow.name}
+                </p>
+              ) : null}
             </div>
-            <div className="w-full sm:max-w-xs">
+            <div className="flex w-full flex-col gap-3 lg:max-w-xs">
               <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                Switch event
+                Switch show
                 <select
                   className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  value={selectedEventId}
-                  onChange={(event) => setSelectedEventId(event.target.value)}
+                  value={selectedShowId}
+                  onChange={(event) => setSelectedShowId(event.target.value)}
                 >
-                  {events.length === 0 && <option value="">No events</option>}
-                  {events.map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {event.name}
+                  {shows.length === 0 && <option value="">No shows</option>}
+                  {shows.map((show) => (
+                    <option key={show.id} value={show.id}>
+                      {show.name}
                     </option>
                   ))}
                 </select>
               </label>
+              <button
+                className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[11px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                type="button"
+                onClick={() => setShowModalOpen(true)}
+              >
+                Add new show
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                Rumble events on this show
+              </p>
+              {showEvents.length === 0 ? (
+                <p className="mt-3 text-sm text-zinc-400">
+                  No events linked to this show yet.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-3 text-sm text-zinc-200">
+                  {showEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
+                    >
+                      <div>
+                        <p className="font-medium text-zinc-100">{event.name}</p>
+                        <p className="text-xs text-zinc-500">
+                          {event.rumble_gender ?? "unspecified"}
+                          {event.roster_year ? ` • ${event.roster_year}` : ""}
+                        </p>
+                      </div>
+                      <button
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                        type="button"
+                        onClick={() => {
+                          setSelectedEventId(event.id);
+                          setAdminTab("events");
+                        }}
+                      >
+                        Edit event
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                Matches on this show
+              </p>
+              {showMatches.length === 0 ? (
+                <p className="mt-3 text-sm text-zinc-400">
+                  No matches linked to this show yet.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-3 text-sm text-zinc-200">
+                  {showMatches.map((match) => (
+                    <div
+                      key={match.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
+                    >
+                      <div>
+                        <p className="font-medium text-zinc-100">{match.name}</p>
+                        <p className="text-xs text-zinc-500">
+                          {(match.match_type ?? "match").replace("_", " ")}
+                          {match.event_id
+                            ? ` • ${eventNameById.get(match.event_id) ?? "Unassigned"}`
+                            : ""}
+                        </p>
+                      </div>
+                      <button
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                        type="button"
+                        onClick={() => {
+                          if (match.event_id) {
+                            setSelectedEventId(match.event_id);
+                          }
+                          setAdminTab("matches");
+                        }}
+                      >
+                        Edit match
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 lg:col-span-2">
-            <h2 className="text-lg font-semibold">Shows</h2>
+            <h2 className="text-lg font-semibold">Show list</h2>
             <p className="mt-2 text-sm text-zinc-400">
-              Create a show (card) to group multiple rumbles and matches.
+              Quick view of all shows in the system.
             </p>
-            <div className="mt-4 grid gap-4 lg:grid-cols-[2fr,1fr]">
-              <div className="space-y-3">
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  placeholder="Show name"
-                  value={showName}
-                  onChange={(event) => setShowName(event.target.value)}
-                />
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  type="datetime-local"
-                  value={showStartsAt}
-                  onChange={(event) => setShowStartsAt(event.target.value)}
-                />
-                <button
-                  className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                  type="button"
-                  onClick={handleCreateShow}
-                >
-                  Create show
-                </button>
-              </div>
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Existing shows
-                </p>
-                {shows.length === 0 ? (
-                  <p className="mt-3 text-sm text-zinc-400">
-                    No shows yet.
-                  </p>
-                ) : (
-                  <ul className="mt-3 space-y-2 text-sm text-zinc-200">
-                    {shows.map((show) => (
-                      <li key={show.id} className="flex items-center justify-between">
-                        <span>{show.name}</span>
-                        <span className="text-xs text-zinc-500">
-                          {show.starts_at
-                            ? new Date(show.starts_at).toLocaleString()
-                            : "No date"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+            <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              {shows.length === 0 ? (
+                <p className="text-sm text-zinc-400">No shows yet.</p>
+              ) : (
+                <ul className="space-y-2 text-sm text-zinc-200">
+                  {shows.map((show) => (
+                    <li key={show.id} className="flex items-center justify-between">
+                      <span>{show.name}</span>
+                      <span className="text-xs text-zinc-500">
+                        {show.starts_at
+                          ? new Date(show.starts_at).toLocaleString()
+                          : "No date"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
+        </section>
 
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+        <div className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              className={`h-11 flex-1 rounded-2xl px-4 text-xs font-semibold uppercase tracking-[0.2em] transition sm:flex-none ${
+                adminTab === "events"
+                  ? "bg-amber-400 text-zinc-900"
+                  : "border border-zinc-800 text-zinc-300 hover:border-amber-300 hover:text-amber-200"
+              }`}
+              type="button"
+              onClick={() => setAdminTab("events")}
+            >
+              Rumble events
+            </button>
+            <button
+              className={`h-11 flex-1 rounded-2xl px-4 text-xs font-semibold uppercase tracking-[0.2em] transition sm:flex-none ${
+                adminTab === "matches"
+                  ? "bg-amber-400 text-zinc-900"
+                  : "border border-zinc-800 text-zinc-300 hover:border-amber-300 hover:text-amber-200"
+              }`}
+              type="button"
+              onClick={() => setAdminTab("matches")}
+            >
+              Matches
+            </button>
+          </div>
+        </div>
+
+        <section className="mt-6 grid gap-6 lg:grid-cols-2">
+          {adminTab === "events" && (
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <h2 className="text-lg font-semibold">Create event</h2>
             <p className="mt-2 text-sm text-zinc-400">
               Add a new rumble event and define its roster settings.
@@ -1130,8 +1364,10 @@ export default function AdminPage() {
               </button>
             </div>
           </div>
+          )}
 
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          {adminTab === "events" && (
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <h2 className="text-lg font-semibold">Edit event</h2>
             <p className="mt-2 text-sm text-zinc-400">
               Update the active event, manage custom entrants, and approve user
@@ -1268,9 +1504,11 @@ export default function AdminPage() {
               </>
             )}
           </div>
+          )}
         </section>
 
-        <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+        {adminTab === "events" && (
+          <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <h2 className="text-lg font-semibold">Rumble Entry</h2>
           <p className="mt-2 text-sm text-zinc-400">
             {entries.length} entries tracked • {filteredEntrantOptions.length} eligible{" "}
@@ -1323,44 +1561,81 @@ export default function AdminPage() {
             </button>
           </div>
         </section>
+        )}
 
-        <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+        {adminTab === "matches" && (
+          <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <h2 className="text-lg font-semibold">Matches</h2>
           <p className="mt-2 text-sm text-zinc-400">
-            Add matches for the event and assign participants.
+            Add matches for the show and assign participants.
           </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,1fr,auto]">
-            <input
-              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-              placeholder="Match name"
-              value={matchName}
-              onChange={(event) => setMatchName(event.target.value)}
-            />
-            <input
-              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-              placeholder="Kind (match, title, tag)"
-              value={matchKind}
-              onChange={(event) => setMatchKind(event.target.value)}
-            />
-            <select
-              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-              value={matchType}
-              onChange={(event) => setMatchType(event.target.value)}
-            >
-              <option value="singles">Singles (1 vs 1)</option>
-              <option value="tag">Tag (2 vs 2)</option>
-              <option value="triple_threat">Triple Threat</option>
-              <option value="fatal_4_way">Fatal 4-Way</option>
-              <option value="multi">Multi-person</option>
-            </select>
-            <button
-              className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
-              type="button"
-              onClick={handleAddMatch}
-            >
-              Add match
-            </button>
-          </div>
+          <details
+            className="group mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+            open={matchCreateOpen}
+            onToggle={(event) =>
+              setMatchCreateOpen((event.target as HTMLDetailsElement).open)
+            }
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-zinc-100">
+              Create a match
+              <span className="text-xs uppercase tracking-[0.3em] text-zinc-500 group-open:hidden">
+                Expand
+              </span>
+              <span className="text-xs uppercase tracking-[0.3em] text-zinc-500 hidden group-open:inline">
+                Collapse
+              </span>
+            </summary>
+            <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,1fr,1fr,1fr,auto]">
+              <input
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                placeholder="Match name"
+                value={matchName}
+                onChange={(event) => setMatchName(event.target.value)}
+              />
+              <input
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                placeholder="Kind (match, title, tag)"
+                value={matchKind}
+                onChange={(event) => setMatchKind(event.target.value)}
+              />
+              <select
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                value={matchType}
+                onChange={(event) => setMatchType(event.target.value)}
+              >
+                <option value="singles">Singles (1 vs 1)</option>
+                <option value="tag">Tag (2 vs 2)</option>
+                <option value="triple_threat">Triple Threat</option>
+                <option value="fatal_4_way">Fatal 4-Way</option>
+                <option value="multi">Multi-person</option>
+              </select>
+              <input
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                type="number"
+                min="1900"
+                max="2100"
+                placeholder="Roster year"
+                value={matchRosterYear}
+                onChange={(event) => setMatchRosterYear(event.target.value)}
+              />
+              <select
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                value={matchRosterGender}
+                onChange={(event) => setMatchRosterGender(event.target.value)}
+              >
+                <option value="men">Men</option>
+                <option value="women">Women</option>
+                <option value="intergender">Intergender</option>
+              </select>
+              <button
+                className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+                type="button"
+                onClick={handleAddMatch}
+              >
+                Add match
+              </button>
+            </div>
+          </details>
 
           {matches.length === 0 ? (
             <p className="mt-6 text-sm text-zinc-400">No matches added yet.</p>
@@ -1369,6 +1644,17 @@ export default function AdminPage() {
               {matches.map((match) => {
                 const sides = matchSidesByMatch[match.id] ?? [];
                 const participantRows = matchEntrantsByMatch[match.id] ?? [];
+                const eligibleEntrants = entrantOptions.filter((entrant) => {
+                  if (!entrant.active) return false;
+                  if (match.roster_year && entrant.roster_year !== match.roster_year) {
+                    return false;
+                  }
+                  const gender = match.roster_gender ?? "";
+                  if (!gender || gender === "intergender") {
+                    return true;
+                  }
+                  return entrant.gender === gender;
+                });
                 const sideEntries = sides.map((side, index) => {
                   const entrantsForSide = participantRows
                     .filter((row) => row.side_id === side.id)
@@ -1392,6 +1678,7 @@ export default function AdminPage() {
                 const finishRequiresEntrants =
                   finishState.method === "pinfall" ||
                   finishState.method === "submission";
+                const finishDisabledForSingles = match.match_type === "singles";
                 const selection = matchEntrantSelection[match.id] ?? "";
                 const sideSelection = matchSideSelection[match.id] ?? "";
                 return (
@@ -1403,6 +1690,8 @@ export default function AdminPage() {
                       <div className="flex flex-col gap-2">
                         <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                           {match.kind} · {match.match_type.replace("_", " ")}
+                          {match.roster_year ? ` · ${match.roster_year}` : ""}
+                          {match.roster_gender ? ` · ${match.roster_gender}` : ""}
                         </p>
                         <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                           Match name
@@ -1465,7 +1754,7 @@ export default function AdminPage() {
 
                     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-3">
                       <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                        Match finish (only for matches with 3+ entrants)
+                        Match finish (not needed for singles)
                       </p>
                       <div className="mt-3 grid gap-3 md:grid-cols-3">
                         <select
@@ -1486,53 +1775,57 @@ export default function AdminPage() {
                           <option value="submission">Submission</option>
                           <option value="disqualification">Disqualification</option>
                         </select>
-                        <select
-                          className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                          value={finishState.winner}
-                          onChange={(event) =>
-                            setMatchFinishEdits((prev) => ({
-                              ...prev,
-                              [match.id]: {
-                                ...finishState,
-                                winner: event.target.value,
-                              },
-                            }))
-                          }
-                          disabled={!finishRequiresEntrants}
-                        >
-                          <option value="">Winner (pin/sub)</option>
-                          {sortedEntrants.map((entrant) => (
-                            <option key={entrant.id} value={entrant.id}>
-                              {entrant.name}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                          value={finishState.loser}
-                          onChange={(event) =>
-                            setMatchFinishEdits((prev) => ({
-                              ...prev,
-                              [match.id]: {
-                                ...finishState,
-                                loser: event.target.value,
-                              },
-                            }))
-                          }
-                          disabled={!finishRequiresEntrants}
-                        >
-                          <option value="">Loser (pin/sub)</option>
-                          {sortedEntrants.map((entrant) => (
-                            <option key={entrant.id} value={entrant.id}>
-                              {entrant.name}
-                            </option>
-                          ))}
-                        </select>
+                        {!finishDisabledForSingles && (
+                          <select
+                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={finishState.winner}
+                            onChange={(event) =>
+                              setMatchFinishEdits((prev) => ({
+                                ...prev,
+                                [match.id]: {
+                                  ...finishState,
+                                  winner: event.target.value,
+                                },
+                              }))
+                            }
+                            disabled={!finishRequiresEntrants}
+                          >
+                            <option value="">Winner (pin/sub)</option>
+                            {sortedEntrants.map((entrant) => (
+                              <option key={entrant.id} value={entrant.id}>
+                                {entrant.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {!finishDisabledForSingles && (
+                          <select
+                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={finishState.loser}
+                            onChange={(event) =>
+                              setMatchFinishEdits((prev) => ({
+                                ...prev,
+                                [match.id]: {
+                                  ...finishState,
+                                  loser: event.target.value,
+                                },
+                              }))
+                            }
+                            disabled={!finishRequiresEntrants}
+                          >
+                            <option value="">Loser (pin/sub)</option>
+                            {sortedEntrants.map((entrant) => (
+                              <option key={entrant.id} value={entrant.id}>
+                                {entrant.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
                         <span>
-                          {allEntrants.length <= 2
-                            ? "Finish scoring is disabled for singles/tag matches."
+                          {finishDisabledForSingles
+                            ? "Finish scoring is disabled for singles matches."
                             : "Set the finish to score these picks."}
                         </span>
                         <button
@@ -1581,7 +1874,7 @@ export default function AdminPage() {
                         }
                       >
                         <option value="">Add participant</option>
-                        {filteredEntrantOptions.map((entrant) => (
+                        {eligibleEntrants.map((entrant) => (
                           <option key={entrant.id} value={entrant.id}>
                             {entrant.name}
                           </option>
@@ -1679,8 +1972,10 @@ export default function AdminPage() {
             </div>
           )}
         </section>
+        )}
 
-        <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+        {adminTab === "events" && (
+          <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <h2 className="text-lg font-semibold">Eliminations</h2>
           <p className="mt-2 text-sm text-zinc-400">
             Mark eliminations to keep the live scoreboard up to date.
@@ -1724,8 +2019,10 @@ export default function AdminPage() {
             </button>
           </div>
         </section>
+        )}
 
-        <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+        {adminTab === "events" && (
+          <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <h2 className="text-lg font-semibold">Active Event Entries</h2>
           <p className="mt-2 text-sm text-zinc-400">
             Edit entry numbers, eliminations, or the credited eliminator.
@@ -1847,6 +2144,7 @@ export default function AdminPage() {
             )}
           </div>
         </section>
+        )}
 
         <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <h2 className="text-lg font-semibold">Scoring</h2>
@@ -1864,6 +2162,47 @@ export default function AdminPage() {
             </button>
           </div>
         </section>
+
+        {showModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+            <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-xl shadow-black/40">
+              <h3 className="text-lg font-semibold text-zinc-100">Create show</h3>
+              <p className="mt-2 text-sm text-zinc-400">
+                Add a new show card. This becomes the active show.
+              </p>
+              <div className="mt-4 space-y-3">
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                  placeholder="Show name"
+                  value={showName}
+                  onChange={(event) => setShowName(event.target.value)}
+                />
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                  type="datetime-local"
+                  value={showStartsAt}
+                  onChange={(event) => setShowStartsAt(event.target.value)}
+                />
+              </div>
+              <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+                <button
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                  type="button"
+                  onClick={() => setShowModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="inline-flex h-10 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
+                  type="button"
+                  onClick={handleCreateShow}
+                >
+                  Save show
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

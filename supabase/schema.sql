@@ -78,6 +78,8 @@ create table if not exists public.matches (
   name text not null,
   kind text not null default 'match',
   match_type text not null default 'singles',
+  roster_year integer,
+  roster_gender text,
   status text not null default 'scheduled',
   winner_entrant_id uuid references public.entrants(id),
   winner_side_id uuid,
@@ -107,6 +109,12 @@ alter table public.matches
   add constraint matches_winner_side_fk
   foreign key (winner_side_id) references public.match_sides(id)
   on delete set null;
+
+alter table public.matches
+  add column if not exists roster_year integer;
+
+alter table public.matches
+  add column if not exists roster_gender text;
 
 create table if not exists public.rumble_entries (
   id uuid primary key default gen_random_uuid(),
