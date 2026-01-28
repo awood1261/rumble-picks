@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { EntrantCard } from "../../components/EntrantCard";
+import { ShowEditor } from "../../components/ShowEditor";
 import { calculateScore, type PicksPayload } from "../../lib/scoring";
 import { scoringRules } from "../../lib/scoringRules";
 
@@ -105,6 +106,9 @@ export default function AdminPage() {
   const [showName, setShowName] = useState("");
   const [showStartsAt, setShowStartsAt] = useState("");
   const [showModalOpen, setShowModalOpen] = useState(false);
+  const [showEditName, setShowEditName] = useState("");
+  const [showEditStartsAt, setShowEditStartsAt] = useState("");
+  const [showEditBusy, setShowEditBusy] = useState(false);
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [selectedShowId, setSelectedShowId] = useState<string>("");
@@ -172,6 +176,15 @@ export default function AdminPage() {
     );
     setEventShowId(activeEvent?.show_id ?? "");
   }, [activeEvent?.starts_at, activeEvent?.roster_year]);
+  useEffect(() => {
+    if (!activeShow) {
+      setShowEditName("");
+      setShowEditStartsAt("");
+      return;
+    }
+    setShowEditName(activeShow.name ?? "");
+    setShowEditStartsAt(formatLocalDateTime(activeShow.starts_at ?? null));
+  }, [activeShow?.id, activeShow?.name, activeShow?.starts_at]);
   useEffect(() => {
     if (!selectedShowId && activeShow?.id) {
       setSelectedShowId(activeShow.id);
@@ -552,6 +565,42 @@ export default function AdminPage() {
     setShowModalOpen(false);
     setToastMessage(`Show created: ${newShow.name}. Active show updated.`);
     refreshData();
+  };
+
+  const handleUpdateShow = async () => {
+    if (!activeShow) {
+      setMessage("Select a show to edit.");
+      return;
+    }
+    if (!showEditName.trim()) {
+      setMessage("Show name is required.");
+      return;
+    }
+    setShowEditBusy(true);
+    setMessage(null);
+    const payload = {
+      name: showEditName.trim(),
+      starts_at: showEditStartsAt
+        ? new Date(showEditStartsAt).toISOString()
+        : null,
+    };
+    const { data: updatedShow, error } = await supabase
+      .from("shows")
+      .update(payload)
+      .eq("id", activeShow.id)
+      .select("id, name, starts_at, status")
+      .single();
+    if (error || !updatedShow) {
+      setMessage(error?.message ?? "Unable to update show.");
+      setShowEditBusy(false);
+      return;
+    }
+    setShows((prev) =>
+      prev.map((show) => (show.id === updatedShow.id ? updatedShow : show))
+    );
+    setToastMessage(`Show updated: ${updatedShow.name}.`);
+    refreshData();
+    setShowEditBusy(false);
   };
 
   const handleAddCustomEntrant = async () => {
@@ -1160,87 +1209,95 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                Rumble events on this show
-              </p>
-              {showEvents.length === 0 ? (
-                <p className="mt-3 text-sm text-zinc-400">
-                  No events linked to this show yet.
-                </p>
-              ) : (
-                <div className="mt-3 space-y-3 text-sm text-zinc-200">
-                  {showEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
-                    >
-                      <div>
-                        <p className="font-medium text-zinc-100">{event.name}</p>
-                        <p className="text-xs text-zinc-500">
-                          {event.rumble_gender ?? "unspecified"}
-                          {event.roster_year ? ` • ${event.roster_year}` : ""}
-                        </p>
-                      </div>
-                      <button
-                        className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                        type="button"
-                        onClick={() => {
-                          setSelectedEventId(event.id);
-                          setAdminTab("events");
-                        }}
-                      >
-                        Edit event
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          <ShowEditor
+            activeShowName={activeShow?.name ?? null}
+            name={showEditName}
+            setName={setShowEditName}
+            startsAt={showEditStartsAt}
+            setStartsAt={setShowEditStartsAt}
+            saving={showEditBusy}
+            disabled={!activeShow}
+            onUseNow={() =>
+              setShowEditStartsAt(formatLocalDateTime(new Date().toISOString()))
+            }
+            onSave={handleUpdateShow}
+          />
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                Matches on this show
-              </p>
-              {showMatches.length === 0 ? (
-                <p className="mt-3 text-sm text-zinc-400">
-                  No matches linked to this show yet.
-                </p>
-              ) : (
-                <div className="mt-3 space-y-3 text-sm text-zinc-200">
-                  {showMatches.map((match) => (
-                    <div
-                      key={match.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
-                    >
-                      <div>
-                        <p className="font-medium text-zinc-100">{match.name}</p>
-                        <p className="text-xs text-zinc-500">
-                          {(match.match_type ?? "match").replace("_", " ")}
-                          {match.event_id
-                            ? ` • ${eventNameById.get(match.event_id) ?? "Unassigned"}`
-                            : ""}
-                        </p>
-                      </div>
-                      <button
-                        className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                        type="button"
-                        onClick={() => {
-                          if (match.event_id) {
-                            setSelectedEventId(match.event_id);
-                          }
-                          setAdminTab("matches");
-                        }}
+          {(showEvents.length > 0 || showMatches.length > 0) && (
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              {showEvents.length > 0 && (
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                    Rumble events on this show
+                  </p>
+                  <div className="mt-3 space-y-3 text-sm text-zinc-200">
+                    {showEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
                       >
-                        Edit match
-                      </button>
-                    </div>
-                  ))}
+                        <div>
+                          <p className="font-medium text-zinc-100">{event.name}</p>
+                          <p className="text-xs text-zinc-500">
+                            {event.rumble_gender ?? "unspecified"}
+                            {event.roster_year ? ` • ${event.roster_year}` : ""}
+                          </p>
+                        </div>
+                        <button
+                          className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                          type="button"
+                          onClick={() => {
+                            setSelectedEventId(event.id);
+                            setAdminTab("events");
+                          }}
+                        >
+                          Edit event
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {showMatches.length > 0 && (
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                    Matches on this show
+                  </p>
+                  <div className="mt-3 space-y-3 text-sm text-zinc-200">
+                    {showMatches.map((match) => (
+                      <div
+                        key={match.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
+                      >
+                        <div>
+                          <p className="font-medium text-zinc-100">{match.name}</p>
+                          <p className="text-xs text-zinc-500">
+                            {(match.match_type ?? "match").replace("_", " ")}
+                            {match.event_id
+                              ? ` • ${eventNameById.get(match.event_id) ?? "Unassigned"}`
+                              : ""}
+                          </p>
+                        </div>
+                        <button
+                          className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                          type="button"
+                          onClick={() => {
+                            if (match.event_id) {
+                              setSelectedEventId(match.event_id);
+                            }
+                            setAdminTab("matches");
+                          }}
+                        >
+                          Edit match
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          </div>
+          )}
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
