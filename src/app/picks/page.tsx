@@ -322,6 +322,8 @@ export default function PicksPage() {
     () => showEvents.some((event) => getEventEntrants(event.id).length > 0),
     [showEvents, getEventEntrants]
   );
+  const hasEvents = showEvents.length > 0;
+  const canShowRumbles = hasEvents && hasEntrantsForShow;
 
   const matchSidesByMatch = useMemo(() => {
     return matchSides.reduce((map, side) => {
@@ -1101,21 +1103,25 @@ export default function PicksPage() {
           </label>
         </section>
 
-        {showEvents.length === 0 ? (
+        {!hasEvents && (
           <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <p className="text-sm text-zinc-400">
               No rumble events are available for this show yet.
             </p>
           </section>
-        ) : !hasEntrantsForShow ? (
+        )}
+        {hasEvents && !hasEntrantsForShow && (
           <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <p className="text-sm text-zinc-400">
               No entrants are available yet.
             </p>
           </section>
-        ) : hasSaved && !editSection ? (
+        )}
+
+        {hasSaved && !editSection ? (
           <>
-            {showEvents.map((event) => {
+            {canShowRumbles &&
+              showEvents.map((event) => {
               const eventPick = getRumblePick(event.id);
               const eventActuals = actualsByEvent[event.id] ?? emptyActuals;
               const points = sectionPointsByEvent[event.id] ?? {
@@ -1450,7 +1456,7 @@ export default function PicksPage() {
           </>
         ) : (
           <>
-            {(editSection === "entrants" || !hasSaved) && (
+            {canShowRumbles && (editSection === "entrants" || !hasSaved) && (
               <>
                 {showEvents.map((event) => {
                   const eventPick = getRumblePick(event.id);
@@ -1605,7 +1611,7 @@ export default function PicksPage() {
               </>
             )}
 
-            {(editSection === "final_four" || !hasSaved) && (
+            {canShowRumbles && (editSection === "final_four" || !hasSaved) && (
               <>
                 {showEvents.map((event) => {
                   const eventPick = getRumblePick(event.id);
@@ -1725,9 +1731,25 @@ export default function PicksPage() {
                         winner: null,
                         loser: null,
                       };
+                      const matchType = match.match_type;
+                      const isSingles = matchType === "singles";
+                      const isTripleOrFatal =
+                        matchType === "triple_threat" ||
+                        matchType === "fatal_4_way";
+                      const isTag = matchType === "tag";
+                      const winningSideId = payload.match_picks[match.id] ?? null;
+                      const winningSideEntrants =
+                        sideEntries.find((side) => side.side.id === winningSideId)
+                          ?.entrants ?? [];
+                      const losingSideEntrants = sideEntries
+                        .filter((side) => side.side.id !== winningSideId)
+                        .flatMap((side) => side.entrants);
                       const finishRequiresEntrants =
                         finishPick.method === "pinfall" ||
                         finishPick.method === "submission";
+                      const showFinishWinner =
+                        !isSingles && !isTripleOrFatal;
+                      const showFinishLoser = !isSingles;
                       return (
                         <div
                           key={match.id}
@@ -1808,7 +1830,7 @@ export default function PicksPage() {
                               ))}
                             </div>
                           )}
-                          {allEntrants.length > 2 && (
+                          {(allEntrants.length > 2 || isSingles) && (
                             <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
                               <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                                 Finish prediction
@@ -1826,11 +1848,15 @@ export default function PicksPage() {
                                         [match.id]: {
                                           method,
                                           winner:
-                                            method === "pinfall" || method === "submission"
+                                            !isSingles &&
+                                            (method === "pinfall" ||
+                                              method === "submission")
                                               ? finishPick.winner
                                               : null,
                                           loser:
-                                            method === "pinfall" || method === "submission"
+                                            !isSingles &&
+                                            (method === "pinfall" ||
+                                              method === "submission")
                                               ? finishPick.loser
                                               : null,
                                         },
@@ -1844,54 +1870,70 @@ export default function PicksPage() {
                                   <option value="submission">Submission</option>
                                   <option value="disqualification">Disqualification</option>
                                 </select>
-                                <select
-                                  className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                                  value={finishPick.winner ?? ""}
-                                  onChange={(event) =>
-                                    setPayload((prev) => ({
-                                      ...prev,
-                                      match_finish_picks: {
-                                        ...prev.match_finish_picks,
-                                        [match.id]: {
-                                          ...finishPick,
-                                          winner: event.target.value || null,
+                                {showFinishWinner && (
+                                  <select
+                                    className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                                    value={finishPick.winner ?? ""}
+                                    onChange={(event) =>
+                                      setPayload((prev) => ({
+                                        ...prev,
+                                        match_finish_picks: {
+                                          ...prev.match_finish_picks,
+                                          [match.id]: {
+                                            ...finishPick,
+                                            winner: event.target.value || null,
+                                          },
                                         },
-                                      },
-                                    }))
-                                  }
-                                  disabled={isLocked || !finishRequiresEntrants}
-                                >
-                                  <option value="">Winner (pin/sub)</option>
-                                  {sortedEntrants.map((entrant) => (
-                                    <option key={entrant.id} value={entrant.id}>
-                                      {entrant.name}
-                                    </option>
-                                  ))}
-                                </select>
-                                <select
-                                  className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                                  value={finishPick.loser ?? ""}
-                                  onChange={(event) =>
-                                    setPayload((prev) => ({
-                                      ...prev,
-                                      match_finish_picks: {
-                                        ...prev.match_finish_picks,
-                                        [match.id]: {
-                                          ...finishPick,
-                                          loser: event.target.value || null,
+                                      }))
+                                    }
+                                    disabled={
+                                      isLocked ||
+                                      !finishRequiresEntrants ||
+                                      (isTag && !winningSideId)
+                                    }
+                                  >
+                                    <option value="">Winner (pin/sub)</option>
+                                    {(isTag ? winningSideEntrants : sortedEntrants).map(
+                                      (entrant) => (
+                                        <option key={entrant.id} value={entrant.id}>
+                                          {entrant.name}
+                                        </option>
+                                      )
+                                    )}
+                                  </select>
+                                )}
+                                {showFinishLoser && (
+                                  <select
+                                    className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                                    value={finishPick.loser ?? ""}
+                                    onChange={(event) =>
+                                      setPayload((prev) => ({
+                                        ...prev,
+                                        match_finish_picks: {
+                                          ...prev.match_finish_picks,
+                                          [match.id]: {
+                                            ...finishPick,
+                                            loser: event.target.value || null,
+                                          },
                                         },
-                                      },
-                                    }))
-                                  }
-                                  disabled={isLocked || !finishRequiresEntrants}
-                                >
-                                  <option value="">Loser (pin/sub)</option>
-                                  {sortedEntrants.map((entrant) => (
-                                    <option key={entrant.id} value={entrant.id}>
-                                      {entrant.name}
-                                    </option>
-                                  ))}
-                                </select>
+                                      }))
+                                    }
+                                    disabled={
+                                      isLocked ||
+                                      !finishRequiresEntrants ||
+                                      (isTag && !winningSideId)
+                                    }
+                                  >
+                                    <option value="">Loser (pin/sub)</option>
+                                    {(isTag ? losingSideEntrants : sortedEntrants).map(
+                                      (entrant) => (
+                                        <option key={entrant.id} value={entrant.id}>
+                                          {entrant.name}
+                                        </option>
+                                      )
+                                    )}
+                                  </select>
+                                )}
                               </div>
                               <p className="mt-2 text-xs text-zinc-500">
                                 Only required for matches with more than two entrants.
@@ -1918,7 +1960,7 @@ export default function PicksPage() {
               </section>
             )}
 
-            {(editSection === "key_picks" || !hasSaved) && (
+            {canShowRumbles && (editSection === "key_picks" || !hasSaved) && (
               <>
                 {showEvents.map((event) => {
                   const eventPick = getRumblePick(event.id);
