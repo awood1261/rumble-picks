@@ -3,101 +3,36 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
-import { EntrantCard } from "../../components/EntrantCard";
 import { scoringRules } from "../../lib/scoringRules";
-
-type EventRow = {
-  id: string;
-  name: string;
-  starts_at: string | null;
-  status: string;
-  rumble_gender: string | null;
-  roster_year: number | null;
-  show_id: string | null;
-};
-
-type ShowRow = {
-  id: string;
-  name: string;
-  starts_at: string | null;
-  status: string;
-};
-
-type EntrantRow = {
-  id: string;
-  name: string;
-  promotion: string | null;
-  gender: string | null;
-  image_url: string | null;
-  roster_year: number | null;
-  event_id: string | null;
-  is_custom: boolean;
-  created_by: string | null;
-  status: string | null;
-};
-
-type RumblePick = {
-  entrants: string[];
-  final_four: string[];
-  winner: string | null;
-  entry_1: string | null;
-  entry_2: string | null;
-  entry_30: string | null;
-  most_eliminations: string | null;
-};
-
-type PicksPayload = {
-  rumbles: Record<string, RumblePick>;
-  match_picks: Record<string, string | null>;
-  match_finish_picks: Record<
-    string,
-    { method: string | null; winner: string | null; loser: string | null }
-  >;
-};
-
-type RumbleEntryRow = {
-  event_id: string;
-  entrant_id: string;
-  entry_number: number | null;
-  eliminated_at: string | null;
-  eliminations_count: number;
-};
-
-type MatchRow = {
-  id: string;
-  name: string;
-  kind: string;
-  match_type: string;
-  status: string;
-  winner_entrant_id: string | null;
-  winner_side_id: string | null;
-  finish_method: string | null;
-  finish_winner_entrant_id: string | null;
-  finish_loser_entrant_id: string | null;
-};
-
-type MatchEntrantRow = {
-  match_id: string;
-  entrant_id: string;
-  side_id: string | null;
-};
-
-type MatchSideRow = {
-  id: string;
-  match_id: string;
-  label: string | null;
-};
-
-type EventActuals = {
-  entrantSet: Set<string>;
-  finalFourSet: Set<string>;
-  winner: string | null;
-  entry1: string | null;
-  entry2: string | null;
-  entry30: string | null;
-  topElims: Set<string>;
-  hasData: boolean;
-};
+import {
+  CustomEntrantModal,
+  KeyPicksEditor,
+  LockStatusBanner,
+  MatchPicksSection,
+  MatchSummarySection,
+  MessageBanner,
+  PicksHeader,
+  RumbleEntrantsEditor,
+  RumbleFinalFourEditor,
+  RumbleSummarySection,
+  SavePicksFooter,
+  ShowSelector,
+} from "../../components/PicksSections";
+import type {
+  EditSection,
+  EntrantRow,
+  EventActuals,
+  EventRow,
+  MatchEntrantRow,
+  MatchRow,
+  MatchSideRow,
+  PicksPayload,
+  RankInfo,
+  RumbleEntryRow,
+  RumblePick,
+  SectionPoints,
+  ShowRow,
+} from "../../lib/picksTypes";
 
 const SCORING_POLL_INTERVAL_MS = 15000;
 
@@ -147,18 +82,14 @@ export default function PicksPage() {
   const [payload, setPayload] = useState<PicksPayload>(emptyPayload);
   const [saving, setSaving] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
-  const [rankInfo, setRankInfo] = useState<{ rank: number | null; total: number }>(
-    { rank: null, total: 0 }
-  );
+  const [rankInfo, setRankInfo] = useState<RankInfo>({ rank: null, total: 0 });
   const [customEntrantName, setCustomEntrantName] = useState("");
   const [entrantSearch, setEntrantSearch] = useState("");
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const [customModalEventId, setCustomModalEventId] = useState<string | null>(null);
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [editSection, setEditSection] = useState<
-    "entrants" | "final_four" | "key_picks" | "matches" | null
-  >(null);
+  const [editSection, setEditSection] = useState<EditSection>(null);
 
   const selectedShow = useMemo(
     () => shows.find((show) => show.id === selectedShowId) ?? null,
@@ -440,10 +371,7 @@ export default function PicksPage() {
   }, [matches, payload.match_finish_picks, payload.match_picks, matchEntrantsByMatch]);
 
   const sectionPointsByEvent = useMemo(() => {
-    const byEvent: Record<
-      string,
-      { entrants: number | null; finalFour: number | null; keyPicks: number | null }
-    > = {};
+    const byEvent: Record<string, SectionPoints> = {};
     showEvents.forEach((event) => {
       const actuals = actualsByEvent[event.id];
       const pick = payload.rumbles[event.id] ?? emptyRumblePick;
@@ -930,94 +858,6 @@ export default function PicksPage() {
     setSaving(false);
   };
 
-  const getEntrant = (id: string | null) =>
-    id ? entrantByIdAll.get(id) ?? null : null;
-
-  const renderPickList = (
-    ids: string[],
-    correctSet: Set<string>,
-    points: number,
-    actualsHasData: boolean
-  ) => {
-    if (ids.length === 0) {
-      return <p className="text-sm text-zinc-400">None selected.</p>;
-    }
-    return (
-      <ul className="mt-4 max-h-64 space-y-2 overflow-y-auto pr-1 text-sm text-zinc-200">
-        {ids
-          .map((id) => ({
-            id,
-            entrant: getEntrant(id),
-            name: getEntrant(id)?.name ?? "Unknown",
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map(({ id, entrant, name }) => {
-            const isCorrect = actualsHasData && correctSet.has(id);
-            const status = entrant?.status ?? "approved";
-            const isPending =
-              status === "pending" && entrant?.created_by === userId;
-            const isApprovedCustom =
-              status === "approved" &&
-              entrant?.is_custom &&
-              entrant?.created_by === userId;
-            return (
-              <li
-                key={id}
-                className={`rounded-xl border px-3 py-2 ${
-                  !actualsHasData
-                    ? "border-zinc-800"
-                    : isCorrect
-                      ? "border-emerald-400/60 bg-emerald-400/10"
-                      : "border-red-500/50 bg-red-500/10"
-                }`}
-              >
-                <EntrantCard
-                  name={name}
-                  promotion={entrant?.promotion}
-                  imageUrl={entrant?.image_url}
-                />
-                {isPending && (
-                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-                    Pending approval
-                  </p>
-                )}
-                {isApprovedCustom && (
-                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
-                    Approved
-                  </p>
-                )}
-                {actualsHasData && (
-                  <p
-                    className={`mt-2 text-[10px] font-semibold uppercase tracking-wide ${
-                      isCorrect ? "text-emerald-200" : "text-red-200"
-                    }`}
-                  >
-                    {isCorrect ? `+${points} pts` : "0 pts"}
-                  </p>
-                )}
-              </li>
-            );
-          })}
-      </ul>
-    );
-  };
-
-  const EditIcon = () => (
-    <svg
-      className="h-4 w-4"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-    </svg>
-  );
-
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
@@ -1044,64 +884,21 @@ export default function PicksPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold">Make your predictions</h1>
-          <p className="text-sm text-zinc-400">
-            Choose a show and lock in your rumble picks before bell time.
-          </p>
-        </header>
-        {!isLocked && (
-          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
-            <p className="font-semibold text-amber-200">{lockInfo.label}</p>
-            <p className="mt-1 text-xs text-zinc-400">{lockInfo.detail}</p>
-          </div>
-        )}
-        {isLocked && (
-          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
-            {rankInfo.rank ? (
-              <span>
-                Your current rank:{" "}
-                <span className="font-semibold text-amber-200">
-                  #{rankInfo.rank}
-                </span>{" "}
-                of {rankInfo.total}
-              </span>
-            ) : (
-              <span className="text-zinc-400">
-                Your rank will appear once scores are calculated for this show.
-              </span>
-            )}
-          </div>
-        )}
-        {isLocked && (
-          <div className="mt-6 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-            Picks are locked for this show.
-          </div>
-        )}
-
-        {message && (
-          <div className="mt-6 rounded-2xl border border-zinc-800 bg-black/50 px-4 py-3 text-sm text-zinc-200">
-            {message}
-          </div>
-        )}
-
-        <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          <label className="text-sm text-zinc-300">
-            Show
-            <select
-              className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-              value={selectedShowId}
-              onChange={(event) => setSelectedShowId(event.target.value)}
-            >
-              {shows.length === 0 && <option value="">No shows yet</option>}
-              {shows.map((show) => (
-                <option key={show.id} value={show.id}>
-                  {show.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </section>
+        <PicksHeader
+          title="Make your predictions"
+          subtitle="Choose a show and lock in your rumble picks before bell time."
+        />
+        <LockStatusBanner
+          isLocked={isLocked}
+          lockInfo={lockInfo}
+          rankInfo={rankInfo}
+        />
+        <MessageBanner message={message} />
+        <ShowSelector
+          shows={shows}
+          selectedShowId={selectedShowId}
+          onChange={setSelectedShowId}
+        />
 
         {!hasEvents && (
           <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
@@ -1122,337 +919,37 @@ export default function PicksPage() {
           <>
             {canShowRumbles &&
               showEvents.map((event) => {
-              const eventPick = getRumblePick(event.id);
-              const eventActuals = actualsByEvent[event.id] ?? emptyActuals;
-              const points = sectionPointsByEvent[event.id] ?? {
-                entrants: null,
-                finalFour: null,
-                keyPicks: null,
-              };
-              return (
-                <section key={event.id} className="mt-8">
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                      {event.rumble_gender ? `${event.rumble_gender} rumble` : "Rumble"}
-                    </p>
-                    <h2 className="text-xl font-semibold">{event.name}</h2>
-                  </div>
-                  <div className="mt-6 grid gap-6 lg:grid-cols-3">
-                    <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold">Entrants</h3>
-                        <button
-                          className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
-                          type="button"
-                          onClick={() => setEditSection("entrants")}
-                          disabled={isLocked}
-                        >
-                          <EditIcon />
-                          Edit
-                        </button>
-                      </div>
-                      <p className="mt-2 text-sm text-zinc-400">
-                        {eventPick.entrants.length} selected
-                      </p>
-                      {points.entrants !== null && (
-                        <p className="mt-1 text-xs text-emerald-200">
-                          Points: {points.entrants}
-                        </p>
-                      )}
-                      {renderPickList(
-                        eventPick.entrants,
-                        eventActuals.entrantSet,
-                        scoringRules.entrants,
-                        eventActuals.hasData
-                      )}
-                    </div>
+                const eventPick = getRumblePick(event.id);
+                const eventActuals = actualsByEvent[event.id] ?? emptyActuals;
+                const points =
+                  sectionPointsByEvent[event.id] ??
+                  ({ entrants: null, finalFour: null, keyPicks: null } as SectionPoints);
+                return (
+                  <RumbleSummarySection
+                    key={event.id}
+                    event={event}
+                    eventPick={eventPick}
+                    actuals={eventActuals}
+                    points={points}
+                    entrantByIdAll={entrantByIdAll}
+                    userId={userId}
+                    isLocked={isLocked}
+                    onEdit={setEditSection}
+                  />
+                );
+              })}
 
-                    <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold">Final Four</h3>
-                        <button
-                          className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
-                          type="button"
-                          onClick={() => setEditSection("final_four")}
-                          disabled={isLocked}
-                        >
-                          <EditIcon />
-                          Edit
-                        </button>
-                      </div>
-                      <p className="mt-2 text-sm text-zinc-400">
-                        {eventPick.final_four.length} selected
-                      </p>
-                      {points.finalFour !== null && (
-                        <p className="mt-1 text-xs text-emerald-200">
-                          Points: {points.finalFour}
-                        </p>
-                      )}
-                      {renderPickList(
-                        eventPick.final_four,
-                        eventActuals.finalFourSet,
-                        scoringRules.final_four,
-                        eventActuals.hasData
-                      )}
-                    </div>
-
-                    <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold">Key Picks</h3>
-                        <button
-                          className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
-                          type="button"
-                          onClick={() => setEditSection("key_picks")}
-                          disabled={isLocked}
-                        >
-                          <EditIcon />
-                          Edit
-                        </button>
-                      </div>
-                      {points.keyPicks !== null && (
-                        <p className="mt-2 text-xs text-emerald-200">
-                          Points: {points.keyPicks}
-                        </p>
-                      )}
-                      <div className="mt-4 space-y-3 text-sm text-zinc-200">
-                        {[
-                          ["Winner", eventPick.winner, eventActuals.winner, scoringRules.winner],
-                          ["Entry #1", eventPick.entry_1, eventActuals.entry1, scoringRules.entry_1],
-                          ["Entry #2", eventPick.entry_2, eventActuals.entry2, scoringRules.entry_2],
-                          ["Entry #30", eventPick.entry_30, eventActuals.entry30, scoringRules.entry_30],
-                          [
-                            "Most eliminations",
-                            eventPick.most_eliminations,
-                            null,
-                            scoringRules.most_eliminations,
-                          ],
-                        ].map(([label, value, actual, points]) => {
-                          const entrant = value ? getEntrant(String(value)) : null;
-                          const isCorrect =
-                            eventActuals.hasData &&
-                            (label === "Most eliminations"
-                              ? value && eventActuals.topElims.has(String(value))
-                              : value && actual === value);
-                          return (
-                            <div
-                              key={label as string}
-                              className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
-                                !eventActuals.hasData
-                                  ? "border-zinc-800"
-                                  : isCorrect
-                                    ? "border-emerald-400/60 bg-emerald-400/10"
-                                    : "border-red-500/50 bg-red-500/10"
-                              }`}
-                            >
-                              <span className="text-zinc-400">{label}</span>
-                              <EntrantCard
-                                name={entrant?.name ?? "Not set"}
-                                promotion={entrant?.promotion}
-                                imageUrl={entrant?.image_url}
-                                className="justify-end"
-                              />
-                              {eventActuals.hasData && (
-                                <span
-                                  className={`ml-3 text-[10px] font-semibold uppercase tracking-wide ${
-                                    isCorrect ? "text-emerald-200" : "text-red-200"
-                                  }`}
-                                >
-                                  {isCorrect ? `+${points} pts` : "0 pts"}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              );
-            })}
-
-            <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Match Picks</h2>
-                <button
-                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
-                  type="button"
-                  onClick={() => setEditSection("matches")}
-                  disabled={isLocked}
-                >
-                  <EditIcon />
-                  Edit
-                </button>
-              </div>
-              {matchPoints !== null && (
-                <p className="mt-2 text-xs text-emerald-200">
-                  Points: {matchPoints}
-                </p>
-              )}
-              {matches.length === 0 ? (
-                <p className="mt-4 text-sm text-zinc-400">
-                  No matches available yet.
-                </p>
-              ) : (
-                <div className="mt-4 space-y-3 text-sm text-zinc-200">
-                  {matches.map((match) => {
-                    const pick = payload.match_picks[match.id] ?? null;
-                    const winner = matchWinnerMap.get(match.id) ?? null;
-                    const sides = matchSidesByMatch[match.id] ?? [];
-                    const pickSide = pick
-                      ? sides.find((side) => side.id === pick)
-                      : null;
-                    const pickLabel = pickSide?.label?.trim() || "Selected side";
-                    const pickEntrants = pick
-                      ? (matchEntrantsByMatch[match.id] ?? [])
-                          .filter((row) => row.side_id === pick)
-                          .map((row) => entrantByIdAll.get(row.entrant_id))
-                          .filter(Boolean)
-                      : [];
-                    const entrantCount = (matchEntrantsByMatch[match.id] ?? []).length;
-                    const finishPick = payload.match_finish_picks[match.id];
-                    const finishMethod = finishPick?.method ?? null;
-                    const finishWinner = finishPick?.winner
-                      ? entrantByIdAll.get(finishPick.winner)
-                      : null;
-                    const finishLoser = finishPick?.loser
-                      ? entrantByIdAll.get(finishPick.loser)
-                      : null;
-                    const finishMethodCorrect =
-                      match.finish_method && finishMethod
-                        ? match.finish_method === finishMethod
-                        : false;
-                    const finishWinnerCorrect =
-                      match.finish_winner_entrant_id && finishPick?.winner
-                        ? match.finish_winner_entrant_id === finishPick.winner
-                        : false;
-                    const finishLoserCorrect =
-                      match.finish_loser_entrant_id && finishPick?.loser
-                        ? match.finish_loser_entrant_id === finishPick.loser
-                        : false;
-                    const isCorrect = winner && pick ? winner === pick : false;
-                    return (
-                      <div
-                        key={match.id}
-                        className={`rounded-xl border px-3 py-2 ${
-                          !winner
-                            ? "border-zinc-800"
-                            : isCorrect
-                              ? "border-emerald-400/60 bg-emerald-400/10"
-                              : "border-red-500/50 bg-red-500/10"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                              {match.kind}
-                            </p>
-                            <p className="text-sm font-semibold text-zinc-100">
-                              {match.name}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1 text-right">
-                            <span className="text-xs font-semibold text-zinc-200">
-                              {pick ? pickLabel : "Not set"}
-                            </span>
-                            {pickEntrants.length > 0 && (
-                              <span className="text-xs text-zinc-500">
-                                {pickEntrants
-                                  .map((entrant) => entrant?.name)
-                                  .filter(Boolean)
-                                  .join(", ")}
-                              </span>
-                            )}
-                          </div>
-                          {winner && (
-                            <span
-                              className={`text-[10px] font-semibold uppercase tracking-wide ${
-                                isCorrect ? "text-emerald-200" : "text-red-200"
-                              }`}
-                            >
-                              {isCorrect
-                                ? `+${scoringRules.match_winner} pts`
-                                : "0 pts"}
-                            </span>
-                          )}
-                        </div>
-                        {entrantCount > 2 && (
-                          <div className="mt-3 space-y-2 text-xs text-zinc-400">
-                            <div className="flex items-center justify-between">
-                              <span>Finish</span>
-                              <span
-                                className={
-                                  !match.finish_method
-                                    ? "text-zinc-500"
-                                    : finishMethodCorrect
-                                      ? "text-emerald-200"
-                                      : "text-red-200"
-                                }
-                              >
-                                {finishMethod ?? "Not set"}
-                                {match.finish_method
-                                  ? ` • ${
-                                      finishMethodCorrect
-                                        ? `+${scoringRules.match_finish_method}`
-                                        : "0"
-                                    } pts`
-                                  : ""}
-                              </span>
-                            </div>
-                            {(finishMethod === "pinfall" ||
-                              finishMethod === "submission") && (
-                              <>
-                                <div className="flex items-center justify-between">
-                                  <span>Winner</span>
-                                  <span
-                                    className={
-                                      match.finish_winner_entrant_id
-                                        ? finishWinnerCorrect
-                                          ? "text-emerald-200"
-                                          : "text-red-200"
-                                        : "text-zinc-500"
-                                    }
-                                  >
-                                    {finishWinner?.name ?? "Not set"}
-                                    {match.finish_winner_entrant_id
-                                      ? ` • ${
-                                          finishWinnerCorrect
-                                            ? `+${scoringRules.match_finish_winner}`
-                                            : "0"
-                                        } pts`
-                                      : ""}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span>Loser</span>
-                                  <span
-                                    className={
-                                      match.finish_loser_entrant_id
-                                        ? finishLoserCorrect
-                                          ? "text-emerald-200"
-                                          : "text-red-200"
-                                        : "text-zinc-500"
-                                    }
-                                  >
-                                    {finishLoser?.name ?? "Not set"}
-                                    {match.finish_loser_entrant_id
-                                      ? ` • ${
-                                          finishLoserCorrect
-                                            ? `+${scoringRules.match_finish_loser}`
-                                            : "0"
-                                        } pts`
-                                      : ""}
-                                  </span>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+            <MatchSummarySection
+              matches={matches}
+              matchPoints={matchPoints}
+              matchWinnerMap={matchWinnerMap}
+              matchSidesByMatch={matchSidesByMatch}
+              matchEntrantsByMatch={matchEntrantsByMatch}
+              entrantByIdAll={entrantByIdAll}
+              payload={payload}
+              isLocked={isLocked}
+              onEdit={setEditSection}
+            />
           </>
         ) : (
           <>
@@ -1462,150 +959,26 @@ export default function PicksPage() {
                   const eventPick = getRumblePick(event.id);
                   const { grouped, count } = getFilteredEntrantsByPromotion(event.id);
                   return (
-                    <section
+                    <RumbleEntrantsEditor
                       key={event.id}
-                      className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                            {event.rumble_gender ? `${event.rumble_gender} rumble` : "Rumble"}
-                          </p>
-                          <h2 className="text-lg font-semibold">{event.name}</h2>
-                          <p className="mt-2 text-sm text-zinc-400">
-                            Select up to 30. You have picked {eventPick.entrants.length}.
-                          </p>
-                        </div>
-                        {hasSaved && (
-                          <button
-                            className="text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200"
-                            type="button"
-                            onClick={() => setEditSection(null)}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                      <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-300">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <p>Don’t see an entrant? Add a custom one for this event.</p>
-                          <button
-                            className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                            type="button"
-                            onClick={() => {
-                              setCustomModalEventId(event.id);
-                              setCustomModalOpen(true);
-                            }}
-                            disabled={isLocked}
-                          >
-                            Add custom
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <input
-                          className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                          placeholder="Search entrants"
-                          value={entrantSearch}
-                          onChange={(event) => setEntrantSearch(event.target.value)}
-                        />
-                        <p className="mt-2 text-xs text-zinc-500">
-                          {count} entrant{count === 1 ? "" : "s"}
-                          {entrantSearch ? " match your search." : " available."}
-                        </p>
-                      </div>
-                      <div className="mt-4 max-h-[520px] space-y-6 overflow-y-auto pr-1">
-                        <div className="sticky top-0 z-10 -mx-1 rounded-2xl border border-zinc-800 bg-zinc-950/90 px-4 py-2 text-xs text-zinc-300 backdrop-blur">
-                          <div className="flex items-center justify-between">
-                            <span>
-                              Selected:{" "}
-                              <span className="font-semibold text-amber-200">
-                                {eventPick.entrants.length}/30
-                              </span>
-                            </span>
-                            <span className="text-zinc-500">
-                              {Math.max(30 - eventPick.entrants.length, 0)} remaining
-                            </span>
-                          </div>
-                        </div>
-                        {count === 0 ? (
-                          <p className="text-sm text-zinc-400">
-                            No entrants match your search.
-                          </p>
-                        ) : (
-                          Object.entries(grouped)
-                            .sort(([a], [b]) => {
-                              const order = ["WWE", "TNA", "AAA"];
-                              const aIndex = order.indexOf(a);
-                              const bIndex = order.indexOf(b);
-                              if (aIndex !== -1 || bIndex !== -1) {
-                                return (
-                                  (aIndex === -1 ? order.length : aIndex) -
-                                  (bIndex === -1 ? order.length : bIndex)
-                                );
-                              }
-                              return a.localeCompare(b);
-                            })
-                            .map(([promotion, promotionEntrants]) => (
-                              <div key={promotion}>
-                                <div className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">
-                                  {promotion}
-                                </div>
-                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                  {promotionEntrants.map((entrant) => (
-                                    <label
-                                      key={entrant.id}
-                                      className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition ${
-                                        eventPick.entrants.includes(entrant.id)
-                                          ? "border-amber-400 bg-amber-400/10"
-                                          : "border-zinc-800 bg-zinc-950/70"
-                                      }`}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={eventPick.entrants.includes(entrant.id)}
-                                        onChange={() => toggleEntrant(event.id, entrant.id)}
-                                        disabled={isLocked}
-                                      />
-                                      <EntrantCard
-                                        name={entrant.name}
-                                        promotion={entrant.promotion}
-                                        imageUrl={entrant.image_url}
-                                        className="flex-1"
-                                      />
-                                      {(entrant.status ?? "approved") === "pending" &&
-                                        entrant.created_by === userId && (
-                                          <span className="rounded-full border border-amber-400/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-                                            Pending
-                                          </span>
-                                        )}
-                                      {(entrant.status ?? "approved") === "approved" &&
-                                        entrant.is_custom &&
-                                        entrant.created_by === userId && (
-                                          <span className="rounded-full border border-emerald-400/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
-                                            Approved
-                                          </span>
-                                        )}
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-                            ))
-                        )}
-                      </div>
-                      {hasSaved && (
-                        <div className="mt-6">
-                          <button
-                            className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
-                            type="button"
-                            onClick={handleSave}
-                            disabled={saving || isLocked}
-                          >
-                            {saving ? "Saving…" : "Save entrants"}
-                          </button>
-                        </div>
-                      )}
-                    </section>
+                      event={event}
+                      eventPick={eventPick}
+                      grouped={grouped}
+                      count={count}
+                      entrantSearch={entrantSearch}
+                      setEntrantSearch={setEntrantSearch}
+                      toggleEntrant={toggleEntrant}
+                      hasSaved={hasSaved}
+                      isLocked={isLocked}
+                      onCancel={() => setEditSection(null)}
+                      onSave={handleSave}
+                      saving={saving}
+                      userId={userId}
+                      onOpenCustomModal={() => {
+                        setCustomModalEventId(event.id);
+                        setCustomModalOpen(true);
+                      }}
+                    />
                   );
                 })}
               </>
@@ -1617,347 +990,37 @@ export default function PicksPage() {
                   const eventPick = getRumblePick(event.id);
                   const selectedEntrants = getSelectedEntrantOptions(event.id);
                   return (
-                    <section
+                    <RumbleFinalFourEditor
                       key={event.id}
-                      className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                            {event.rumble_gender ? `${event.rumble_gender} rumble` : "Rumble"}
-                          </p>
-                          <h2 className="text-lg font-semibold">Final Four</h2>
-                          <p className="mt-2 text-sm text-zinc-400">
-                            Select exactly 4. You have picked {eventPick.final_four.length}.
-                          </p>
-                        </div>
-                        {hasSaved && (
-                          <button
-                            className="text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200"
-                            type="button"
-                            onClick={() => setEditSection(null)}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        {selectedEntrants.map((entrant) => (
-                          <label
-                            key={entrant.id}
-                            className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition ${
-                              eventPick.final_four.includes(entrant.id)
-                                ? "border-amber-400 bg-amber-400/10"
-                                : "border-zinc-800 bg-zinc-950/70"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={eventPick.final_four.includes(entrant.id)}
-                              onChange={() => toggleFinalFour(event.id, entrant.id)}
-                              disabled={isLocked}
-                            />
-                            <EntrantCard
-                              name={entrant.name}
-                              promotion={entrant.promotion}
-                              imageUrl={entrant.image_url}
-                              className="flex-1"
-                            />
-                          </label>
-                        ))}
-                      </div>
-                      {hasSaved && (
-                        <div className="mt-6">
-                          <button
-                            className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
-                            type="button"
-                            onClick={handleSave}
-                            disabled={saving || isLocked}
-                          >
-                            {saving ? "Saving…" : "Save final four"}
-                          </button>
-                        </div>
-                      )}
-                    </section>
+                      event={event}
+                      eventPick={eventPick}
+                      selectedEntrants={selectedEntrants}
+                      toggleFinalFour={toggleFinalFour}
+                      hasSaved={hasSaved}
+                      isLocked={isLocked}
+                      onCancel={() => setEditSection(null)}
+                      onSave={handleSave}
+                      saving={saving}
+                    />
                   );
                 })}
               </>
             )}
 
             {(editSection === "matches" || !hasSaved) && (
-              <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold">Match Picks</h2>
-                    <p className="mt-2 text-sm text-zinc-400">
-                      Pick winners for the matches on the card.
-                    </p>
-                  </div>
-                  {hasSaved && (
-                    <button
-                      className="text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200"
-                      type="button"
-                      onClick={() => setEditSection(null)}
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
-                {matches.length === 0 ? (
-                  <p className="mt-4 text-sm text-zinc-400">
-                    No matches available yet.
-                  </p>
-                ) : (
-                  <div className="mt-4 space-y-4">
-                    {matches.map((match) => {
-                      const sides = matchSidesByMatch[match.id] ?? [];
-                      const participantRows = matchEntrantsByMatch[match.id] ?? [];
-                      const sideEntries = sides.map((side, index) => {
-                        const entrantsForSide = participantRows
-                          .filter((row) => row.side_id === side.id)
-                          .map((row) => entrantByIdAll.get(row.entrant_id))
-                          .filter(Boolean) as EntrantRow[];
-                        const label = side.label?.trim() || `Side ${index + 1}`;
-                        return { side, label, entrants: entrantsForSide };
-                      });
-                      const allEntrants = participantRows
-                        .map((row) => entrantByIdAll.get(row.entrant_id))
-                        .filter(Boolean) as EntrantRow[];
-                      const sortedEntrants = [...allEntrants].sort((a, b) =>
-                        a.name.localeCompare(b.name)
-                      );
-                      const finishPick = payload.match_finish_picks[match.id] ?? {
-                        method: null,
-                        winner: null,
-                        loser: null,
-                      };
-                      const matchType = match.match_type;
-                      const isSingles = matchType === "singles";
-                      const isTripleOrFatal =
-                        matchType === "triple_threat" ||
-                        matchType === "fatal_4_way";
-                      const isTag = matchType === "tag";
-                      const winningSideId = payload.match_picks[match.id] ?? null;
-                      const winningSideEntrants =
-                        sideEntries.find((side) => side.side.id === winningSideId)
-                          ?.entrants ?? [];
-                      const losingSideEntrants = sideEntries
-                        .filter((side) => side.side.id !== winningSideId)
-                        .flatMap((side) => side.entrants);
-                      const finishRequiresEntrants =
-                        finishPick.method === "pinfall" ||
-                        finishPick.method === "submission";
-                      const showFinishWinner =
-                        !isSingles && !isTripleOrFatal;
-                      const showFinishLoser = !isSingles;
-                      return (
-                        <div
-                          key={match.id}
-                          className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
-                        >
-                          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                            <div>
-                              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                                {match.kind}
-                              </p>
-                              <p className="text-sm font-semibold text-zinc-100">
-                                {match.name}
-                              </p>
-                            </div>
-                            <select
-                              className="h-10 min-w-[220px] rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                              value={payload.match_picks[match.id] ?? ""}
-                              onChange={(event) =>
-                                setPayload((prev) => ({
-                                  ...prev,
-                                  match_picks: {
-                                    ...prev.match_picks,
-                                    [match.id]: event.target.value || null,
-                                  },
-                                }))
-                              }
-                              disabled={isLocked || sideEntries.length === 0}
-                            >
-                              <option value="">Select winner</option>
-                              {sideEntries.map(({ side, label, entrants }) => (
-                                <option key={side.id} value={side.id}>
-                                  {label}
-                                  {entrants.length > 0
-                                    ? ` — ${entrants
-                                        .map((entrant) => entrant.name)
-                                        .join(", ")}`
-                                    : ""}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          {sideEntries.length === 0 && (
-                            <p className="mt-2 text-xs text-zinc-500">
-                              Add match participants in admin to enable picks.
-                            </p>
-                          )}
-                          {sideEntries.length > 0 && (
-                            <div className="mt-3 grid gap-3 md:grid-cols-2">
-                              {sideEntries.map(({ side, label, entrants }) => (
-                                <div
-                                  key={side.id}
-                                  className={`rounded-xl border px-3 py-2 ${
-                                    payload.match_picks[match.id] === side.id
-                                      ? "border-amber-400/60 bg-amber-400/10"
-                                      : "border-zinc-800 bg-zinc-900/60"
-                                  }`}
-                                >
-                                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                                    {label}
-                                  </p>
-                                  {entrants.length === 0 ? (
-                                    <p className="mt-2 text-xs text-zinc-500">
-                                      No participants.
-                                    </p>
-                                  ) : (
-                                    <div className="mt-2 space-y-2">
-                                      {entrants.map((entrant) => (
-                                        <EntrantCard
-                                          key={entrant.id}
-                                          name={entrant.name}
-                                          promotion={entrant.promotion}
-                                          imageUrl={entrant.image_url}
-                                        />
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {(allEntrants.length > 2 || isSingles) && (
-                            <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
-                              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                                Finish prediction
-                              </p>
-                              <div className="mt-3 grid gap-3 md:grid-cols-3">
-                                <select
-                                  className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                                  value={finishPick.method ?? ""}
-                                  onChange={(event) => {
-                                    const method = event.target.value || null;
-                                    setPayload((prev) => ({
-                                      ...prev,
-                                      match_finish_picks: {
-                                        ...prev.match_finish_picks,
-                                        [match.id]: {
-                                          method,
-                                          winner:
-                                            !isSingles &&
-                                            (method === "pinfall" ||
-                                              method === "submission")
-                                              ? finishPick.winner
-                                              : null,
-                                          loser:
-                                            !isSingles &&
-                                            (method === "pinfall" ||
-                                              method === "submission")
-                                              ? finishPick.loser
-                                              : null,
-                                        },
-                                      },
-                                    }));
-                                  }}
-                                  disabled={isLocked}
-                                >
-                                  <option value="">Select finish</option>
-                                  <option value="pinfall">Pinfall</option>
-                                  <option value="submission">Submission</option>
-                                  <option value="disqualification">Disqualification</option>
-                                </select>
-                                {showFinishWinner && (
-                                  <select
-                                    className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                                    value={finishPick.winner ?? ""}
-                                    onChange={(event) =>
-                                      setPayload((prev) => ({
-                                        ...prev,
-                                        match_finish_picks: {
-                                          ...prev.match_finish_picks,
-                                          [match.id]: {
-                                            ...finishPick,
-                                            winner: event.target.value || null,
-                                          },
-                                        },
-                                      }))
-                                    }
-                                    disabled={
-                                      isLocked ||
-                                      !finishRequiresEntrants ||
-                                      (isTag && !winningSideId)
-                                    }
-                                  >
-                                    <option value="">Winner (pin/sub)</option>
-                                    {(isTag ? winningSideEntrants : sortedEntrants).map(
-                                      (entrant) => (
-                                        <option key={entrant.id} value={entrant.id}>
-                                          {entrant.name}
-                                        </option>
-                                      )
-                                    )}
-                                  </select>
-                                )}
-                                {showFinishLoser && (
-                                  <select
-                                    className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                                    value={finishPick.loser ?? ""}
-                                    onChange={(event) =>
-                                      setPayload((prev) => ({
-                                        ...prev,
-                                        match_finish_picks: {
-                                          ...prev.match_finish_picks,
-                                          [match.id]: {
-                                            ...finishPick,
-                                            loser: event.target.value || null,
-                                          },
-                                        },
-                                      }))
-                                    }
-                                    disabled={
-                                      isLocked ||
-                                      !finishRequiresEntrants ||
-                                      (isTag && !winningSideId)
-                                    }
-                                  >
-                                    <option value="">Loser (pin/sub)</option>
-                                    {(isTag ? losingSideEntrants : sortedEntrants).map(
-                                      (entrant) => (
-                                        <option key={entrant.id} value={entrant.id}>
-                                          {entrant.name}
-                                        </option>
-                                      )
-                                    )}
-                                  </select>
-                                )}
-                              </div>
-                              <p className="mt-2 text-xs text-zinc-500">
-                                Only required for matches with more than two entrants.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {hasSaved && (
-                  <div className="mt-6">
-                    <button
-                      className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
-                      type="button"
-                      onClick={handleSave}
-                      disabled={saving || isLocked}
-                    >
-                      {saving ? "Saving…" : "Save match picks"}
-                    </button>
-                  </div>
-                )}
-              </section>
+              <MatchPicksSection
+                matches={matches}
+                matchSidesByMatch={matchSidesByMatch}
+                matchEntrantsByMatch={matchEntrantsByMatch}
+                entrantByIdAll={entrantByIdAll}
+                payload={payload}
+                setPayload={setPayload}
+                isLocked={isLocked}
+                hasSaved={hasSaved}
+                onCancel={() => setEditSection(null)}
+                onSave={handleSave}
+                saving={saving}
+              />
             )}
 
             {canShowRumbles && (editSection === "key_picks" || !hasSaved) && (
@@ -1967,170 +1030,60 @@ export default function PicksPage() {
                   const selectedEntrants = getSelectedEntrantOptions(event.id);
                   const selectedFinalFour = getSelectedFinalFourOptions(event.id);
                   return (
-                    <section
+                    <KeyPicksEditor
                       key={event.id}
-                      ref={event.id === showEvents[0]?.id ? keyPicksRef : null}
-                      className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                            {event.rumble_gender ? `${event.rumble_gender} rumble` : "Rumble"}
-                          </p>
-                          <h2 className="text-lg font-semibold">Key Picks</h2>
-                          <p className="mt-2 text-sm text-zinc-400">
-                            Choose your winner and entry position picks.
-                          </p>
-                        </div>
-                        {hasSaved && (
-                          <button
-                            className="text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200"
-                            type="button"
-                            onClick={() => setEditSection(null)}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                      <div className="mt-4 space-y-4">
-                        {(
-                          [
-                            { label: "Winner", key: "winner" },
-                            { label: "Entry #1", key: "entry_1" },
-                            { label: "Entry #2", key: "entry_2" },
-                            { label: "Entry #30", key: "entry_30" },
-                            { label: "Most eliminations", key: "most_eliminations" },
-                          ] as const
-                        ).map((field) => (
-                          <label
-                            key={field.key}
-                            className="flex flex-col text-sm text-zinc-300"
-                          >
-                            {field.label}
-                            <select
-                              className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                              value={eventPick[field.key] ?? ""}
-                              onChange={(eventChange) =>
-                                setPayload((prev) => {
-                                  const current =
-                                    prev.rumbles[event.id] ?? emptyRumblePick;
-                                  return {
-                                    ...prev,
-                                    rumbles: {
-                                      ...prev.rumbles,
-                                      [event.id]: {
-                                        ...current,
-                                        [field.key]: eventChange.target.value || null,
-                                      },
-                                    },
-                                  };
-                                })
-                              }
-                              disabled={isLocked}
-                            >
-                              <option value="">Select</option>
-                              {(field.key === "winner"
-                                ? selectedFinalFour
-                                : selectedEntrants
-                              ).map((entrant) => (
-                                <option key={entrant.id} value={entrant.id}>
-                                  {entrant.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        ))}
-                      </div>
-                      {hasSaved && (
-                        <div className="mt-6">
-                          <button
-                            className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
-                            type="button"
-                            onClick={handleSave}
-                            disabled={saving || isLocked}
-                          >
-                            {saving ? "Saving…" : "Save key picks"}
-                          </button>
-                        </div>
-                      )}
-                    </section>
+                      event={event}
+                      eventPick={eventPick}
+                      selectedEntrants={selectedEntrants}
+                      selectedFinalFour={selectedFinalFour}
+                      isLocked={isLocked}
+                      hasSaved={hasSaved}
+                      onCancel={() => setEditSection(null)}
+                      onSave={handleSave}
+                      saving={saving}
+                      onPickChange={(fieldKey, value) =>
+                        setPayload((prev) => {
+                          const current = prev.rumbles[event.id] ?? emptyRumblePick;
+                          return {
+                            ...prev,
+                            rumbles: {
+                              ...prev.rumbles,
+                              [event.id]: {
+                                ...current,
+                                [fieldKey]: value,
+                              },
+                            },
+                          };
+                        })
+                      }
+                      sectionRef={event.id === showEvents[0]?.id ? keyPicksRef : undefined}
+                    />
                   );
                 })}
               </>
             )}
 
             {!hasSaved && (
-              <section className="mt-8 flex flex-col items-start gap-3">
-                <button
-                  className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving || isLocked}
-                >
-                  {saving ? "Saving…" : "Save picks"}
-                </button>
-                <p className="text-xs text-zinc-500">
-                  Your picks can be updated until the show locks.
-                </p>
-              </section>
+              <SavePicksFooter
+                saving={saving}
+                isLocked={isLocked}
+                onSave={handleSave}
+              />
             )}
           </>
         )}
-        {customModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
-            <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6 text-zinc-100 shadow-xl">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Add custom entrant</h3>
-                <button
-                  className="text-sm text-zinc-400 transition hover:text-zinc-200"
-                  type="button"
-                  onClick={() => {
-                    setCustomModalOpen(false);
-                    setCustomModalEventId(null);
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-              {customModalEvent && (
-                <p className="mt-1 text-xs text-zinc-500">
-                  For {customModalEvent.name}
-                </p>
-              )}
-              <p className="mt-2 text-sm text-zinc-400">
-                Custom entrants require admin approval before they show up for
-                everyone.
-              </p>
-              <input
-                className="mt-4 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-base text-zinc-100"
-                placeholder="Entrant name"
-                value={customEntrantName}
-                onChange={(event) => setCustomEntrantName(event.target.value)}
-                autoFocus
-              />
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <button
-                  className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
-                  type="button"
-                  onClick={() => {
-                    setCustomModalOpen(false);
-                    setCustomModalEventId(null);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="inline-flex h-10 items-center justify-center rounded-full bg-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
-                  type="button"
-                  onClick={handleAddCustomEntrant}
-                  disabled={isLocked}
-                >
-                  Submit
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <CustomEntrantModal
+          open={customModalOpen}
+          event={customModalEvent}
+          entrantName={customEntrantName}
+          setEntrantName={setCustomEntrantName}
+          isLocked={isLocked}
+          onClose={() => {
+            setCustomModalOpen(false);
+            setCustomModalEventId(null);
+          }}
+          onSubmit={handleAddCustomEntrant}
+        />
       </main>
     </div>
   );
