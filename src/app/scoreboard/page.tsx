@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import { ScoreboardCountdown } from "../../components/ScoreboardCountdown";
+import { scoringRules } from "../../lib/scoringRules";
+import { calculateScore } from "../../lib/scoring";
 
 type ScoreRow = {
   id: string;
@@ -12,6 +14,32 @@ type ScoreRow = {
   show_id: string | null;
   points: number;
   breakdown: Record<string, number> | null;
+  updated_at: string;
+};
+
+type PickRow = {
+  id: string;
+  user_id: string;
+  show_id: string | null;
+  payload: {
+    rumbles?: Record<
+      string,
+      {
+        entrants: string[];
+        final_four: string[];
+        winner: string | null;
+        entry_1: string | null;
+        entry_2: string | null;
+        entry_30: string | null;
+        most_eliminations: string | null;
+      }
+    >;
+    match_picks?: Record<string, string | null>;
+    match_finish_picks?: Record<
+      string,
+      { method: string | null; winner: string | null; loser: string | null }
+    >;
+  };
   updated_at: string;
 };
 
@@ -40,6 +68,26 @@ type EventEntrantRow = {
   promotion: string | null;
 };
 
+type MatchRow = {
+  id: string;
+  winner_side_id: string | null;
+  finish_method: string | null;
+  finish_winner_entrant_id: string | null;
+  finish_loser_entrant_id: string | null;
+};
+
+type MatchSideRow = {
+  id: string;
+  match_id: string;
+  label: string | null;
+};
+
+type MatchEntrantRow = {
+  match_id: string;
+  entrant_id: string;
+  side_id: string | null;
+};
+
 type ProfileRow = {
   id: string;
   display_name: string | null;
@@ -47,7 +95,7 @@ type ProfileRow = {
 
 type ScoreboardRow = ScoreRow & { display_name: string };
 
-const SCOREBOARD_POLL_INTERVAL_MS = 60000;
+const SCOREBOARD_POLL_INTERVAL_MS = 30000;
 
 export default function ScoreboardPage() {
   const searchParams = useSearchParams();
@@ -60,6 +108,9 @@ export default function ScoreboardPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [rumbleEntries, setRumbleEntries] = useState<RumbleEntryRow[]>([]);
   const [eventEntrants, setEventEntrants] = useState<EventEntrantRow[]>([]);
+  const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
+  const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [rankDelta, setRankDelta] = useState<Record<string, number | null>>({});
@@ -88,7 +139,7 @@ export default function ScoreboardPage() {
   );
 
   const filteredScoreboard = useMemo(() => {
-    if (!selectedShowId) return scoreboard;
+    if (!selectedShowId) return [];
     return scoreboard.filter((row) => row.show_id === selectedShowId);
   }, [scoreboard, selectedShowId]);
 
@@ -156,73 +207,199 @@ export default function ScoreboardPage() {
     return map;
   }, [entriesByEvent]);
 
+  const computeRumbleScore = useCallback(
+    (pick: PickRow["payload"]["rumbles"][string] | undefined, entries: RumbleEntryRow[]) => {
+      if (!pick) {
+        return { points: 0, breakdown: {} as Record<string, number> };
+      }
+      const entrantIds = new Set(entries.map((entry) => entry.entrant_id));
+      const correctEntrants = (pick.entrants ?? []).filter((id) =>
+        entrantIds.has(id)
+      );
+      const finalFour = [...entries]
+        .sort((a, b) => {
+          const aKey = a.eliminated_at ? new Date(a.eliminated_at).getTime() : Number.MAX_SAFE_INTEGER;
+          const bKey = b.eliminated_at ? new Date(b.eliminated_at).getTime() : Number.MAX_SAFE_INTEGER;
+          return bKey - aKey;
+        })
+        .slice(0, 4)
+        .map((entry) => entry.entrant_id);
+      const finalFourSet = new Set(finalFour);
+      const correctFinalFour = (pick.final_four ?? []).filter((id) =>
+        finalFourSet.has(id)
+      );
+      const winners = entries.filter((entry) => !entry.eliminated_at);
+      const actualWinner =
+        entries.length >= 30 && winners.length === 1 ? winners[0].entrant_id : null;
+      const entryOne = entries.find((entry) => entry.entry_number === 1)?.entrant_id ?? null;
+      const entryTwo = entries.find((entry) => entry.entry_number === 2)?.entrant_id ?? null;
+      const entryThirty = entries.find((entry) => entry.entry_number === 30)?.entrant_id ?? null;
+      const maxElims = entries.reduce(
+        (max, entry) => Math.max(max, entry.eliminations_count ?? 0),
+        0
+      );
+      const topElims = new Set(
+        entries
+          .filter((entry) => entry.eliminations_count === maxElims)
+          .map((entry) => entry.entrant_id)
+      );
+
+      const breakdown = {
+        entrants: correctEntrants.length * scoringRules.entrants,
+        final_four: correctFinalFour.length * scoringRules.final_four,
+        winner:
+          actualWinner && pick.winner === actualWinner ? scoringRules.winner : 0,
+        entry_1: pick.entry_1 && pick.entry_1 === entryOne ? scoringRules.entry_1 : 0,
+        entry_2: pick.entry_2 && pick.entry_2 === entryTwo ? scoringRules.entry_2 : 0,
+        entry_30: pick.entry_30 && pick.entry_30 === entryThirty ? scoringRules.entry_30 : 0,
+        most_eliminations:
+          pick.most_eliminations && topElims.has(pick.most_eliminations)
+            ? scoringRules.most_eliminations
+            : 0,
+      };
+      const points =
+        breakdown.entrants +
+        breakdown.final_four +
+        breakdown.winner +
+        breakdown.entry_1 +
+        breakdown.entry_2 +
+        breakdown.entry_30 +
+        breakdown.most_eliminations;
+      return { points, breakdown };
+    },
+    []
+  );
+
   const loadScores = useCallback(async () => {
     setMessage(null);
-    const { data: scoreRows, error: scoreError } = await supabase
-      .from("scores")
-      .select("id, user_id, show_id, points, breakdown, updated_at");
-    if (scoreError) {
-      setMessage(scoreError.message);
-      setLoading(false);
-      return;
-    }
-    const userIds = Array.from(
-      new Set((scoreRows ?? []).map((row) => row.user_id))
-    );
-    if (userIds.length === 0) {
-      setScores(scoreRows ?? []);
+    if (!selectedShowId) {
+      setScores([]);
       setProfiles([]);
       setLoading(false);
       return;
     }
-    const { data: profileRows, error: profileError } = await supabase
+    const { data: pickRows, error: pickError } = await supabase
+      .from("picks")
+      .select("id, user_id, show_id, payload, updated_at")
+      .eq("show_id", selectedShowId);
+
+    if (pickError) {
+      setMessage(pickError.message);
+      setLoading(false);
+      return;
+    }
+
+    const picks = (pickRows ?? []) as PickRow[];
+    const userIds = Array.from(new Set(picks.map((row) => row.user_id)));
+    if (userIds.length === 0) {
+      setScores([]);
+      setProfiles([]);
+      setLoading(false);
+      setLastUpdateAt(Date.now());
+      return;
+    }
+    const { data: profileRowsFresh, error: profileErrorFresh } = await supabase
       .from("profiles")
       .select("id, display_name")
       .in("id", userIds);
-    if (profileError) {
-      setMessage(profileError.message);
-    }
-    if (selectedShowId) {
-      const eventScores = (scoreRows ?? [])
-        .filter((row) => row.show_id === selectedShowId)
-        .sort((a, b) => b.points - a.points);
-      const nextRankMap: Record<string, number> = {};
-      eventScores.forEach((row, index) => {
-        nextRankMap[row.user_id] = index + 1;
-      });
-      const updated: Record<string, number | null> = { ...lastDeltaRef.current };
-      eventScores.forEach((row) => {
-        const prevRank = previousRanksRef.current[row.user_id];
-        if (typeof prevRank === "number") {
-          const delta = prevRank - nextRankMap[row.user_id];
-          if (delta !== 0) {
-            updated[row.user_id] = delta;
-          }
-        } else if (!(row.user_id in updated)) {
-          updated[row.user_id] = null;
-        }
-      });
-      setRankDelta(updated);
-      previousRanksRef.current = nextRankMap;
-      lastDeltaRef.current = Object.fromEntries(
-        Object.entries(updated).filter(([, value]) => value !== null)
-      ) as Record<string, number>;
-    } else {
-      setRankDelta({});
-      previousRanksRef.current = {};
-      lastDeltaRef.current = {};
+    if (profileErrorFresh) {
+      setMessage(profileErrorFresh.message);
     }
 
-    setScores(scoreRows ?? []);
-    setProfiles(profileRows ?? []);
+    const eventEntriesById = rumbleEntries.reduce((map, entry) => {
+      if (!map[entry.event_id]) map[entry.event_id] = [];
+      map[entry.event_id].push(entry);
+      return map;
+    }, {} as Record<string, RumbleEntryRow[]>);
+
+    const scoreboardRows: ScoreRow[] = picks.map((pick) => {
+      let points = 0;
+      const breakdown: Record<string, number> = {};
+      const rumbles = pick.payload?.rumbles ?? {};
+      showEvents.forEach((event) => {
+        const entries = eventEntriesById[event.id] ?? [];
+        const rumblePick = rumbles[event.id];
+        const rumbleScore = computeRumbleScore(rumblePick, entries);
+        points += rumbleScore.points;
+        Object.entries(rumbleScore.breakdown).forEach(([key, value]) => {
+          breakdown[`${event.id}:${key}`] = value;
+        });
+      });
+
+      const matchPayload = {
+        entrants: [],
+        final_four: [],
+        winner: null,
+        entry_1: null,
+        entry_2: null,
+        entry_30: null,
+        most_eliminations: null,
+        match_picks: pick.payload?.match_picks ?? {},
+        match_finish_picks: pick.payload?.match_finish_picks ?? {},
+      };
+      const matchScore = calculateScore(
+        matchPayload,
+        [],
+        scoringRules,
+        matches,
+        matchEntrants,
+        matchSides
+      );
+      points += matchScore.points;
+      breakdown.matches = matchScore.breakdown.matches ?? 0;
+      breakdown.match_finish_method = matchScore.breakdown.match_finish_method ?? 0;
+
+      return {
+        id: pick.id,
+        user_id: pick.user_id,
+        show_id: pick.show_id,
+        points,
+        breakdown,
+        updated_at: pick.updated_at,
+      };
+    });
+
+    const eventScores = [...scoreboardRows].sort((a, b) => b.points - a.points);
+    const nextRankMap: Record<string, number> = {};
+    eventScores.forEach((row, index) => {
+      nextRankMap[row.user_id] = index + 1;
+    });
+    const updated: Record<string, number | null> = { ...lastDeltaRef.current };
+    eventScores.forEach((row) => {
+      const prevRank = previousRanksRef.current[row.user_id];
+      if (typeof prevRank === "number") {
+        const delta = prevRank - nextRankMap[row.user_id];
+        if (delta !== 0) {
+          updated[row.user_id] = delta;
+        }
+      } else if (!(row.user_id in updated)) {
+        updated[row.user_id] = null;
+      }
+    });
+    setRankDelta(updated);
+    previousRanksRef.current = nextRankMap;
+    lastDeltaRef.current = Object.fromEntries(
+      Object.entries(updated).filter(([, value]) => value !== null)
+    ) as Record<string, number>;
+
+    setScores(scoreboardRows);
+    setProfiles(profileRowsFresh ?? []);
     setLoading(false);
     setLastUpdateAt(Date.now());
-  }, [selectedShowId]);
+  }, [
+    computeRumbleScore,
+    matchEntrants,
+    matchSides,
+    matches,
+    rumbleEntries,
+    selectedShowId,
+    showEvents,
+  ]);
 
   const loadRumbleEntries = useCallback(async () => {
     if (!selectedShowId || showEvents.length === 0) {
-      setRumbleEntries([]);
-      setEventEntrants([]);
+      setRumbleEntries((prev) => (prev.length === 0 ? prev : []));
+      setEventEntrants((prev) => (prev.length === 0 ? prev : []));
       return;
     }
     const eventIds = showEvents.map((event) => event.id);
@@ -234,7 +411,29 @@ export default function ScoreboardPage() {
       setMessage(error.message);
       return;
     }
-    setRumbleEntries((entryRows ?? []) as RumbleEntryRow[]);
+    const nextEntries = (entryRows ?? []) as RumbleEntryRow[];
+    setRumbleEntries((prev) => {
+      if (prev.length === nextEntries.length) {
+        const prevKey = prev
+          .map(
+            (entry) =>
+              `${entry.event_id}:${entry.entrant_id}:${entry.entry_number ?? ""}:${entry.eliminated_at ?? ""}`
+          )
+          .sort()
+          .join("|");
+        const nextKey = nextEntries
+          .map(
+            (entry) =>
+              `${entry.event_id}:${entry.entrant_id}:${entry.entry_number ?? ""}:${entry.eliminated_at ?? ""}`
+          )
+          .sort()
+          .join("|");
+        if (prevKey === nextKey) {
+          return prev;
+        }
+      }
+      return nextEntries;
+    });
 
     const entrantIds = Array.from(
       new Set((entryRows ?? []).map((entry) => entry.entrant_id))
@@ -253,7 +452,17 @@ export default function ScoreboardPage() {
       setMessage(entrantError.message);
       return;
     }
-    setEventEntrants(entrantRows ?? []);
+    setEventEntrants((prev) => {
+      const next = entrantRows ?? [];
+      if (prev.length === next.length) {
+        const prevKey = prev.map((entrant) => entrant.id).sort().join("|");
+        const nextKey = next.map((entrant) => entrant.id).sort().join("|");
+        if (prevKey === nextKey) {
+          return prev;
+        }
+      }
+      return next;
+    });
     setLastUpdateAt(Date.now());
   }, [selectedShowId, showEvents]);
 
@@ -301,7 +510,6 @@ export default function ScoreboardPage() {
 
     loadShows();
     loadEvents();
-    loadScores();
   }, [loadScores, queryShowId]);
 
   useEffect(() => {
@@ -322,6 +530,55 @@ export default function ScoreboardPage() {
     return () => clearInterval(interval);
   }, [loadRumbleEntries, loadScores]);
 
+  useEffect(() => {
+    const loadMatches = async () => {
+      if (!selectedShowId) {
+        setMatches([]);
+        setMatchSides([]);
+        setMatchEntrants([]);
+        return;
+      }
+      const { data: matchRows, error } = await supabase
+        .from("matches")
+        .select(
+          "id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id"
+        )
+        .eq("show_id", selectedShowId)
+        .order("created_at", { ascending: true });
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+      const matchList = (matchRows ?? []) as MatchRow[];
+      setMatches(matchList);
+      if (matchList.length === 0) {
+        setMatchSides([]);
+        setMatchEntrants([]);
+        return;
+      }
+      const matchIds = matchList.map((match) => match.id);
+      const [
+        { data: sideRows, error: sideError },
+        { data: entrantRows, error: entrantError },
+      ] = await Promise.all([
+        supabase.from("match_sides").select("id, match_id, label").in("match_id", matchIds),
+        supabase.from("match_entrants").select("match_id, entrant_id, side_id").in("match_id", matchIds),
+      ]);
+      if (sideError) {
+        setMessage(sideError.message);
+        return;
+      }
+      if (entrantError) {
+        setMessage(entrantError.message);
+        return;
+      }
+      setMatchSides((sideRows ?? []) as MatchSideRow[]);
+      setMatchEntrants((entrantRows ?? []) as MatchEntrantRow[]);
+    };
+
+    loadMatches();
+  }, [selectedShowId]);
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <ScoreboardCountdown
@@ -336,7 +593,7 @@ export default function ScoreboardPage() {
             Scores update as eliminations and results are recorded.
           </p>
         </header>
-        {shows.length > 1 && (
+        {shows.length > 0 && (
           <div className="mt-6">
             <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
               Show
@@ -350,6 +607,7 @@ export default function ScoreboardPage() {
                   url.searchParams.set("show", value);
                   window.history.replaceState({}, "", url.toString());
                 }}
+                disabled={shows.length === 1}
               >
                 {shows.map((show) => (
                   <option key={show.id} value={show.id}>

@@ -136,7 +136,6 @@ export const calculateScore = (
 
   const matchFinishPoints = matches.reduce((total, match) => {
     const entrantCount = entrantCountByMatch[match.id] ?? 0;
-    if (entrantCount <= 2) return total;
     if (!match.finish_method) return total;
     const pick = matchFinishPicks[match.id];
     if (!pick) return total;
@@ -147,7 +146,8 @@ export const calculateScore = (
     if (
       (match.finish_method === "pinfall" ||
         match.finish_method === "submission") &&
-      pick.method === match.finish_method
+      pick.method === match.finish_method &&
+      entrantCount > 2
     ) {
       if (
         match.finish_winner_entrant_id &&

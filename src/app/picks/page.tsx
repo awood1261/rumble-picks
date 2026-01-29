@@ -342,14 +342,15 @@ export default function PicksPage() {
         total += scoringRules.match_winner;
       }
       const entrantCount = (matchEntrantsByMatch[match.id] ?? []).length;
-      if (entrantCount > 2 && match.finish_method) {
+      if (match.finish_method) {
         const finishPick = payload.match_finish_picks[match.id];
         if (finishPick?.method === match.finish_method) {
           total += scoringRules.match_finish_method;
           if (
             (match.finish_method === "pinfall" ||
               match.finish_method === "submission") &&
-            finishPick.method === match.finish_method
+            finishPick.method === match.finish_method &&
+            entrantCount > 2
           ) {
             if (
               match.finish_winner_entrant_id &&
@@ -900,13 +901,6 @@ export default function PicksPage() {
           onChange={setSelectedShowId}
         />
 
-        {!hasEvents && (
-          <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <p className="text-sm text-zinc-400">
-              No rumble events are available for this show yet.
-            </p>
-          </section>
-        )}
         {hasEvents && !hasEntrantsForShow && (
           <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <p className="text-sm text-zinc-400">

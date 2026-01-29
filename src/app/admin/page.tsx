@@ -1887,7 +1887,7 @@ export default function AdminPage() {
 
                     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-3">
                       <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                        Match finish (not needed for singles)
+                        Match finish
                       </p>
                       <div className="mt-3 grid gap-3 md:grid-cols-3">
                         <select
@@ -1962,11 +1962,7 @@ export default function AdminPage() {
                         )}
                       </div>
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
-                        <span>
-                          {isSingles
-                            ? "Finish scoring is disabled for singles matches."
-                            : "Set the finish to score these picks."}
-                        </span>
+                        <span>Set the finish to score these picks.</span>
                         <button
                           className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
                           type="button"

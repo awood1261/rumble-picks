@@ -307,7 +307,7 @@ export default function ScoreboardPicksPage() {
         summary.winner += scoringRules.match_winner;
       }
       const entrantCount = entrantCountByMatch[match.id] ?? 0;
-      if (entrantCount <= 2 || !match.finish_method) {
+      if (!match.finish_method) {
         return;
       }
       const finishPick = payload?.match_finish_picks?.[match.id];
@@ -317,7 +317,8 @@ export default function ScoreboardPicksPage() {
         if (
           (match.finish_method === "pinfall" ||
             match.finish_method === "submission") &&
-          finishPick.method === match.finish_method
+          finishPick.method === match.finish_method &&
+          entrantCount > 2
         ) {
           if (
             match.finish_winner_entrant_id &&
@@ -610,16 +611,16 @@ export default function ScoreboardPicksPage() {
           <p className="mt-2 text-sm text-zinc-400">
             Totals reflect the latest results recorded for this show.
           </p>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                Rumble events
-              </p>
-              {events.length === 0 ? (
-                <p className="mt-3 text-sm text-zinc-400">
-                  No rumble events found.
+          <div
+            className={`mt-4 grid gap-4 ${
+              events.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"
+            }`}
+          >
+            {events.length > 0 && (
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                  Rumble events
                 </p>
-              ) : (
                 <div className="mt-3 space-y-3 text-sm text-zinc-200">
                   {events.map((event) => {
                     const points = eventPointsByEvent[event.id] ?? {
@@ -648,8 +649,8 @@ export default function ScoreboardPicksPage() {
                     Event total: {eventPointsSummary.total} points
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
               <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                 Matches
@@ -677,11 +678,7 @@ export default function ScoreboardPicksPage() {
           </div>
         </section>
 
-        {events.length === 0 ? (
-          <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
-            <p className="text-sm text-zinc-400">No rumble events found.</p>
-          </section>
-        ) : (
+        {events.length > 0 &&
           events.map((event) => {
             const rumblePick = payload.rumbles?.[event.id] ?? emptyRumblePick;
             const actuals = actualsByEvent[event.id] ?? emptyActuals;
@@ -775,8 +772,7 @@ export default function ScoreboardPicksPage() {
                 </div>
               </section>
             );
-          })
-        )}
+          })}
 
         <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <h2 className="text-lg font-semibold">Match Picks</h2>
@@ -820,6 +816,9 @@ export default function ScoreboardPicksPage() {
                     ? match.finish_loser_entrant_id === finishPick.loser
                     : false;
                 const isCorrect = winner && pick ? winner === pick : false;
+                const showFinishDetails =
+                  !!finishMethod || !!match.finish_method || !!finishPick;
+
                 return (
                   <div
                     key={match.id}
@@ -863,7 +862,7 @@ export default function ScoreboardPicksPage() {
                         </span>
                       )}
                     </div>
-                    {entrantCount > 2 && (
+                    {showFinishDetails && (
                       <div className="mt-3 space-y-2 text-xs text-zinc-400">
                         <div className="flex items-center justify-between">
                           <span>Finish</span>
@@ -887,7 +886,8 @@ export default function ScoreboardPicksPage() {
                           </span>
                         </div>
                         {(finishMethod === "pinfall" ||
-                          finishMethod === "submission") && (
+                          finishMethod === "submission") &&
+                          entrantCount > 2 && (
                           <>
                             <div className="flex items-center justify-between">
                               <span>Winner</span>

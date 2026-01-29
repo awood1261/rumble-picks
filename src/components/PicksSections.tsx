@@ -676,6 +676,9 @@ export const MatchSummarySection = ({
               ? match.finish_loser_entrant_id === finishPick.loser
               : false;
           const isCorrect = winner && pick ? winner === pick : false;
+          const showFinishDetails =
+            !!finishMethod || !!match.finish_method || !!finishPick;
+
           return (
             <div
               key={match.id}
@@ -721,7 +724,7 @@ export const MatchSummarySection = ({
                   </span>
                 )}
               </div>
-              {entrantCount > 2 && (
+              {showFinishDetails && (
                 <div className="mt-3 space-y-2 text-xs text-zinc-400">
                   <div className="flex items-center justify-between">
                     <span>Finish</span>
@@ -745,7 +748,8 @@ export const MatchSummarySection = ({
                     </span>
                   </div>
                   {(finishMethod === "pinfall" ||
-                    finishMethod === "submission") && (
+                    finishMethod === "submission") &&
+                    entrantCount > 2 && (
                     <>
                       <div className="flex items-center justify-between">
                         <span>Winner</span>
@@ -959,8 +963,7 @@ export const MatchPicksSection = ({
                   })}
                 </div>
               )}
-              {(allEntrants.length > 2 || isSingles) && (
-                <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
+              <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
                   <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                     Finish prediction
                   </p>
@@ -1061,10 +1064,9 @@ export const MatchPicksSection = ({
                     )}
                   </div>
                   <p className="mt-2 text-xs text-zinc-500">
-                    Only required for matches with more than two entrants.
+                    Pick how the match ends (applies to singles too).
                   </p>
                 </div>
-              )}
             </div>
           );
         })}
