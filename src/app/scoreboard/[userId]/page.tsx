@@ -223,6 +223,125 @@ export default function ScoreboardPicksPage() {
     return byEvent;
   }, [events, rumbleEntries]);
 
+  const eventPointsByEvent = useMemo(() => {
+    const map: Record<
+      string,
+      { entrants: number; finalFour: number; keyPicks: number; total: number }
+    > = {};
+    events.forEach((event) => {
+      const pick = payload?.rumbles?.[event.id] ?? emptyRumblePick;
+      const actuals = actualsByEvent[event.id] ?? emptyActuals;
+      if (!actuals.hasData) {
+        map[event.id] = { entrants: 0, finalFour: 0, keyPicks: 0, total: 0 };
+        return;
+      }
+      const entrantsCorrect = pick.entrants.filter((id) =>
+        actuals.entrantSet.has(id)
+      ).length;
+      const finalFourCorrect = pick.final_four.filter((id) =>
+        actuals.finalFourSet.has(id)
+      ).length;
+      const keyPicks =
+        (pick.winner && pick.winner === actuals.winner
+          ? scoringRules.winner
+          : 0) +
+        (pick.entry_1 && pick.entry_1 === actuals.entry1
+          ? scoringRules.entry_1
+          : 0) +
+        (pick.entry_2 && pick.entry_2 === actuals.entry2
+          ? scoringRules.entry_2
+          : 0) +
+        (pick.entry_30 && pick.entry_30 === actuals.entry30
+          ? scoringRules.entry_30
+          : 0) +
+        (pick.most_eliminations &&
+        actuals.topElims.has(pick.most_eliminations)
+          ? scoringRules.most_eliminations
+          : 0);
+      const entrantsPoints = entrantsCorrect * scoringRules.entrants;
+      const finalFourPoints = finalFourCorrect * scoringRules.final_four;
+      map[event.id] = {
+        entrants: entrantsPoints,
+        finalFour: finalFourPoints,
+        keyPicks,
+        total: entrantsPoints + finalFourPoints + keyPicks,
+      };
+    });
+    return map;
+  }, [actualsByEvent, events, payload]);
+
+  const eventPointsSummary = useMemo(() => {
+    return events.reduce(
+      (acc, event) => {
+        const points = eventPointsByEvent[event.id] ?? {
+          entrants: 0,
+          finalFour: 0,
+          keyPicks: 0,
+          total: 0,
+        };
+        acc.entrants += points.entrants;
+        acc.finalFour += points.finalFour;
+        acc.keyPicks += points.keyPicks;
+        acc.total += points.total;
+        return acc;
+      },
+      { entrants: 0, finalFour: 0, keyPicks: 0, total: 0 }
+    );
+  }, [eventPointsByEvent, events]);
+
+  const matchPointsSummary = useMemo(() => {
+    const summary = {
+      winner: 0,
+      finishMethod: 0,
+      finishWinner: 0,
+      finishLoser: 0,
+      total: 0,
+    };
+    const entrantCountByMatch = matchEntrants.reduce((map, row) => {
+      map[row.match_id] = (map[row.match_id] ?? 0) + 1;
+      return map;
+    }, {} as Record<string, number>);
+    matches.forEach((match) => {
+      const pick = payload?.match_picks?.[match.id] ?? null;
+      if (match.winner_side_id && pick && pick === match.winner_side_id) {
+        summary.winner += scoringRules.match_winner;
+      }
+      const entrantCount = entrantCountByMatch[match.id] ?? 0;
+      if (entrantCount <= 2 || !match.finish_method) {
+        return;
+      }
+      const finishPick = payload?.match_finish_picks?.[match.id];
+      if (!finishPick) return;
+      if (finishPick.method && finishPick.method === match.finish_method) {
+        summary.finishMethod += scoringRules.match_finish_method;
+        if (
+          (match.finish_method === "pinfall" ||
+            match.finish_method === "submission") &&
+          finishPick.method === match.finish_method
+        ) {
+          if (
+            match.finish_winner_entrant_id &&
+            finishPick.winner === match.finish_winner_entrant_id
+          ) {
+            summary.finishWinner += scoringRules.match_finish_winner;
+          }
+          if (
+            match.finish_loser_entrant_id &&
+            finishPick.loser === match.finish_loser_entrant_id
+          ) {
+            summary.finishLoser += scoringRules.match_finish_loser;
+          }
+        }
+      }
+    });
+    summary.total =
+      summary.winner +
+      summary.finishMethod +
+      summary.finishWinner +
+      summary.finishLoser;
+    return summary;
+  }, [matchEntrants, matches, payload]);
+
   const load = useCallback(async () => {
     if (!validShowId) {
       setMessage("Missing show id.");
@@ -485,6 +604,78 @@ export default function ScoreboardPicksPage() {
             {show?.name ?? "Show"}
           </p>
         </header>
+
+        <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <h2 className="text-lg font-semibold">Scoring breakdown</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Totals reflect the latest results recorded for this show.
+          </p>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                Rumble events
+              </p>
+              {events.length === 0 ? (
+                <p className="mt-3 text-sm text-zinc-400">
+                  No rumble events found.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-3 text-sm text-zinc-200">
+                  {events.map((event) => {
+                    const points = eventPointsByEvent[event.id] ?? {
+                      entrants: 0,
+                      finalFour: 0,
+                      keyPicks: 0,
+                      total: 0,
+                    };
+                    return (
+                      <div
+                        key={event.id}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
+                      >
+                        <p className="font-medium text-zinc-100">{event.name}</p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Entrants: {points.entrants} · Final four:{" "}
+                          {points.finalFour} · Key picks: {points.keyPicks}
+                        </p>
+                        <p className="mt-1 text-xs text-emerald-200">
+                          Total: {points.total}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
+                    Event total: {eventPointsSummary.total} points
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                Matches
+              </p>
+              {matches.length === 0 ? (
+                <p className="mt-3 text-sm text-zinc-400">
+                  No matches available.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-2 text-sm text-zinc-200">
+                  <p className="text-xs text-zinc-400">
+                    Winners: {matchPointsSummary.winner} · Finish method:{" "}
+                    {matchPointsSummary.finishMethod}
+                  </p>
+                  <p className="text-xs text-zinc-400">
+                    Finish winner: {matchPointsSummary.finishWinner} · Finish
+                    loser: {matchPointsSummary.finishLoser}
+                  </p>
+                  <p className="text-xs text-emerald-200">
+                    Match total: {matchPointsSummary.total}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
 
         {events.length === 0 ? (
           <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
