@@ -117,6 +117,8 @@ export default function ScoreboardPage() {
   const previousRanksRef = useRef<Record<string, number>>({});
   const lastDeltaRef = useRef<Record<string, number>>({});
   const [lastUpdateAt, setLastUpdateAt] = useState(Date.now());
+  const loadScoresRef = useRef<() => void>(() => {});
+  const loadRumbleEntriesRef = useRef<() => void>(() => {});
 
   const scoreboard = useMemo(() => {
     const profileMap = new Map(
@@ -385,7 +387,6 @@ export default function ScoreboardPage() {
     setScores(scoreboardRows);
     setProfiles(profileRowsFresh ?? []);
     setLoading(false);
-    setLastUpdateAt(Date.now());
   }, [
     computeRumbleScore,
     matchEntrants,
@@ -463,8 +464,15 @@ export default function ScoreboardPage() {
       }
       return next;
     });
-    setLastUpdateAt(Date.now());
   }, [selectedShowId, showEvents]);
+
+  useEffect(() => {
+    loadScoresRef.current = loadScores;
+  }, [loadScores]);
+
+  useEffect(() => {
+    loadRumbleEntriesRef.current = loadRumbleEntries;
+  }, [loadRumbleEntries]);
 
   useEffect(() => {
     if (queryShowId && shows.some((show) => show.id === queryShowId)) {
@@ -519,16 +527,22 @@ export default function ScoreboardPage() {
   }, [selectedShowId]);
 
   useEffect(() => {
-    loadRumbleEntries();
-    loadScores();
+    if (!selectedShowId) {
+      return;
+    }
+
+    loadRumbleEntriesRef.current();
+    loadScoresRef.current();
+    setLastUpdateAt(Date.now());
 
     const interval = setInterval(() => {
-      loadScores();
-      loadRumbleEntries();
+      setLastUpdateAt(Date.now());
+      loadScoresRef.current();
+      loadRumbleEntriesRef.current();
     }, SCOREBOARD_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [loadRumbleEntries, loadScores]);
+  }, [selectedShowId]);
 
   useEffect(() => {
     const loadMatches = async () => {
