@@ -647,7 +647,6 @@ export const MatchSummarySection = ({
           const winner = matchWinnerMap.get(match.id) ?? null;
           const sides = matchSidesByMatch[match.id] ?? [];
           const pickSide = pick ? sides.find((side) => side.id === pick) : null;
-          const pickLabel = pickSide?.label?.trim() || "Selected side";
           const pickEntrants = pick
             ? (matchEntrantsByMatch[match.id] ?? [])
                 .filter((row) => row.side_id === pick)
@@ -701,7 +700,7 @@ export const MatchSummarySection = ({
                 </div>
                 <div className="flex flex-col items-end gap-1 text-right">
                   <span className="text-xs font-semibold text-zinc-200">
-                    {pick ? pickLabel : "Not set"}
+                    {pick ? "Winner pick" : "Not set"}
                   </span>
                   {pickEntrants.length > 0 && (
                     <span className="text-xs text-zinc-500">

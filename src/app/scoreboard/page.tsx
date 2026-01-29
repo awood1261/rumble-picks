@@ -641,11 +641,7 @@ export default function ScoreboardPage() {
 
         <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <div className="mb-6 space-y-4">
-            {showEvents.length === 0 ? (
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-400">
-                No rumble events added yet.
-              </div>
-            ) : (
+            {showEvents.length > 0 &&
               showEvents.map((event) => {
                 const eventEntries = entriesByEvent[event.id] ?? [];
                 const eliminatedSet = eliminatedEntrantIdsByEvent[event.id] ?? new Set();
@@ -734,8 +730,7 @@ export default function ScoreboardPage() {
                     </details>
                   </div>
                 );
-              })
-            )}
+              })}
           </div>
           {currentUserIndex !== null && (
             <div className="mb-6 rounded-2xl border border-sky-400/40 bg-sky-400/5 px-4 py-3 text-sm text-sky-100">

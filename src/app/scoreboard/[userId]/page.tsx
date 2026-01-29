@@ -458,6 +458,9 @@ export default function ScoreboardPicksPage() {
     )
       .flatMap((pick) => [pick?.winner, pick?.loser])
       .filter(Boolean);
+    const matchEntrantIds = (matchEntrants ?? [])
+      .map((row) => row.entrant_id)
+      .filter(Boolean);
     const rumblePickIds = Object.values(pickRow?.payload?.rumbles ?? {}).flatMap(
       (rumble) => [
         ...(rumble?.entrants ?? []),
@@ -469,7 +472,7 @@ export default function ScoreboardPicksPage() {
         rumble?.most_eliminations,
       ]
     );
-    const ids = [...rumblePickIds, ...matchFinishIds]
+    const ids = [...rumblePickIds, ...matchFinishIds, ...matchEntrantIds]
       .filter(Boolean)
       .map(String);
 
@@ -784,10 +787,6 @@ export default function ScoreboardPicksPage() {
                 const pick = payload.match_picks?.[match.id] ?? null;
                 const winner = matchWinnerMap.get(match.id) ?? null;
                 const sides = matchSidesByMatch[match.id] ?? [];
-                const pickSide = pick
-                  ? sides.find((side) => side.id === pick)
-                  : null;
-                const pickLabel = pickSide?.label?.trim() || "Selected side";
                 const pickEntrants = pick
                   ? (matchEntrantsByMatch[match.id] ?? [])
                       .filter((row) => row.side_id === pick)
@@ -830,37 +829,37 @@ export default function ScoreboardPicksPage() {
                           : "border-red-500/50 bg-red-500/10"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                          {match.kind}
-                        </p>
-                        <p className="text-sm font-semibold text-zinc-100">
-                          {match.name}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 text-right">
-                        <span className="text-xs font-semibold text-zinc-200">
-                          {pick ? pickLabel : "Not set"}
-                        </span>
-                        {pickEntrants.length > 0 && (
-                          <span className="text-xs text-zinc-500">
-                            {pickEntrants
-                              .map((entrant) => entrant?.name)
-                              .filter(Boolean)
-                              .join(", ")}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                            {match.kind}
+                          </p>
+                          <p className="text-sm font-semibold text-zinc-100">
+                            {match.name}
+                          </p>
+                        </div>
+                        {winner && (
+                          <span
+                            className={`text-[10px] font-semibold uppercase tracking-wide ${
+                              isCorrect ? "text-emerald-200" : "text-red-200"
+                            }`}
+                          >
+                            {isCorrect ? `+${scoringRules.match_winner} pts` : "0 pts"}
                           </span>
                         )}
                       </div>
-                      {winner && (
-                        <span
-                          className={`text-[10px] font-semibold uppercase tracking-wide ${
-                            isCorrect ? "text-emerald-200" : "text-red-200"
-                          }`}
-                        >
-                          {isCorrect ? `+${scoringRules.match_winner} pts` : "0 pts"}
+                      <div className="text-xs font-semibold text-zinc-200">
+                        Winner pick:{" "}
+                        <span className="font-semibold text-zinc-400">
+                          {pickEntrants.length > 0
+                            ? pickEntrants
+                                .map((entrant) => entrant?.name)
+                                .filter(Boolean)
+                                .join(", ")
+                            : "Not set"}
                         </span>
-                      )}
+                      </div>
                     </div>
                     {showFinishDetails && (
                       <div className="mt-3 space-y-2 text-xs text-zinc-400">
