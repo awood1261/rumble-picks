@@ -894,7 +894,7 @@ export const MatchPicksSection = ({
               key={match.id}
               className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
             >
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-2">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                     {match.kind}
@@ -902,31 +902,10 @@ export const MatchPicksSection = ({
                   <p className="text-sm font-semibold text-zinc-100">
                     {match.name}
                   </p>
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Tap a side to select the winner.
+                  </p>
                 </div>
-                <select
-                  className="h-10 min-w-[220px] rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  value={payload.match_picks[match.id] ?? ""}
-                  onChange={(event) =>
-                    setPayload((prev) => ({
-                      ...prev,
-                      match_picks: {
-                        ...prev.match_picks,
-                        [match.id]: event.target.value || null,
-                      },
-                    }))
-                  }
-                  disabled={isLocked || sideEntries.length === 0}
-                >
-                  <option value="">Select winner</option>
-                  {sideEntries.map(({ side, label, entrants }) => (
-                    <option key={side.id} value={side.id}>
-                      {label}
-                      {entrants.length > 0
-                        ? ` — ${entrants.map((entrant) => entrant.name).join(", ")}`
-                        : ""}
-                    </option>
-                  ))}
-                </select>
               </div>
               {sideEntries.length === 0 && (
                 <p className="mt-2 text-xs text-zinc-500">
@@ -935,34 +914,49 @@ export const MatchPicksSection = ({
               )}
               {sideEntries.length > 0 && (
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  {sideEntries.map(({ side, label, entrants }) => (
-                    <div
-                      key={side.id}
-                      className={`rounded-xl border px-3 py-2 ${
-                        payload.match_picks[match.id] === side.id
-                          ? "border-amber-400/60 bg-amber-400/10"
-                          : "border-zinc-800 bg-zinc-900/60"
-                      }`}
-                    >
-                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                        {label}
-                      </p>
-                      {entrants.length === 0 ? (
-                        <p className="mt-2 text-xs text-zinc-500">No participants.</p>
-                      ) : (
-                        <div className="mt-2 space-y-2">
-                          {entrants.map((entrant) => (
-                            <EntrantCard
-                              key={entrant.id}
-                              name={entrant.name}
-                              promotion={entrant.promotion}
-                              imageUrl={entrant.image_url}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  {sideEntries.map(({ side, label, entrants }) => {
+                    const isSelected = payload.match_picks[match.id] === side.id;
+                    return (
+                      <button
+                        key={side.id}
+                        type="button"
+                        onClick={() =>
+                          setPayload((prev) => ({
+                            ...prev,
+                            match_picks: {
+                              ...prev.match_picks,
+                              [match.id]: side.id,
+                            },
+                          }))
+                        }
+                        disabled={isLocked}
+                        className={`rounded-xl border px-3 py-2 text-left transition ${
+                          isSelected
+                            ? "border-amber-400/60 bg-amber-400/10"
+                            : "border-zinc-800 bg-zinc-900/60 hover:border-amber-400/60"
+                        } ${isLocked ? "cursor-not-allowed opacity-70" : ""}`}
+                        aria-pressed={isSelected}
+                      >
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          {label}
+                        </p>
+                        {entrants.length === 0 ? (
+                          <p className="mt-2 text-xs text-zinc-500">No participants.</p>
+                        ) : (
+                          <div className="mt-2 space-y-2">
+                            {entrants.map((entrant) => (
+                              <EntrantCard
+                                key={entrant.id}
+                                name={entrant.name}
+                                promotion={entrant.promotion}
+                                imageUrl={entrant.image_url}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               {(allEntrants.length > 2 || isSingles) && (
