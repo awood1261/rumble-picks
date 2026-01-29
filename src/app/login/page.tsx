@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
+import { APP_BASE_URL } from "../../lib/appConfig";
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -63,6 +64,7 @@ export default function LoginPage() {
           email,
           password,
           options: {
+            emailRedirectTo: APP_BASE_URL,
             data: {
               display_name: displayName,
             },

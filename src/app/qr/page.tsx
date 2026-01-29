@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-
-const HOME_URL = "http://192.168.1.16:3000";
+import { APP_BASE_URL } from "../../lib/appConfig";
 
 export default function QrPage() {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -11,7 +10,7 @@ export default function QrPage() {
 
   useEffect(() => {
     let active = true;
-    QRCode.toDataURL(HOME_URL, {
+    QRCode.toDataURL(APP_BASE_URL, {
       width: 240,
       margin: 1,
       color: { dark: "#fbbf24", light: "#0a0a0a" },
@@ -54,7 +53,7 @@ export default function QrPage() {
           )}
         </div>
         <p className="mt-4 text-xs uppercase tracking-[0.3em] text-zinc-500">
-          {HOME_URL}
+          {APP_BASE_URL}
         </p>
       </main>
     </div>
