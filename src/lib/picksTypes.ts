@@ -89,6 +89,14 @@ export type EventActuals = {
   entry30: string | null;
   topElims: Set<string>;
   hasData: boolean;
+  totalEntries: number;
+  remainingCount: number;
+  finalFourReady: boolean;
+  winnerReady: boolean;
+  entry1Ready: boolean;
+  entry2Ready: boolean;
+  entry30Ready: boolean;
+  mostElimsReady: boolean;
 };
 
 export type SectionPoints = {

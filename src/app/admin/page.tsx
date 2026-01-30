@@ -854,6 +854,25 @@ export default function AdminPage() {
     refreshData();
   };
 
+  const handleRemoveMatchEntrant = async (matchId: string, entrantId: string) => {
+    const shouldRemove = window.confirm(
+      "Remove this participant from the match?"
+    );
+    if (!shouldRemove) return;
+    setMessage(null);
+    const { error } = await supabase
+      .from("match_entrants")
+      .delete()
+      .eq("match_id", matchId)
+      .eq("entrant_id", entrantId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await handleRecalculateScores({ silent: true });
+    refreshData();
+  };
+
   const handleSetMatchWinner = async (matchId: string, winnerSideId: string) => {
     setMessage(null);
     const sideEntrants = matchEntrants.filter(
@@ -1058,7 +1077,9 @@ export default function AdminPage() {
         .eq("event_id", activeEvent.id),
       supabase
         .from("rumble_entries")
-        .select("id, entrant_id, entry_number, eliminated_at, eliminations_count")
+        .select(
+          "id, entrant_id, entry_number, eliminated_at, eliminations_count, is_confirmed"
+        )
         .eq("event_id", activeEvent.id),
       supabase
         .from("matches")
@@ -2080,13 +2101,22 @@ export default function AdminPage() {
                                 {entrants.map((entrant) => (
                                   <div
                                     key={entrant.id}
-                                    className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"
+                                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"
                                   >
                                     <EntrantCard
                                       name={entrant.name}
                                       promotion={entrant.promotion}
                                       imageUrl={entrant.image_url}
                                     />
+                                    <button
+                                      className="inline-flex h-8 items-center justify-center rounded-full border border-red-500/70 px-3 text-[10px] font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
+                                      type="button"
+                                      onClick={() =>
+                                        handleRemoveMatchEntrant(match.id, entrant.id)
+                                      }
+                                    >
+                                      Remove
+                                    </button>
                                   </div>
                                 ))}
                               </div>

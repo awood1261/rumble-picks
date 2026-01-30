@@ -56,6 +56,7 @@ type RumbleEntryRow = {
   entry_number: number | null;
   eliminated_at: string | null;
   eliminations_count: number;
+  is_confirmed?: boolean;
 };
 
 type MatchRow = {
@@ -102,6 +103,14 @@ const emptyActuals = {
   entry30: null,
   topElims: new Set<string>(),
   hasData: false,
+  totalEntries: 0,
+  remainingCount: 0,
+  finalFourReady: false,
+  winnerReady: false,
+  entry1Ready: false,
+  entry2Ready: false,
+  entry30Ready: false,
+  mostElimsReady: false,
 };
 
 export default function ScoreboardPicksPage() {
@@ -179,14 +188,26 @@ export default function ScoreboardPicksPage() {
       const eventEntries = rumbleEntries.filter(
         (entry) => entry.event_id === event.id
       );
-      const entrantSet = new Set(eventEntries.map((entry) => entry.entrant_id));
+      const entrantSet = new Set(
+        eventEntries
+          .filter((entry) => !entry.is_confirmed)
+          .map((entry) => entry.entrant_id)
+      );
       const finalFour = [...eventEntries]
         .sort((a, b) => getEliminationKey(b) - getEliminationKey(a))
         .slice(0, 4)
         .map((entry) => entry.entrant_id);
       const winners = eventEntries.filter((entry) => !entry.eliminated_at);
+      const totalEntries = eventEntries.length;
+      const remainingCount = winners.length;
+      const finalFourReady = totalEntries >= 4 && remainingCount <= 4;
+      const winnerReady = totalEntries >= 30 && remainingCount === 1;
+      const entry1Ready = Boolean(entry1);
+      const entry2Ready = Boolean(entry2);
+      const entry30Ready = Boolean(entry30);
+      const mostElimsReady = totalEntries >= 30 && remainingCount === 1;
       const winner =
-        eventEntries.length >= 30 && winners.length === 1
+        winnerReady
           ? winners[0].entrant_id
           : null;
       const entry1 =
@@ -210,13 +231,21 @@ export default function ScoreboardPicksPage() {
 
       byEvent[event.id] = {
         entrantSet,
-        finalFourSet: new Set(finalFour),
+        finalFourSet: finalFourReady ? new Set(finalFour) : new Set(),
         winner,
         entry1,
         entry2,
         entry30,
-        topElims,
-        hasData: eventEntries.length > 0,
+        topElims: mostElimsReady ? topElims : new Set(),
+        hasData: totalEntries > 0,
+        totalEntries,
+        remainingCount,
+        finalFourReady,
+        winnerReady,
+        entry1Ready,
+        entry2Ready,
+        entry30Ready,
+        mostElimsReady,
       };
     });
 
@@ -238,32 +267,50 @@ export default function ScoreboardPicksPage() {
       const entrantsCorrect = pick.entrants.filter((id) =>
         actuals.entrantSet.has(id)
       ).length;
-      const finalFourCorrect = pick.final_four.filter((id) =>
-        actuals.finalFourSet.has(id)
-      ).length;
+      const finalFourCorrect = actuals.finalFourReady
+        ? pick.final_four.filter((id) => actuals.finalFourSet.has(id)).length
+        : 0;
       const keyPicks =
-        (pick.winner && pick.winner === actuals.winner
+        (actuals.winnerReady &&
+        pick.winner &&
+        pick.winner === actuals.winner
           ? scoringRules.winner
           : 0) +
-        (pick.entry_1 && pick.entry_1 === actuals.entry1
+        (actuals.entry1Ready &&
+        pick.entry_1 &&
+        pick.entry_1 === actuals.entry1
           ? scoringRules.entry_1
           : 0) +
-        (pick.entry_2 && pick.entry_2 === actuals.entry2
+        (actuals.entry2Ready &&
+        pick.entry_2 &&
+        pick.entry_2 === actuals.entry2
           ? scoringRules.entry_2
           : 0) +
-        (pick.entry_30 && pick.entry_30 === actuals.entry30
+        (actuals.entry30Ready &&
+        pick.entry_30 &&
+        pick.entry_30 === actuals.entry30
           ? scoringRules.entry_30
           : 0) +
-        (pick.most_eliminations &&
+        (actuals.mostElimsReady &&
+        pick.most_eliminations &&
         actuals.topElims.has(pick.most_eliminations)
           ? scoringRules.most_eliminations
           : 0);
       const entrantsPoints = entrantsCorrect * scoringRules.entrants;
-      const finalFourPoints = finalFourCorrect * scoringRules.final_four;
+      const finalFourPoints = actuals.finalFourReady
+        ? finalFourCorrect * scoringRules.final_four
+        : 0;
       map[event.id] = {
         entrants: entrantsPoints,
         finalFour: finalFourPoints,
-        keyPicks,
+        keyPicks:
+          actuals.winnerReady ||
+          actuals.entry1Ready ||
+          actuals.entry2Ready ||
+          actuals.entry30Ready ||
+          actuals.mostElimsReady
+            ? keyPicks
+            : 0,
         total: entrantsPoints + finalFourPoints + keyPicks,
       };
     });
@@ -403,7 +450,9 @@ export default function ScoreboardPicksPage() {
       const eventIds = eventList.map((event) => event.id);
       const { data: entryRows, error: entryError } = await supabase
         .from("rumble_entries")
-        .select("event_id, entrant_id, entry_number, eliminated_at, eliminations_count")
+        .select(
+          "event_id, entrant_id, entry_number, eliminated_at, eliminations_count, is_confirmed"
+        )
         .in("event_id", eventIds);
       if (entryError) {
         setMessage(entryError.message);
@@ -716,7 +765,7 @@ export default function ScoreboardPicksPage() {
                       rumblePick.final_four,
                       actuals.finalFourSet,
                       scoringRules.final_four,
-                      actuals.hasData
+                      actuals.finalFourReady
                     )}
                   </div>
 
@@ -724,20 +773,46 @@ export default function ScoreboardPicksPage() {
                     <h3 className="text-lg font-semibold">Key Picks</h3>
                     <div className="mt-4 space-y-3 text-sm text-zinc-200">
                       {[
-                        ["Winner", rumblePick.winner, actuals.winner, scoringRules.winner],
-                        ["Entry #1", rumblePick.entry_1, actuals.entry1, scoringRules.entry_1],
-                        ["Entry #2", rumblePick.entry_2, actuals.entry2, scoringRules.entry_2],
-                        ["Entry #30", rumblePick.entry_30, actuals.entry30, scoringRules.entry_30],
+                        [
+                          "Winner",
+                          rumblePick.winner,
+                          actuals.winner,
+                          scoringRules.winner,
+                          actuals.winnerReady,
+                        ],
+                        [
+                          "Entry #1",
+                          rumblePick.entry_1,
+                          actuals.entry1,
+                          scoringRules.entry_1,
+                          actuals.entry1Ready,
+                        ],
+                        [
+                          "Entry #2",
+                          rumblePick.entry_2,
+                          actuals.entry2,
+                          scoringRules.entry_2,
+                          actuals.entry2Ready,
+                        ],
+                        [
+                          "Entry #30",
+                          rumblePick.entry_30,
+                          actuals.entry30,
+                          scoringRules.entry_30,
+                          actuals.entry30Ready,
+                        ],
                         [
                           "Most eliminations",
                           rumblePick.most_eliminations,
                           null,
                           scoringRules.most_eliminations,
+                          actuals.mostElimsReady,
                         ],
-                      ].map(([label, value, actual, points]) => {
+                      ].map(([label, value, actual, points, isReady]) => {
                         const entrant = value ? entrantMap.get(String(value)) : null;
+                        const ready = Boolean(isReady);
                         const isCorrect =
-                          actuals.hasData &&
+                          ready &&
                           (label === "Most eliminations"
                             ? value && actuals.topElims.has(String(value))
                             : value && actual === value);
@@ -745,7 +820,7 @@ export default function ScoreboardPicksPage() {
                           <div
                             key={label}
                             className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
-                              !actuals.hasData
+                              !ready
                                 ? "border-zinc-800"
                                 : isCorrect
                                   ? "border-emerald-400/60 bg-emerald-400/10"
@@ -758,7 +833,7 @@ export default function ScoreboardPicksPage() {
                               promotion={entrant?.promotion}
                               className="justify-end"
                             />
-                            {actuals.hasData && (
+                            {ready && (
                               <span
                                 className={`ml-3 text-[10px] font-semibold uppercase tracking-wide ${
                                   isCorrect ? "text-emerald-200" : "text-red-200"

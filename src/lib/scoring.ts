@@ -20,6 +20,7 @@ export type RumbleEntryRow = {
   entry_number: number | null;
   eliminated_at: string | null;
   eliminations_count: number;
+  is_confirmed?: boolean;
 };
 
 export type MatchRow = {
@@ -57,7 +58,16 @@ export const calculateScore = (
   const breakdown: Record<string, number> = {};
   let points = 0;
 
-  const entrantIds = new Set(rumbleEntries.map((entry) => entry.entrant_id));
+  const totalEntries = rumbleEntries.length;
+  const remainingCount = rumbleEntries.filter((entry) => !entry.eliminated_at).length;
+  const finalFourReady = totalEntries >= 4 && remainingCount <= 4;
+  const winnerReady = totalEntries >= 30 && remainingCount === 1;
+  const mostElimsReady = winnerReady;
+  const entrantIds = new Set(
+    rumbleEntries
+      .filter((entry) => !entry.is_confirmed)
+      .map((entry) => entry.entrant_id)
+  );
   const guessedEntrants = (payload.entrants ?? []).filter((id) =>
     entrantIds.has(id)
   );
@@ -72,12 +82,13 @@ export const calculateScore = (
   const guessedFinalFour = (payload.final_four ?? []).filter((id) =>
     finalFourSet.has(id)
   );
-  breakdown.final_four = guessedFinalFour.length * rules.final_four;
+  breakdown.final_four = finalFourReady
+    ? guessedFinalFour.length * rules.final_four
+    : 0;
   points += breakdown.final_four;
 
   const winners = rumbleEntries.filter((entry) => !entry.eliminated_at);
-  const actualWinner =
-    winners.length === 1 ? winners[0].entrant_id : null;
+  const actualWinner = winnerReady ? winners[0].entrant_id : null;
   breakdown.winner =
     actualWinner && payload.winner === actualWinner ? rules.winner : 0;
   points += breakdown.winner;
@@ -106,6 +117,7 @@ export const calculateScore = (
     .filter((entry) => entry.eliminations_count === maxEliminations)
     .map((entry) => entry.entrant_id);
   breakdown.most_eliminations =
+    mostElimsReady &&
     payload.most_eliminations &&
     topEliminators.includes(payload.most_eliminations)
       ? rules.most_eliminations

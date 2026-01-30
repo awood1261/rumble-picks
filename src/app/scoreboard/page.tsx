@@ -60,6 +60,7 @@ type RumbleEntryRow = {
   entrant_id: string;
   entry_number: number | null;
   eliminated_at: string | null;
+  is_confirmed?: boolean;
 };
 
 type EventEntrantRow = {
@@ -214,7 +215,14 @@ export default function ScoreboardPage() {
       if (!pick) {
         return { points: 0, breakdown: {} as Record<string, number> };
       }
-      const entrantIds = new Set(entries.map((entry) => entry.entrant_id));
+      const totalEntries = entries.length;
+      const remainingCount = entries.filter((entry) => !entry.eliminated_at).length;
+      const finalFourReady = totalEntries >= 4 && remainingCount <= 4;
+      const winnerReady = totalEntries >= 30 && remainingCount === 1;
+      const mostElimsReady = winnerReady;
+      const entrantIds = new Set(
+        entries.filter((entry) => !entry.is_confirmed).map((entry) => entry.entrant_id)
+      );
       const correctEntrants = (pick.entrants ?? []).filter((id) =>
         entrantIds.has(id)
       );
@@ -226,13 +234,13 @@ export default function ScoreboardPage() {
         })
         .slice(0, 4)
         .map((entry) => entry.entrant_id);
-      const finalFourSet = new Set(finalFour);
+      const finalFourSet = finalFourReady ? new Set(finalFour) : new Set();
       const correctFinalFour = (pick.final_four ?? []).filter((id) =>
         finalFourSet.has(id)
       );
       const winners = entries.filter((entry) => !entry.eliminated_at);
       const actualWinner =
-        entries.length >= 30 && winners.length === 1 ? winners[0].entrant_id : null;
+        winnerReady ? winners[0].entrant_id : null;
       const entryOne = entries.find((entry) => entry.entry_number === 1)?.entrant_id ?? null;
       const entryTwo = entries.find((entry) => entry.entry_number === 2)?.entrant_id ?? null;
       const entryThirty = entries.find((entry) => entry.entry_number === 30)?.entrant_id ?? null;
@@ -248,14 +256,21 @@ export default function ScoreboardPage() {
 
       const breakdown = {
         entrants: correctEntrants.length * scoringRules.entrants,
-        final_four: correctFinalFour.length * scoringRules.final_four,
+        final_four: finalFourReady
+          ? correctFinalFour.length * scoringRules.final_four
+          : 0,
         winner:
           actualWinner && pick.winner === actualWinner ? scoringRules.winner : 0,
-        entry_1: pick.entry_1 && pick.entry_1 === entryOne ? scoringRules.entry_1 : 0,
-        entry_2: pick.entry_2 && pick.entry_2 === entryTwo ? scoringRules.entry_2 : 0,
-        entry_30: pick.entry_30 && pick.entry_30 === entryThirty ? scoringRules.entry_30 : 0,
+        entry_1:
+          pick.entry_1 && pick.entry_1 === entryOne ? scoringRules.entry_1 : 0,
+        entry_2:
+          pick.entry_2 && pick.entry_2 === entryTwo ? scoringRules.entry_2 : 0,
+        entry_30:
+          pick.entry_30 && pick.entry_30 === entryThirty ? scoringRules.entry_30 : 0,
         most_eliminations:
-          pick.most_eliminations && topElims.has(pick.most_eliminations)
+          mostElimsReady &&
+          pick.most_eliminations &&
+          topElims.has(pick.most_eliminations)
             ? scoringRules.most_eliminations
             : 0,
       };
@@ -406,7 +421,7 @@ export default function ScoreboardPage() {
     const eventIds = showEvents.map((event) => event.id);
       const { data: entryRows, error } = await supabase
       .from("rumble_entries")
-      .select("event_id, entrant_id, entry_number, eliminated_at")
+      .select("event_id, entrant_id, entry_number, eliminated_at, is_confirmed")
       .in("event_id", eventIds);
     if (error) {
       setMessage(error.message);

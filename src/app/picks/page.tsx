@@ -61,6 +61,14 @@ const emptyActuals: EventActuals = {
   entry30: null,
   topElims: new Set(),
   hasData: false,
+  totalEntries: 0,
+  remainingCount: 0,
+  finalFourReady: false,
+  winnerReady: false,
+  entry1Ready: false,
+  entry2Ready: false,
+  entry30Ready: false,
+  mostElimsReady: false,
 };
 
 export default function PicksPage() {
@@ -291,14 +299,23 @@ export default function PicksPage() {
       const eventEntries = rumbleEntries.filter(
         (entry) => entry.event_id === event.id
       );
-      const entrantSet = new Set(eventEntries.map((entry) => entry.entrant_id));
+      const entrantSet = new Set(
+        eventEntries
+          .filter((entry) => !entry.is_confirmed)
+          .map((entry) => entry.entrant_id)
+      );
       const finalFour = [...eventEntries]
         .sort((a, b) => getEliminationKey(b) - getEliminationKey(a))
         .slice(0, 4)
         .map((entry) => entry.entrant_id);
       const winners = eventEntries.filter((entry) => !entry.eliminated_at);
+      const totalEntries = eventEntries.length;
+      const remainingCount = winners.length;
+      const finalFourReady = totalEntries >= 4 && remainingCount <= 4;
+      const winnerReady = totalEntries >= 30 && remainingCount === 1;
+      const mostElimsReady = totalEntries >= 30 && remainingCount === 1;
       const winner =
-        eventEntries.length >= 30 && winners.length === 1
+        winnerReady
           ? winners[0].entrant_id
           : null;
       const entry1 =
@@ -310,6 +327,9 @@ export default function PicksPage() {
       const entry30 =
         eventEntries.find((entry) => entry.entry_number === 30)?.entrant_id ??
         null;
+      const entry1Ready = Boolean(entry1);
+      const entry2Ready = Boolean(entry2);
+      const entry30Ready = Boolean(entry30);
       const maxElims = eventEntries.reduce(
         (max, entry) => Math.max(max, entry.eliminations_count ?? 0),
         0
@@ -322,13 +342,21 @@ export default function PicksPage() {
 
       byEvent[event.id] = {
         entrantSet,
-        finalFourSet: new Set(finalFour),
+        finalFourSet: finalFourReady ? new Set(finalFour) : new Set(),
         winner,
         entry1,
         entry2,
         entry30,
-        topElims,
-        hasData: eventEntries.length > 0,
+        topElims: mostElimsReady ? topElims : new Set(),
+        hasData: totalEntries > 0,
+        totalEntries,
+        remainingCount,
+        finalFourReady,
+        winnerReady,
+        entry1Ready,
+        entry2Ready,
+        entry30Ready,
+        mostElimsReady,
       };
     });
     return byEvent;
@@ -383,30 +411,48 @@ export default function PicksPage() {
       const entrantsCorrect = pick.entrants.filter((id) =>
         actuals.entrantSet.has(id)
       ).length;
-      const finalFourCorrect = pick.final_four.filter((id) =>
-        actuals.finalFourSet.has(id)
-      ).length;
+      const finalFourCorrect = actuals.finalFourReady
+        ? pick.final_four.filter((id) => actuals.finalFourSet.has(id)).length
+        : 0;
       const keyPicksTotal =
-        (pick.winner && pick.winner === actuals.winner
+        (actuals.winnerReady &&
+        pick.winner &&
+        pick.winner === actuals.winner
           ? scoringRules.winner
           : 0) +
-        (pick.entry_1 && pick.entry_1 === actuals.entry1
+        (actuals.entry1Ready &&
+        pick.entry_1 &&
+        pick.entry_1 === actuals.entry1
           ? scoringRules.entry_1
           : 0) +
-        (pick.entry_2 && pick.entry_2 === actuals.entry2
+        (actuals.entry2Ready &&
+        pick.entry_2 &&
+        pick.entry_2 === actuals.entry2
           ? scoringRules.entry_2
           : 0) +
-        (pick.entry_30 && pick.entry_30 === actuals.entry30
+        (actuals.entry30Ready &&
+        pick.entry_30 &&
+        pick.entry_30 === actuals.entry30
           ? scoringRules.entry_30
           : 0) +
-        (pick.most_eliminations && actuals.topElims.has(pick.most_eliminations)
+        (actuals.mostElimsReady &&
+        pick.most_eliminations &&
+        actuals.topElims.has(pick.most_eliminations)
           ? scoringRules.most_eliminations
           : 0);
 
       byEvent[event.id] = {
         entrants: entrantsCorrect * scoringRules.entrants,
-        finalFour: finalFourCorrect * scoringRules.final_four,
-        keyPicks: keyPicksTotal,
+        finalFour: actuals.finalFourReady
+          ? finalFourCorrect * scoringRules.final_four
+          : 0,
+        keyPicks: actuals.winnerReady ||
+          actuals.entry1Ready ||
+          actuals.entry2Ready ||
+          actuals.entry30Ready ||
+          actuals.mostElimsReady
+          ? keyPicksTotal
+          : 0,
       };
     });
     return byEvent;
@@ -949,6 +995,7 @@ export default function PicksPage() {
                   <RumbleSummarySection
                     key={event.id}
                     event={event}
+                    showName={selectedShow?.name ?? null}
                     eventPick={eventPick}
                     actuals={eventActuals}
                     points={points}

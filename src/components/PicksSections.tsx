@@ -114,6 +114,7 @@ export const ShowSelector = ({
 
 type RumbleSummarySectionProps = {
   event: EventRow;
+  showName: string | null;
   eventPick: RumblePick;
   actuals: EventActuals;
   points: SectionPoints;
@@ -125,6 +126,7 @@ type RumbleSummarySectionProps = {
 
 export const RumbleSummarySection = ({
   event,
+  showName,
   eventPick,
   actuals,
   points,
@@ -208,135 +210,197 @@ export const RumbleSummarySection = ({
   return (
     <section className="mt-8">
       <div className="flex flex-col gap-2">
-        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-          {event.rumble_gender ? `${event.rumble_gender} rumble` : "Rumble"}
-        </p>
-        <h2 className="text-xl font-semibold">{event.name}</h2>
+        <h2 className="text-xl font-semibold">{showName ?? event.name}</h2>
       </div>
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Entrants</h3>
-            <button
-              className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
-              type="button"
-              onClick={() => onEdit("entrants")}
-              disabled={isLocked}
-            >
-              <EditIcon />
-              Edit
-            </button>
-          </div>
-          <p className="mt-2 text-sm text-zinc-400">
-            {eventPick.entrants.length} selected
+      <div className="mt-6 rounded-3xl border border-amber-400/20 bg-gradient-to-b from-amber-500/5 via-zinc-900/70 to-zinc-950/90 p-4 sm:p-6">
+        <div className="flex flex-col gap-1">
+          <p className="text-xs uppercase tracking-[0.3em] text-amber-200/80">
+            {event.name}
           </p>
-          {points.entrants !== null && (
-            <p className="mt-1 text-xs text-emerald-200">
-              Points: {points.entrants}
-            </p>
-          )}
-          {renderPickList(
-            eventPick.entrants,
-            actuals.entrantSet,
-            scoringRules.entrants,
-            actuals.hasData
-          )}
-        </div>
-        <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Final Four</h3>
-            <button
-              className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
-              type="button"
-              onClick={() => onEdit("final_four")}
-              disabled={isLocked}
-            >
-              <EditIcon />
-              Edit
-            </button>
-          </div>
-          <p className="mt-2 text-sm text-zinc-400">
-            {eventPick.final_four.length} selected
+          <h3 className="text-lg font-semibold text-zinc-100">Entrants, Final Four, Key Picks</h3>
+          <p className="text-xs text-zinc-400">
+            Everything below is tied to this rumble event.
           </p>
-          {points.finalFour !== null && (
-            <p className="mt-1 text-xs text-emerald-200">
-              Points: {points.finalFour}
-            </p>
-          )}
-          {renderPickList(
-            eventPick.final_four,
-            actuals.finalFourSet,
-            scoringRules.final_four,
-            actuals.hasData
-          )}
         </div>
-        <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Key Picks</h3>
-            <button
-              className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
-              type="button"
-              onClick={() => onEdit("key_picks")}
-              disabled={isLocked}
-            >
-              <EditIcon />
-              Edit
-            </button>
-          </div>
-          {points.keyPicks !== null && (
-            <p className="mt-2 text-xs text-emerald-200">
-              Points: {points.keyPicks}
+        <div className="mt-4 grid gap-4">
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <div className="flex items-center justify-between">
+              <h4 className="text-lg font-semibold">Entrants</h4>
+              <button
+                className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
+                type="button"
+                onClick={() => onEdit("entrants")}
+                disabled={isLocked}
+              >
+                <EditIcon />
+                Edit
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-zinc-400">
+              {eventPick.entrants.length} selected
             </p>
-          )}
-          <div className="mt-4 space-y-3 text-sm text-zinc-200">
-            {[
-              ["Winner", eventPick.winner, actuals.winner, scoringRules.winner],
-              ["Entry #1", eventPick.entry_1, actuals.entry1, scoringRules.entry_1],
-              ["Entry #2", eventPick.entry_2, actuals.entry2, scoringRules.entry_2],
-              ["Entry #30", eventPick.entry_30, actuals.entry30, scoringRules.entry_30],
-              [
-                "Most eliminations",
-                eventPick.most_eliminations,
-                null,
-                scoringRules.most_eliminations,
-              ],
-            ].map(([label, value, actual, pointsValue]) => {
-              const entrant = value ? getEntrant(String(value)) : null;
-              const isCorrect =
-                actuals.hasData &&
-                (label === "Most eliminations"
-                  ? value && actuals.topElims.has(String(value))
-                  : value && actual === value);
-              return (
-                <div
-                  key={label as string}
-                  className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
-                    !actuals.hasData
-                      ? "border-zinc-800"
-                      : isCorrect
-                        ? "border-emerald-400/60 bg-emerald-400/10"
-                        : "border-red-500/50 bg-red-500/10"
-                  }`}
-                >
-                  <span className="text-zinc-400">{label}</span>
-                  <EntrantCard
-                    name={entrant?.name ?? "Not set"}
-                    promotion={entrant?.promotion}
-                    imageUrl={entrant?.image_url}
-                    className="justify-end"
-                  />
-                  {actuals.hasData && (
-                    <span
-                      className={`ml-3 text-[10px] font-semibold uppercase tracking-wide ${
-                        isCorrect ? "text-emerald-200" : "text-red-200"
-                      }`}
-                    >
-                      {isCorrect ? `+${pointsValue} pts` : "0 pts"}
-                    </span>
+            {points.entrants !== null && (
+              <p className="mt-1 text-xs text-emerald-200">
+                Points: {points.entrants}
+              </p>
+            )}
+            {renderPickList(
+              eventPick.entrants,
+              actuals.entrantSet,
+              scoringRules.entrants,
+              actuals.hasData
+            )}
+          </div>
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-lg font-semibold">Final Four</h4>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    {eventPick.final_four.length} selected
+                  </p>
+                  {points.finalFour !== null && actuals.finalFourReady && (
+                    <p className="mt-1 text-[10px] text-emerald-200">
+                      Points: {points.finalFour}
+                    </p>
                   )}
                 </div>
-              );
-            })}
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200/40 text-amber-200 transition group-open:rotate-180">
+                  <ChevronIcon />
+                </span>
+              </summary>
+              <div className="mt-4">
+                <button
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
+                  type="button"
+                  onClick={() => onEdit("final_four")}
+                  disabled={isLocked}
+                >
+                  <EditIcon />
+                  Edit
+                </button>
+                <div className="mt-3">
+                  {renderPickList(
+                    eventPick.final_four,
+                    actuals.finalFourSet,
+                    scoringRules.final_four,
+                    actuals.finalFourReady
+                  )}
+                </div>
+              </div>
+            </details>
+          </div>
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-lg font-semibold">Key Picks</h4>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    Winner: {eventPick.winner ? getEntrant(eventPick.winner)?.name ?? "Selected" : "Not set"}
+                  </p>
+                  {points.keyPicks !== null &&
+                    (actuals.winnerReady ||
+                      actuals.entry1Ready ||
+                      actuals.entry2Ready ||
+                      actuals.entry30Ready ||
+                      actuals.mostElimsReady) && (
+                    <p className="mt-1 text-[10px] text-emerald-200">
+                      Points: {points.keyPicks}
+                    </p>
+                  )}
+                </div>
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200/40 text-amber-200 transition group-open:rotate-180">
+                  <ChevronIcon />
+                </span>
+              </summary>
+              <div className="mt-4">
+                <button
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
+                  type="button"
+                  onClick={() => onEdit("key_picks")}
+                  disabled={isLocked}
+                >
+                  <EditIcon />
+                  Edit
+                </button>
+                <div className="mt-4 space-y-3 text-sm text-zinc-200">
+                  {[
+                    [
+                      "Winner",
+                      eventPick.winner,
+                      actuals.winner,
+                      scoringRules.winner,
+                      actuals.winnerReady,
+                    ],
+                    [
+                      "Entry #1",
+                      eventPick.entry_1,
+                      actuals.entry1,
+                      scoringRules.entry_1,
+                      actuals.entry1Ready,
+                    ],
+                    [
+                      "Entry #2",
+                      eventPick.entry_2,
+                      actuals.entry2,
+                      scoringRules.entry_2,
+                      actuals.entry2Ready,
+                    ],
+                    [
+                      "Entry #30",
+                      eventPick.entry_30,
+                      actuals.entry30,
+                      scoringRules.entry_30,
+                      actuals.entry30Ready,
+                    ],
+                    [
+                      "Most eliminations",
+                      eventPick.most_eliminations,
+                      null,
+                      scoringRules.most_eliminations,
+                      actuals.mostElimsReady,
+                    ],
+                  ].map(([label, value, actual, pointsValue, isReady]) => {
+                    const entrant = value ? getEntrant(String(value)) : null;
+                    const ready = Boolean(isReady);
+                    const isCorrect =
+                      ready &&
+                      (label === "Most eliminations"
+                        ? value && actuals.topElims.has(String(value))
+                        : value && actual === value);
+                    return (
+                      <div
+                        key={label as string}
+                        className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
+                          !ready
+                            ? "border-zinc-800"
+                            : isCorrect
+                              ? "border-emerald-400/60 bg-emerald-400/10"
+                              : "border-red-500/50 bg-red-500/10"
+                        }`}
+                      >
+                        <span className="text-zinc-400">{label}</span>
+                        <EntrantCard
+                          name={entrant?.name ?? "Not set"}
+                          promotion={entrant?.promotion}
+                          imageUrl={entrant?.image_url}
+                          className="justify-end"
+                        />
+                        {ready && (
+                          <span
+                            className={`ml-3 text-[10px] font-semibold uppercase tracking-wide ${
+                              isCorrect ? "text-emerald-200" : "text-red-200"
+                            }`}
+                          >
+                            {isCorrect ? `+${pointsValue} pts` : "0 pts"}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </details>
           </div>
         </div>
       </div>
@@ -898,6 +962,7 @@ export const MatchPicksSection = ({
             finishPick.method === "pinfall" || finishPick.method === "submission";
           const showFinishWinner = !isSingles && !isTripleOrFatal;
           const showFinishLoser = !isSingles;
+          const hasWinnerPick = Boolean(payload.match_picks[match.id]);
 
           return (
             <div
@@ -999,7 +1064,7 @@ export const MatchPicksSection = ({
                           },
                         }));
                       }}
-                      disabled={isLocked}
+                      disabled={isLocked || !hasWinnerPick}
                     >
                       <option value="">Select finish</option>
                       <option value="pinfall">Pinfall</option>
@@ -1024,6 +1089,7 @@ export const MatchPicksSection = ({
                         }
                         disabled={
                           isLocked ||
+                          !hasWinnerPick ||
                           !finishRequiresEntrants ||
                           (isTag && !winningSideId)
                         }
@@ -1056,6 +1122,7 @@ export const MatchPicksSection = ({
                         }
                         disabled={
                           isLocked ||
+                          !hasWinnerPick ||
                           !finishRequiresEntrants ||
                           (isTag && !winningSideId)
                         }
@@ -1288,5 +1355,20 @@ const EditIcon = () => (
   >
     <path d="M12 20h9" />
     <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+  </svg>
+);
+
+const ChevronIcon = () => (
+  <svg
+    className="h-4 w-4"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="m6 9 6 6 6-6" />
   </svg>
 );
