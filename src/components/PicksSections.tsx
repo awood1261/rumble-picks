@@ -138,6 +138,48 @@ export const RumbleSummarySection = ({
   const getEntrant = (id: string | null) =>
     id ? entrantByIdAll.get(id) ?? null : null;
 
+  const renderGhostStrip = (
+    ids: string[],
+    maxVisible = 3,
+    className = ""
+  ) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean);
+    if (uniqueIds.length === 0) return null;
+    const visible = uniqueIds.slice(0, maxVisible);
+    return (
+      <div
+        className={`pointer-events-none absolute inset-0 z-0 flex items-stretch justify-end -space-x-6 overflow-hidden opacity-60 transition-opacity duration-300 ${className}`}
+      >
+        {visible.map((id) => {
+          const entrant = getEntrant(id);
+          const name = entrant?.name ?? "Unknown";
+          return (
+            <div
+              key={id}
+              className="relative h-full w-20 overflow-hidden rounded-none border-l border-zinc-800 bg-gradient-to-b from-amber-400/40 via-zinc-900 to-zinc-950 shadow-sm sm:w-28"
+              title={name}
+            >
+              {entrant?.image_url ? (
+                <img
+                  src={entrant.image_url}
+                  alt={name}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  onError={(event) => {
+                    event.currentTarget.style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="h-full w-full" />
+              )}
+            </div>
+          );
+        })}
+        <div className="absolute inset-0 bg-gradient-to-l from-transparent via-zinc-950/35 to-zinc-950" />
+      </div>
+    );
+  };
+
   const renderPickList = (
     ids: string[],
     correctSet: Set<string>,
@@ -214,10 +256,10 @@ export const RumbleSummarySection = ({
       </div>
       <div className="mt-6 rounded-3xl border border-amber-400/20 bg-gradient-to-b from-amber-500/5 via-zinc-900/70 to-zinc-950/90 p-4 sm:p-6">
         <div className="mt-4 grid gap-4">
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <details className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-                <div>
+          <div className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <details className="group peer">
+              <summary className="relative flex cursor-pointer list-none items-center justify-between gap-3 overflow-hidden">
+                <div className="relative z-10">
                   <h4 className="text-lg font-semibold">Entrants</h4>
                   <p className="mt-1 text-xs text-zinc-400">
                     {eventPick.entrants.length} selected
@@ -228,7 +270,7 @@ export const RumbleSummarySection = ({
                     </p>
                   )}
                 </div>
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200/40 text-amber-200 transition group-open:rotate-180">
+                <span className="pointer-events-none absolute right-4 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
                   <ChevronIcon />
                 </span>
               </summary>
@@ -252,11 +294,12 @@ export const RumbleSummarySection = ({
                 </div>
               </div>
             </details>
+            {renderGhostStrip(eventPick.entrants, 3, "peer-open:hidden")}
           </div>
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <details className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-                <div>
+          <div className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <details className="group peer">
+              <summary className="relative flex cursor-pointer list-none items-center justify-between gap-3 overflow-hidden">
+                <div className="relative z-10">
                   <h4 className="text-lg font-semibold">Final Four</h4>
                   <p className="mt-1 text-xs text-zinc-400">
                     {eventPick.final_four.length} selected
@@ -265,7 +308,7 @@ export const RumbleSummarySection = ({
                     Points: {points.finalFour ?? "—"}
                   </p>
                 </div>
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200/40 text-amber-200 transition group-open:rotate-180">
+                <span className="pointer-events-none absolute right-4 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
                   <ChevronIcon />
                 </span>
               </summary>
@@ -289,11 +332,12 @@ export const RumbleSummarySection = ({
                 </div>
               </div>
             </details>
+            {renderGhostStrip(eventPick.final_four, 3, "peer-open:hidden")}
           </div>
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <details className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-                <div>
+          <div className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <details className="group peer">
+              <summary className="relative flex cursor-pointer list-none items-center justify-between gap-3 overflow-hidden">
+                <div className="relative z-10">
                   <h4 className="text-lg font-semibold">Key Picks</h4>
                   <p className="mt-1 text-xs text-zinc-400">
                     Winner: {eventPick.winner ? getEntrant(eventPick.winner)?.name ?? "Selected" : "Not set"}
@@ -302,7 +346,7 @@ export const RumbleSummarySection = ({
                     Points: {points.keyPicks ?? "—"}
                   </p>
                 </div>
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200/40 text-amber-200 transition group-open:rotate-180">
+                <span className="pointer-events-none absolute right-4 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
                   <ChevronIcon />
                 </span>
               </summary>
@@ -394,6 +438,17 @@ export const RumbleSummarySection = ({
                 </div>
               </div>
             </details>
+            {renderGhostStrip(
+              [
+                eventPick.winner,
+                eventPick.entry_1,
+                eventPick.entry_2,
+                eventPick.entry_30,
+                eventPick.most_eliminations,
+              ].filter(Boolean) as string[],
+              3,
+              "peer-open:hidden"
+            )}
           </div>
         </div>
       </div>
