@@ -210,46 +210,48 @@ export const RumbleSummarySection = ({
   return (
     <section className="mt-8">
       <div className="flex flex-col gap-2">
-        <h2 className="text-xl font-semibold">{showName ?? event.name}</h2>
+        <h2 className="text-xl font-semibold">{event.name}</h2>
       </div>
       <div className="mt-6 rounded-3xl border border-amber-400/20 bg-gradient-to-b from-amber-500/5 via-zinc-900/70 to-zinc-950/90 p-4 sm:p-6">
-        <div className="flex flex-col gap-1">
-          <p className="text-xs uppercase tracking-[0.3em] text-amber-200/80">
-            {event.name}
-          </p>
-          <h3 className="text-lg font-semibold text-zinc-100">Entrants, Final Four, Key Picks</h3>
-          <p className="text-xs text-zinc-400">
-            Everything below is tied to this rumble event.
-          </p>
-        </div>
         <div className="mt-4 grid gap-4">
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <div className="flex items-center justify-between">
-              <h4 className="text-lg font-semibold">Entrants</h4>
-              <button
-                className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
-                type="button"
-                onClick={() => onEdit("entrants")}
-                disabled={isLocked}
-              >
-                <EditIcon />
-                Edit
-              </button>
-            </div>
-            <p className="mt-2 text-sm text-zinc-400">
-              {eventPick.entrants.length} selected
-            </p>
-            {points.entrants !== null && (
-              <p className="mt-1 text-xs text-emerald-200">
-                Points: {points.entrants}
-              </p>
-            )}
-            {renderPickList(
-              eventPick.entrants,
-              actuals.entrantSet,
-              scoringRules.entrants,
-              actuals.hasData
-            )}
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-lg font-semibold">Entrants</h4>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    {eventPick.entrants.length} selected
+                  </p>
+                  {points.entrants !== null && (
+                    <p className="mt-1 text-[10px] text-emerald-200">
+                      Points: {points.entrants}
+                    </p>
+                  )}
+                </div>
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200/40 text-amber-200 transition group-open:rotate-180">
+                  <ChevronIcon />
+                </span>
+              </summary>
+              <div className="mt-4">
+                <button
+                  className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
+                  type="button"
+                  onClick={() => onEdit("entrants")}
+                  disabled={isLocked}
+                >
+                  <EditIcon />
+                  Edit
+                </button>
+                <div className="mt-3">
+                  {renderPickList(
+                    eventPick.entrants,
+                    actuals.entrantSet,
+                    scoringRules.entrants,
+                    actuals.hasData
+                  )}
+                </div>
+              </div>
+            </details>
           </div>
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <details className="group">
@@ -259,11 +261,9 @@ export const RumbleSummarySection = ({
                   <p className="mt-1 text-xs text-zinc-400">
                     {eventPick.final_four.length} selected
                   </p>
-                  {points.finalFour !== null && actuals.finalFourReady && (
-                    <p className="mt-1 text-[10px] text-emerald-200">
-                      Points: {points.finalFour}
-                    </p>
-                  )}
+                  <p className="mt-1 text-[10px] text-emerald-200">
+                    Points: {points.finalFour ?? "—"}
+                  </p>
                 </div>
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200/40 text-amber-200 transition group-open:rotate-180">
                   <ChevronIcon />
@@ -298,16 +298,9 @@ export const RumbleSummarySection = ({
                   <p className="mt-1 text-xs text-zinc-400">
                     Winner: {eventPick.winner ? getEntrant(eventPick.winner)?.name ?? "Selected" : "Not set"}
                   </p>
-                  {points.keyPicks !== null &&
-                    (actuals.winnerReady ||
-                      actuals.entry1Ready ||
-                      actuals.entry2Ready ||
-                      actuals.entry30Ready ||
-                      actuals.mostElimsReady) && (
-                    <p className="mt-1 text-[10px] text-emerald-200">
-                      Points: {points.keyPicks}
-                    </p>
-                  )}
+                  <p className="mt-1 text-[10px] text-emerald-200">
+                    Points: {points.keyPicks ?? "—"}
+                  </p>
                 </div>
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200/40 text-amber-200 transition group-open:rotate-180">
                   <ChevronIcon />

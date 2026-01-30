@@ -224,6 +224,13 @@ export default function AdminPage() {
       setScrollMatchId(null);
     }
   }, [adminTab, scrollMatchId]);
+  const scrollToEventEditor = () => {
+    requestAnimationFrame(() => {
+      const target = document.getElementById("event-editor");
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
@@ -1006,10 +1013,16 @@ export default function AdminPage() {
       }
       return;
     }
+    if (entryConfirmed) {
+      if (entryNumber) {
+        setEntryNumber("");
+      }
+      return;
+    }
     if (!entryNumber) {
       setEntryNumber(String(entries.length + 1));
     }
-  }, [entryEntrantId, entryNumber, entries.length]);
+  }, [entryEntrantId, entryNumber, entries.length, entryConfirmed]);
 
   const handleElimination = async () => {
     setMessage(null);
@@ -1326,8 +1339,12 @@ export default function AdminPage() {
                           className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
                           type="button"
                           onClick={() => {
+                            if (event.show_id) {
+                              setSelectedShowId(event.show_id);
+                            }
                             setSelectedEventId(event.id);
                             setAdminTab("events");
+                            scrollToEventEditor();
                           }}
                         >
                           Edit event
@@ -1422,7 +1439,10 @@ export default function AdminPage() {
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
           {adminTab === "events" && (
-            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <div
+              id="event-editor"
+              className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6"
+            >
             <h2 className="text-lg font-semibold">Create event</h2>
             <p className="mt-2 text-sm text-zinc-400">
               Add a new rumble event and define its roster settings.
@@ -1642,13 +1662,20 @@ export default function AdminPage() {
               placeholder="Entry number (optional)"
               value={entryNumber}
               onChange={(event) => setEntryNumber(event.target.value)}
+              disabled={entryConfirmed}
             />
             <label className="flex items-center gap-2 text-xs text-zinc-300">
               <input
                 type="checkbox"
                 className="h-4 w-4 rounded border border-zinc-700 bg-zinc-900"
                 checked={entryConfirmed}
-                onChange={(event) => setEntryConfirmed(event.target.checked)}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setEntryConfirmed(checked);
+                  if (checked) {
+                    setEntryNumber("");
+                  }
+                }}
               />
               Mark as confirmed entrant
             </label>
