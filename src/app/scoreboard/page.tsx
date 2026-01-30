@@ -200,6 +200,14 @@ export default function ScoreboardPage() {
     return map;
   }, [entriesByEvent, eventEntrants]);
 
+  const eventProgressItems = useMemo(() => {
+    return showEvents.map((event) => {
+      const total = entriesByEvent[event.id]?.length ?? 0;
+      const remaining = remainingEntrantsByEvent[event.id]?.length ?? 0;
+      return `${event.name}: ${total} entrants • ${remaining} remaining`;
+    });
+  }, [entriesByEvent, remainingEntrantsByEvent, showEvents]);
+
   const eliminatedEntrantIdsByEvent = useMemo(() => {
     const map: Record<string, Set<string>> = {};
     Object.entries(entriesByEvent).forEach(([eventId, entries]) => {
@@ -614,6 +622,7 @@ export default function ScoreboardPage() {
         className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+4px)] left-0 right-0 z-40 px-6 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6px)]"
         intervalMs={SCOREBOARD_POLL_INTERVAL_MS}
         lastUpdateAt={lastUpdateAt}
+        tickerItems={eventProgressItems}
       />
       <main className="mx-auto w-full max-w-5xl pb-10 pt-10">
         <header className="flex flex-col gap-2">
@@ -655,98 +664,6 @@ export default function ScoreboardPage() {
         )}
 
         <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          <div className="mb-6 space-y-4">
-            {showEvents.length > 0 &&
-              showEvents.map((event) => {
-                const eventEntries = entriesByEvent[event.id] ?? [];
-                const eliminatedSet = eliminatedEntrantIdsByEvent[event.id] ?? new Set();
-                const remainingEntrants = remainingEntrantsByEvent[event.id] ?? [];
-                const winnerEntrantId = winnerEntrantsByEvent[event.id];
-                const entrantsForEvent = eventEntrants.filter((entrant) =>
-                  eventEntries.some((entry) => entry.entrant_id === entrant.id)
-                );
-                return (
-                  <div
-                    key={event.id}
-                    className="grid gap-4 lg:grid-cols-2"
-                  >
-                    <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-[11px]">
-                      <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
-                        {event.name} entrants
-                        <span className="text-zinc-600 transition group-open:rotate-180">
-                          ▾
-                        </span>
-                      </summary>
-                      {entrantsForEvent.length === 0 ? (
-                        <p className="mt-3 text-zinc-400">No entrants added yet.</p>
-                      ) : (
-                        <ul className="mt-3 max-h-28 space-y-2 overflow-y-auto pr-1 text-zinc-300">
-                          {[...entrantsForEvent]
-                            .sort((a, b) => {
-                              const aNum = entryNumberMap.get(a.id);
-                              const bNum = entryNumberMap.get(b.id);
-                              if (aNum == null && bNum == null) return a.name.localeCompare(b.name);
-                              if (aNum == null) return 1;
-                              if (bNum == null) return -1;
-                              return aNum - bNum;
-                            })
-                            .map((entrant) => {
-                              const eliminated = eliminatedSet.has(entrant.id);
-                              return (
-                                <li
-                                  key={entrant.id}
-                                  className="flex items-center justify-between gap-2"
-                                >
-                                  <span
-                                    className={
-                                      eliminated ? "text-red-200" : "text-zinc-300"
-                                    }
-                                  >
-                                    <span className="mr-2 text-[10px] font-semibold text-zinc-400">
-                                      #{entryNumberMap.get(entrant.id) ?? "—"}
-                                    </span>
-                                    {entrant.name}
-                                    {entrant.promotion ? ` • ${entrant.promotion}` : ""}
-                                  </span>
-                                  {eliminated ? (
-                                    <span className="rounded-full border border-red-500/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-200">
-                                      Eliminated
-                                    </span>
-                                  ) : null}
-                                </li>
-                              );
-                            })}
-                        </ul>
-                      )}
-                    </details>
-                    <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 text-[11px]">
-                      <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
-                        {event.name} remaining
-                        <span className="text-zinc-600 transition group-open:rotate-180">
-                          ▾
-                        </span>
-                      </summary>
-                      {remainingEntrants.length === 0 ? (
-                        <p className="mt-3 text-zinc-400">
-                          {winnerEntrantId
-                            ? "Winner determined."
-                            : "All entrants eliminated."}
-                        </p>
-                      ) : (
-                        <ul className="mt-3 max-h-28 space-y-2 overflow-y-auto pr-1 text-zinc-300">
-                          {remainingEntrants.map((entrant) => (
-                            <li key={entrant.id}>
-                              {entrant.name}
-                              {entrant.promotion ? ` • ${entrant.promotion}` : ""}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </details>
-                  </div>
-                );
-              })}
-          </div>
           {currentUserIndex !== null && (
             <div className="mb-6 rounded-2xl border border-sky-400/40 bg-sky-400/5 px-4 py-3 text-sm text-sky-100">
               You are currently <span className="font-semibold">#{currentUserIndex + 1}</span> in this show.

@@ -202,10 +202,6 @@ export default function ScoreboardPicksPage() {
       const remainingCount = winners.length;
       const finalFourReady = totalEntries >= 4 && remainingCount <= 4;
       const winnerReady = totalEntries >= 30 && remainingCount === 1;
-      const entry1Ready = Boolean(entry1);
-      const entry2Ready = Boolean(entry2);
-      const entry30Ready = Boolean(entry30);
-      const mostElimsReady = totalEntries >= 30 && remainingCount === 1;
       const winner =
         winnerReady
           ? winners[0].entrant_id
@@ -219,6 +215,10 @@ export default function ScoreboardPicksPage() {
       const entry30 =
         eventEntries.find((entry) => entry.entry_number === 30)?.entrant_id ??
         null;
+      const entry1Ready = Boolean(entry1);
+      const entry2Ready = Boolean(entry2);
+      const entry30Ready = Boolean(entry30);
+      const mostElimsReady = totalEntries >= 30 && remainingCount === 1;
       const maxElims = eventEntries.reduce(
         (max, entry) => Math.max(max, entry.eliminations_count ?? 0),
         0
