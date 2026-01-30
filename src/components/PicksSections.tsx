@@ -349,6 +349,7 @@ type RumbleEntrantsEditorProps = {
   eventPick: RumblePick;
   grouped: Record<string, EntrantRow[]>;
   count: number;
+  confirmedEntrantIds: Set<string>;
   entrantSearch: string;
   setEntrantSearch: (value: string) => void;
   toggleEntrant: (eventId: string, entrantId: string) => void;
@@ -366,6 +367,7 @@ export const RumbleEntrantsEditor = ({
   eventPick,
   grouped,
   count,
+  confirmedEntrantIds,
   entrantSearch,
   setEntrantSearch,
   toggleEntrant,
@@ -472,7 +474,7 @@ export const RumbleEntrantsEditor = ({
                       type="checkbox"
                       checked={eventPick.entrants.includes(entrant.id)}
                       onChange={() => toggleEntrant(event.id, entrant.id)}
-                      disabled={isLocked}
+                      disabled={isLocked || confirmedEntrantIds.has(entrant.id)}
                     />
                     <EntrantCard
                       name={entrant.name}
@@ -480,6 +482,11 @@ export const RumbleEntrantsEditor = ({
                       imageUrl={entrant.image_url}
                       className="flex-1"
                     />
+                    {confirmedEntrantIds.has(entrant.id) && (
+                      <span className="rounded-full border border-emerald-400/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                        Confirmed
+                      </span>
+                    )}
                     {(entrant.status ?? "approved") === "pending" &&
                       entrant.created_by === userId && (
                         <span className="rounded-full border border-amber-400/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">

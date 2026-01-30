@@ -1,7 +1,6 @@
 export type EventRow = {
   id: string;
   name: string;
-  starts_at: string | null;
   status: string;
   rumble_gender: string | null;
   roster_year: number | null;
@@ -53,6 +52,7 @@ export type RumbleEntryRow = {
   entry_number: number | null;
   eliminated_at: string | null;
   eliminations_count: number;
+  is_confirmed?: boolean;
 };
 
 export type MatchRow = {

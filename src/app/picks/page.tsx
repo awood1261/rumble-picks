@@ -442,12 +442,12 @@ export default function PicksPage() {
     Promise.all([
       supabase
         .from("shows")
-        .select("id, name, starts_at, status")
-        .order("starts_at", { ascending: true }),
+        .select("id, name, status")
+        .order("name", { ascending: true }),
       supabase
         .from("events")
-        .select("id, name, starts_at, status, rumble_gender, roster_year, show_id")
-        .order("starts_at", { ascending: true }),
+        .select("id, name, status, rumble_gender, roster_year, show_id")
+        .order("name", { ascending: true }),
     ]).then(([showsResult, eventsResult]) => {
       if (showsResult.error) {
         setMessage(showsResult.error.message);
@@ -482,7 +482,7 @@ export default function PicksPage() {
     const { data: entryRows, error } = await supabase
       .from("rumble_entries")
       .select(
-        "event_id, entrant_id, entry_number, eliminated_at, eliminations_count"
+        "event_id, entrant_id, entry_number, eliminated_at, eliminations_count, is_confirmed"
       )
       .in("event_id", eventIds);
 
@@ -493,6 +493,18 @@ export default function PicksPage() {
 
     setRumbleEntries((entryRows ?? []) as RumbleEntryRow[]);
   }, [selectedShowId, showEvents]);
+
+  const confirmedEntrantsByEvent = useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    rumbleEntries.forEach((entry) => {
+      if (!entry.is_confirmed) return;
+      if (!map[entry.event_id]) {
+        map[entry.event_id] = new Set();
+      }
+      map[entry.event_id].add(entry.entrant_id);
+    });
+    return map;
+  }, [rumbleEntries]);
 
   const loadMatches = useCallback(async () => {
     if (!selectedShowId) return;
@@ -576,9 +588,12 @@ export default function PicksPage() {
       const nextRumbles: Record<string, RumblePick> = {};
       const existingRumbles = savedPayload?.rumbles ?? {};
       showEvents.forEach((event) => {
-        nextRumbles[event.id] = {
+        const base = {
           ...emptyRumblePick,
           ...(existingRumbles[event.id] ?? {}),
+        };
+        nextRumbles[event.id] = {
+          ...base,
         };
       });
 
@@ -603,7 +618,13 @@ export default function PicksPage() {
     };
 
     loadShowData();
-  }, [selectedShowId, userId, loadMatches, loadRumbleEntries, showEvents]);
+  }, [
+    selectedShowId,
+    userId,
+    loadMatches,
+    loadRumbleEntries,
+    showEvents,
+  ]);
 
   const loadRank = useCallback(async () => {
     if (!selectedShowId || !userId) return;
@@ -656,11 +677,13 @@ export default function PicksPage() {
       const nextRumbles: Record<string, RumblePick> = {};
       showEvents.forEach((event) => {
         const current = prev.rumbles[event.id] ?? emptyRumblePick;
-        const selected = new Set(current.entrants);
+        const confirmedSet = confirmedEntrantsByEvent[event.id] ?? new Set();
+        const selected = new Set([...current.entrants, ...Array.from(confirmedSet)]);
         const finalFour = current.final_four.filter((id) => selected.has(id));
         const finalFourSet = new Set(finalFour);
         nextRumbles[event.id] = {
           ...current,
+          entrants: Array.from(selected),
           final_four: finalFour,
           winner:
             current.winner && finalFourSet.has(current.winner)
@@ -692,7 +715,7 @@ export default function PicksPage() {
         match_finish_picks: matchFinishPicks,
       };
     });
-  }, [matches, showEvents]);
+  }, [matches, showEvents, confirmedEntrantsByEvent]);
 
   useEffect(() => {
     if (editSection !== "key_picks") return;
@@ -702,6 +725,10 @@ export default function PicksPage() {
   const toggleEntrant = (eventId: string, id: string) => {
     setPayload((prev) => {
       const current = prev.rumbles[eventId] ?? emptyRumblePick;
+      const confirmedSet = confirmedEntrantsByEvent[eventId] ?? new Set();
+      if (confirmedSet.has(id)) {
+        return prev;
+      }
       const exists = current.entrants.includes(id);
       if (exists) {
         return {
@@ -959,6 +986,7 @@ export default function PicksPage() {
                       eventPick={eventPick}
                       grouped={grouped}
                       count={count}
+                      confirmedEntrantIds={confirmedEntrantsByEvent[event.id] ?? new Set()}
                       entrantSearch={entrantSearch}
                       setEntrantSearch={setEntrantSearch}
                       toggleEntrant={toggleEntrant}

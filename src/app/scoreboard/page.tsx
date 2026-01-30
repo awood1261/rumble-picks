@@ -508,7 +508,7 @@ export default function ScoreboardPage() {
       const { data: eventRows, error } = await supabase
         .from("events")
         .select("id, name, show_id, rumble_gender")
-        .order("starts_at", { ascending: true });
+        .order("name", { ascending: true });
       if (error) {
         setMessage(error.message);
         return;
@@ -542,7 +542,7 @@ export default function ScoreboardPage() {
     }, SCOREBOARD_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [selectedShowId]);
+  }, [selectedShowId, showEvents]);
 
   useEffect(() => {
     const loadMatches = async () => {

@@ -11,7 +11,6 @@ type EventRow = {
   id: string;
   name: string;
   status: string;
-  starts_at: string | null;
   rumble_gender: string | null;
   roster_year: number | null;
   show_id: string | null;
@@ -45,6 +44,7 @@ type RumbleEntryRow = {
   eliminated_by: string | null;
   eliminated_at: string | null;
   eliminations_count: number;
+  is_confirmed?: boolean;
 };
 
 type MatchRow = {
@@ -100,7 +100,6 @@ export default function AdminPage() {
 
   const [eventName, setEventName] = useState("");
   const [eventGender, setEventGender] = useState("men");
-  const [eventStartsAt, setEventStartsAt] = useState("");
   const [eventRosterYear, setEventRosterYear] = useState("");
   const [eventShowId, setEventShowId] = useState("");
   const [showName, setShowName] = useState("");
@@ -117,6 +116,7 @@ export default function AdminPage() {
   const [toastVisible, setToastVisible] = useState(false);
   const [entryEntrantId, setEntryEntrantId] = useState("");
   const [entryNumber, setEntryNumber] = useState("");
+  const [entryConfirmed, setEntryConfirmed] = useState(false);
   const [eliminateEntryId, setEliminateEntryId] = useState("");
   const [eliminatedById, setEliminatedById] = useState("");
   const [recalcBusy, setRecalcBusy] = useState(false);
@@ -176,12 +176,11 @@ export default function AdminPage() {
     return new Map(events.map((event) => [event.id, event.name]));
   }, [events]);
   useEffect(() => {
-    setEventStartsAt(formatLocalDateTime(activeEvent?.starts_at ?? null));
     setEventRosterYear(
       activeEvent?.roster_year ? String(activeEvent.roster_year) : ""
     );
     setEventShowId(activeEvent?.show_id ?? "");
-  }, [activeEvent?.starts_at, activeEvent?.roster_year]);
+  }, [activeEvent?.roster_year, activeEvent?.show_id]);
   useEffect(() => {
     if (!activeShow) {
       setShowEditName("");
@@ -335,7 +334,7 @@ export default function AdminPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("events")
-          .select("id, name, status, starts_at, rumble_gender, roster_year, show_id")
+          .select("id, name, status, rumble_gender, roster_year, show_id")
           .order("created_at", { ascending: false }),
         supabase
           .from("entrants")
@@ -412,7 +411,7 @@ export default function AdminPage() {
             .order("created_at", { ascending: false }),
           supabase
             .from("events")
-            .select("id, name, status, starts_at, rumble_gender, roster_year, show_id")
+            .select("id, name, status, rumble_gender, roster_year, show_id")
             .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
@@ -423,7 +422,7 @@ export default function AdminPage() {
           supabase
             .from("rumble_entries")
             .select(
-              "id, entrant_id, entry_number, eliminated_by, eliminated_at, eliminations_count"
+              "id, entrant_id, entry_number, eliminated_by, eliminated_at, eliminations_count, is_confirmed"
             )
             .eq("event_id", activeEvent.id)
             .order("entry_number", { ascending: true }),
@@ -467,7 +466,7 @@ export default function AdminPage() {
       setMatchEntrants(matchEntrantList);
       setMatchNameEdits((prev) => {
         const next = { ...prev };
-        matchList.forEach((match) => {
+        matchListAll.forEach((match) => {
           if (!next[match.id]) {
             next[match.id] = match.name;
           }
@@ -542,7 +541,6 @@ export default function AdminPage() {
         status: "draft",
         rumble_gender: eventGender,
         roster_year: eventRosterYear ? Number(eventRosterYear) : null,
-        starts_at: eventStartsAt ? new Date(eventStartsAt).toISOString() : null,
         show_id: eventShowId || null,
       });
     if (error) {
@@ -550,7 +548,6 @@ export default function AdminPage() {
       return;
     }
     setEventName("");
-    setEventStartsAt("");
     setEventGender("men");
     setEventRosterYear("");
     setEventShowId("");
@@ -699,7 +696,6 @@ export default function AdminPage() {
     const { error } = await supabase
       .from("events")
       .update({
-        starts_at: eventStartsAt ? new Date(eventStartsAt).toISOString() : null,
         roster_year: eventRosterYear ? Number(eventRosterYear) : null,
         show_id: eventShowId || null,
       })
@@ -722,6 +718,7 @@ export default function AdminPage() {
         entry_number: entry.entry_number,
         eliminations_count: entry.eliminations_count,
         eliminated_by: entry.eliminated_by || null,
+        is_confirmed: entry.is_confirmed ?? false,
       })
       .eq("id", entry.id);
     if (error) {
@@ -730,6 +727,23 @@ export default function AdminPage() {
     }
     await handleRecalculateScores({ silent: true });
     setMessage("Entry updated.");
+    refreshData();
+  };
+
+  const handleRemoveEntry = async (entryId: string) => {
+    if (!activeEvent) return;
+    const shouldRemove = window.confirm(
+      "Remove this entrant from the event? This cannot be undone."
+    );
+    if (!shouldRemove) return;
+    setMessage(null);
+    const { error } = await supabase.from("rumble_entries").delete().eq("id", entryId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await handleRecalculateScores({ silent: true });
+    setMessage("Entry removed.");
     refreshData();
   };
 
@@ -752,6 +766,7 @@ export default function AdminPage() {
       event_id: activeEvent.id,
       entrant_id: entryEntrantId,
       entry_number: numberValue,
+      is_confirmed: entryConfirmed,
     });
     if (error) {
       setMessage(error.message);
@@ -759,6 +774,7 @@ export default function AdminPage() {
     }
     setEntryEntrantId("");
     setEntryNumber("");
+    setEntryConfirmed(false);
     refreshData();
   };
 
@@ -1356,33 +1372,6 @@ export default function AdminPage() {
           )}
         </section>
 
-        <section className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 lg:col-span-2">
-            <h2 className="text-lg font-semibold">Show list</h2>
-            <p className="mt-2 text-sm text-zinc-400">
-              Quick view of all shows in the system.
-            </p>
-            <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-              {shows.length === 0 ? (
-                <p className="text-sm text-zinc-400">No shows yet.</p>
-              ) : (
-                <ul className="space-y-2 text-sm text-zinc-200">
-                  {shows.map((show) => (
-                    <li key={show.id} className="flex items-center justify-between">
-                      <span>{show.name}</span>
-                      <span className="text-xs text-zinc-500">
-                        {show.starts_at
-                          ? new Date(show.starts_at).toLocaleString()
-                          : "No date"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </section>
-
         <div className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-2">
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -1424,12 +1413,6 @@ export default function AdminPage() {
                 value={eventName}
                 onChange={(event) => setEventName(event.target.value)}
               />
-              <input
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                type="datetime-local"
-                value={eventStartsAt}
-                onChange={(event) => setEventStartsAt(event.target.value)}
-              />
               <select
                 className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                 value={eventShowId}
@@ -1442,15 +1425,6 @@ export default function AdminPage() {
                   </option>
                 ))}
               </select>
-              <button
-                className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-300 hover:text-amber-200"
-                type="button"
-                onClick={() =>
-                  setEventStartsAt(formatLocalDateTime(new Date().toISOString()))
-                }
-              >
-                Use current time
-              </button>
               <select
                 className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                 value={eventGender}
@@ -1498,12 +1472,6 @@ export default function AdminPage() {
                   </p>
                   <input
                     className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                    type="datetime-local"
-                    value={eventStartsAt}
-                    onChange={(event) => setEventStartsAt(event.target.value)}
-                  />
-                  <input
-                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                     type="number"
                     min="1900"
                     max="2100"
@@ -1524,17 +1492,6 @@ export default function AdminPage() {
                     ))}
                   </select>
                   <div className="flex flex-col gap-3 sm:flex-row">
-                    <button
-                      className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-300 hover:text-amber-200"
-                      type="button"
-                      onClick={() =>
-                        setEventStartsAt(
-                          formatLocalDateTime(new Date().toISOString())
-                        )
-                      }
-                    >
-                      Use current time
-                    </button>
                     <button
                       className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
                       type="button"
@@ -1665,6 +1622,15 @@ export default function AdminPage() {
               value={entryNumber}
               onChange={(event) => setEntryNumber(event.target.value)}
             />
+            <label className="flex items-center gap-2 text-xs text-zinc-300">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border border-zinc-700 bg-zinc-900"
+                checked={entryConfirmed}
+                onChange={(event) => setEntryConfirmed(event.target.checked)}
+              />
+              Mark as confirmed entrant
+            </label>
             <button
               className="inline-flex h-11 w-full items-center justify-center rounded-full border border-zinc-700 text-sm font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
               type="button"
@@ -2212,6 +2178,11 @@ export default function AdminPage() {
                           promotion={entrant?.promotion ?? "Unknown promotion"}
                           imageUrl={entrant?.image_url}
                         />
+                        {entry.is_confirmed ? (
+                          <span className="rounded-full border border-emerald-400/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                            Confirmed
+                          </span>
+                        ) : null}
                         {entry.eliminated_at ? (
                           <span className="rounded-full border border-red-500/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-red-200">
                             Eliminated
@@ -2266,6 +2237,24 @@ export default function AdminPage() {
                           />
                         </label>
                         <label className="flex flex-col text-xs text-zinc-400">
+                          Confirmed
+                          <input
+                            type="checkbox"
+                            className="mt-3 h-4 w-4 rounded border border-zinc-700 bg-zinc-900"
+                            checked={!!entry.is_confirmed}
+                            onChange={(event) => {
+                              const checked = event.target.checked;
+                              setEntries((prev) =>
+                                prev.map((item) =>
+                                  item.id === entry.id
+                                    ? { ...item, is_confirmed: checked }
+                                    : item
+                                )
+                              );
+                            }}
+                          />
+                        </label>
+                        <label className="flex flex-col text-xs text-zinc-400">
                           Eliminated by
                           <select
                             className="mt-1 h-10 min-w-[200px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
@@ -2298,6 +2287,13 @@ export default function AdminPage() {
                           onClick={() => handleUpdateEntry(entry)}
                         >
                           Save
+                        </button>
+                        <button
+                          className="mt-5 h-10 rounded-full border border-red-500/70 px-4 text-xs font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
+                          type="button"
+                          onClick={() => handleRemoveEntry(entry.id)}
+                        >
+                          Remove
                         </button>
                       </div>
                     </div>
