@@ -623,7 +623,7 @@ export default function ScoreboardPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <ScoreboardCountdown
-        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+4px)] left-0 right-0 z-40 px-6 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6px)]"
+        className="px-6 sm:pb-[calc(env(safe-area-inset-bottom,0px)+6px)]"
         intervalMs={SCOREBOARD_POLL_INTERVAL_MS}
         lastUpdateAt={lastUpdateAt}
         tickerItems={eventProgressItems}

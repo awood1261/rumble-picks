@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 type ScoreboardCountdownProps = {
   intervalMs: number;
@@ -19,6 +20,38 @@ export const ScoreboardCountdown = ({
 }: ScoreboardCountdownProps) => {
   const [countdownMs, setCountdownMs] = useState(intervalMs);
   const [pulse, setPulse] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [bottomOffset, setBottomOffset] = useState(0);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || typeof window === "undefined") return;
+    const update = () => {
+      const layoutHeight = document.documentElement.clientHeight;
+      const visualHeight = window.innerHeight;
+      const offset = Math.max(0, visualHeight - layoutHeight);
+      setBottomOffset(Math.max(0, offset - 6));
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update);
+    const viewport = window.visualViewport;
+    if (viewport) {
+      viewport.addEventListener("resize", update);
+      viewport.addEventListener("scroll", update);
+    }
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update);
+      if (viewport) {
+        viewport.removeEventListener("resize", update);
+        viewport.removeEventListener("scroll", update);
+      }
+    };
+  }, [mounted]);
 
   useEffect(() => {
     setCountdownMs(Math.max(intervalMs - (Date.now() - lastUpdateAt), 0));
@@ -40,8 +73,13 @@ export const ScoreboardCountdown = ({
     return () => clearTimeout(timeout);
   }, [lastUpdateAt]);
 
-  return (
-    <div className={className}>
+  if (!mounted) return null;
+
+  const content = (
+    <div
+      className={["scoreboard-fixed", className].filter(Boolean).join(" ")}
+      style={{ transform: `translate3d(0, ${bottomOffset}px, 0)` }}
+    >
       <div className="mx-auto w-full max-w-5xl">
         <div
           className={`countdown-banner w-full border border-amber-500/80 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-black shadow-lg shadow-black/30 ${
@@ -78,6 +116,16 @@ export const ScoreboardCountdown = ({
       <style jsx>{`
         .countdown-banner {
           background: linear-gradient(180deg, #fbc400 0%, #f2b200 100%);
+        }
+        .scoreboard-fixed {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 40;
+          padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4px);
+          backface-visibility: hidden;
+          will-change: transform;
         }
         .ticker-track {
           display: inline-flex;
@@ -117,4 +165,6 @@ export const ScoreboardCountdown = ({
       `}</style>
     </div>
   );
+
+  return createPortal(content, document.body);
 };
