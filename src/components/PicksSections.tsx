@@ -184,7 +184,8 @@ export const RumbleSummarySection = ({
     ids: string[],
     correctSet: Set<string>,
     pointValue: number,
-    actualsHasData: boolean
+    actualsHasData: boolean,
+    totalEntries?: number
   ) => {
     if (ids.length === 0) {
       return <p className="text-sm text-zinc-400">None selected.</p>;
@@ -200,6 +201,8 @@ export const RumbleSummarySection = ({
           .sort((a, b) => a.name.localeCompare(b.name))
           .map(({ id, entrant, name }) => {
             const isCorrect = actualsHasData && correctSet.has(id);
+            const showMisses =
+              actualsHasData && (totalEntries === undefined || totalEntries >= 30);
             const status = entrant?.status ?? "approved";
             const isPending =
               status === "pending" && entrant?.created_by === userId;
@@ -215,7 +218,9 @@ export const RumbleSummarySection = ({
                     ? "border-zinc-800"
                     : isCorrect
                       ? "border-emerald-400/60 bg-emerald-400/10"
-                      : "border-red-500/50 bg-red-500/10"
+                      : showMisses
+                        ? "border-red-500/50 bg-red-500/10"
+                        : "border-zinc-800"
                 }`}
               >
                 <EntrantCard
@@ -233,7 +238,7 @@ export const RumbleSummarySection = ({
                     Approved
                   </p>
                 )}
-                {actualsHasData && (
+                {actualsHasData && (isCorrect || showMisses) && (
                   <p
                     className={`mt-2 text-[10px] font-semibold uppercase tracking-wide ${
                       isCorrect ? "text-emerald-200" : "text-red-200"
@@ -289,7 +294,8 @@ export const RumbleSummarySection = ({
                     eventPick.entrants,
                     actuals.entrantSet,
                     scoringRules.entrants,
-                    actuals.hasData
+                    actuals.hasData,
+                    actuals.totalEntries
                   )}
                 </div>
               </div>

@@ -138,6 +138,9 @@ export default function ScoreboardPicksPage() {
   const [show, setShow] = useState<ShowRow | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [rankInfo, setRankInfo] = useState<{ rank: number | null; total: number }>(
+    { rank: null, total: 0 }
+  );
 
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
@@ -441,6 +444,10 @@ export default function ScoreboardPicksPage() {
     return summary;
   }, [matchEntrants, matches, payload]);
 
+  const totalShowPoints = useMemo(() => {
+    return eventPointsSummary.total + matchPointsSummary.total;
+  }, [eventPointsSummary.total, matchPointsSummary.total]);
+
   const load = useCallback(async () => {
     if (!validShowId) {
       setMessage("Missing show id.");
@@ -453,6 +460,7 @@ export default function ScoreboardPicksPage() {
       { data: eventRows },
       { data: profileRow },
       { data: matchRows, error: matchError },
+      { data: scoreRows, error: scoreError },
     ] = await Promise.all([
       supabase
         .from("picks")
@@ -481,10 +489,19 @@ export default function ScoreboardPicksPage() {
         )
         .eq("show_id", validShowId)
         .order("created_at", { ascending: true }),
+      supabase
+        .from("scores")
+        .select("user_id, points")
+        .eq("show_id", validShowId),
     ]);
 
     if (pickError) {
       setMessage(pickError.message);
+      setLoading(false);
+      return;
+    }
+    if (scoreError) {
+      setMessage(scoreError.message);
       setLoading(false);
       return;
     }
@@ -494,6 +511,18 @@ export default function ScoreboardPicksPage() {
     setShow(showRow ?? null);
     setEvents(eventList);
     setProfile(profileRow ?? null);
+
+    const scoreList = (scoreRows ?? []) as { user_id: string; points: number }[];
+    if (scoreList.length > 0) {
+      const sortedScores = [...scoreList].sort((a, b) => b.points - a.points);
+      const index = sortedScores.findIndex((row) => row.user_id === userId);
+      setRankInfo({
+        rank: index >= 0 ? index + 1 : null,
+        total: sortedScores.length,
+      });
+    } else {
+      setRankInfo({ rank: null, total: 0 });
+    }
 
     if (eventList.length === 0) {
       setRumbleEntries([]);
@@ -619,7 +648,8 @@ export default function ScoreboardPicksPage() {
     ids: string[] | undefined,
     correctSet: Set<string>,
     points: number,
-    actualsHasData: boolean
+    actualsHasData: boolean,
+    totalEntries?: number
   ) => {
     if (!ids || ids.length === 0) {
       return <p className="text-sm text-zinc-400">None selected.</p>;
@@ -629,6 +659,8 @@ export default function ScoreboardPicksPage() {
         {ids.map((id) => {
           const entrant = entrantMap.get(id);
           const isCorrect = actualsHasData && correctSet.has(id);
+          const showMisses =
+            actualsHasData && (totalEntries === undefined || totalEntries >= 30);
           return (
             <li
               key={id}
@@ -637,7 +669,9 @@ export default function ScoreboardPicksPage() {
                   ? "border-zinc-800"
                   : isCorrect
                     ? "border-emerald-400/60 bg-emerald-400/10"
-                    : "border-red-500/50 bg-red-500/10"
+                    : showMisses
+                      ? "border-red-500/50 bg-red-500/10"
+                      : "border-zinc-800"
               }`}
             >
               <EntrantCard
@@ -645,7 +679,7 @@ export default function ScoreboardPicksPage() {
                 promotion={entrant?.promotion}
                 imageUrl={entrant?.image_url}
               />
-              {actualsHasData && (
+              {actualsHasData && (isCorrect || showMisses) && (
                 <p
                   className={`mt-2 text-[10px] font-semibold uppercase tracking-wide ${
                     isCorrect ? "text-emerald-200" : "text-red-200"
@@ -710,79 +744,14 @@ export default function ScoreboardPicksPage() {
           <p className="text-sm text-zinc-400">
             {show?.name ?? "Show"}
           </p>
+          <p className="text-sm text-zinc-300">
+            {rankInfo.rank
+              ? `Rank #${rankInfo.rank} of ${rankInfo.total} · ${totalShowPoints} pts`
+              : `Total points: ${totalShowPoints}`}
+          </p>
         </header>
 
-        <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          <h2 className="text-lg font-semibold">Scoring breakdown</h2>
-          <p className="mt-2 text-sm text-zinc-400">
-            Totals reflect the latest results recorded for this show.
-          </p>
-          <div
-            className={`mt-4 grid gap-4 ${
-              events.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1"
-            }`}
-          >
-            {events.length > 0 && (
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Rumble events
-                </p>
-                <div className="mt-3 space-y-3 text-sm text-zinc-200">
-                  {events.map((event) => {
-                    const points = eventPointsByEvent[event.id] ?? {
-                      entrants: 0,
-                      finalFour: 0,
-                      keyPicks: 0,
-                      total: 0,
-                    };
-                    return (
-                      <div
-                        key={event.id}
-                        className="rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
-                      >
-                        <p className="font-medium text-zinc-100">{event.name}</p>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          Entrants: {points.entrants} · Final four:{" "}
-                          {points.finalFour} · Key picks: {points.keyPicks}
-                        </p>
-                        <p className="mt-1 text-xs text-emerald-200">
-                          Total: {points.total}
-                        </p>
-                      </div>
-                    );
-                  })}
-                  <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
-                    Event total: {eventPointsSummary.total} points
-                  </div>
-                </div>
-              </div>
-            )}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                Matches
-              </p>
-              {matches.length === 0 ? (
-                <p className="mt-3 text-sm text-zinc-400">
-                  No matches available.
-                </p>
-              ) : (
-                <div className="mt-3 space-y-2 text-sm text-zinc-200">
-                  <p className="text-xs text-zinc-400">
-                    Winners: {matchPointsSummary.winner} · Finish method:{" "}
-                    {matchPointsSummary.finishMethod}
-                  </p>
-                  <p className="text-xs text-zinc-400">
-                    Finish winner: {matchPointsSummary.finishWinner} · Finish
-                    loser: {matchPointsSummary.finishLoser}
-                  </p>
-                  <p className="text-xs text-emerald-200">
-                    Match total: {matchPointsSummary.total}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
+        
 
         {events.length > 0 &&
           events.map((event) => {
@@ -824,7 +793,8 @@ export default function ScoreboardPicksPage() {
                           rumblePick.entrants,
                           actuals.entrantSet,
                           scoringRules.entrants,
-                          actuals.hasData
+                          actuals.hasData,
+                          actuals.totalEntries
                         )}
                       </div>
                     </details>
@@ -983,7 +953,7 @@ export default function ScoreboardPicksPage() {
             {matchPointsSummary.total} pts
           </span>
         </div>
-        <section className="mt-4 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+        <section className="mt-4">
           {matches.length === 0 ? (
             <p className="mt-3 text-sm text-zinc-400">No matches available.</p>
           ) : (
@@ -1034,9 +1004,9 @@ export default function ScoreboardPicksPage() {
                 return (
                   <div
                     key={match.id}
-                    className={`relative overflow-hidden rounded-xl border px-3 py-2 ${
+                    className={`relative overflow-hidden rounded-2xl border px-3 py-2 ${
                       !winner
-                        ? "border-zinc-800"
+                        ? "border-zinc-800 bg-zinc-900/70"
                         : isCorrect
                           ? "border-emerald-400/60 bg-emerald-400/10"
                           : "border-red-500/50 bg-red-500/10"
