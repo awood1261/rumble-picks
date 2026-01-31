@@ -922,6 +922,7 @@ export default function ScoreboardPicksPage() {
                               <EntrantCard
                                 name={entrant?.name ?? "Not set"}
                                 promotion={entrant?.promotion}
+                                imageUrl={entrant?.image_url}
                                 className="justify-end"
                               />
                               {ready && (

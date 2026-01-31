@@ -98,6 +98,7 @@ export default function PicksPage() {
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [editSection, setEditSection] = useState<EditSection>(null);
+  const [focusedEventId, setFocusedEventId] = useState<string>("");
 
   const selectedShow = useMemo(
     () => shows.find((show) => show.id === selectedShowId) ?? null,
@@ -107,6 +108,10 @@ export default function PicksPage() {
     () => events.filter((event) => event.show_id === selectedShowId),
     [events, selectedShowId]
   );
+  const visibleShowEvents = useMemo(() => {
+    if (!focusedEventId) return showEvents;
+    return showEvents.filter((event) => event.id === focusedEventId);
+  }, [focusedEventId, showEvents]);
   const customModalEvent = useMemo(
     () => showEvents.find((event) => event.id === customModalEventId) ?? null,
     [customModalEventId, showEvents]
@@ -603,6 +608,7 @@ export default function PicksPage() {
     setPayload(emptyPayload);
     setHasSaved(false);
     setEditSection(null);
+    setFocusedEventId("");
 
     const loadShowData = async () => {
       const [{ data: pickRows }, { data: entrantRows, error: entrantError }] =
@@ -928,8 +934,17 @@ export default function PicksPage() {
     }
     setHasSaved(true);
     setEditSection(null);
+    setFocusedEventId("");
     setMessage("Picks saved.");
     setSaving(false);
+  };
+
+  const handleEditEventSection = (
+    section: Exclude<EditSection, "matches" | null>,
+    eventId: string
+  ) => {
+    setFocusedEventId(eventId);
+    setEditSection(section);
   };
 
   if (loading) {
@@ -1002,7 +1017,7 @@ export default function PicksPage() {
                     entrantByIdAll={entrantByIdAll}
                     userId={userId}
                     isLocked={isLocked}
-                    onEdit={setEditSection}
+                    onEdit={handleEditEventSection}
                   />
                 );
               })}
@@ -1023,7 +1038,7 @@ export default function PicksPage() {
           <>
             {canShowRumbles && (editSection === "entrants" || !hasSaved) && (
               <>
-                {showEvents.map((event) => {
+                {visibleShowEvents.map((event) => {
                   const eventPick = getRumblePick(event.id);
                   const { grouped, count } = getFilteredEntrantsByPromotion(event.id);
                   return (
@@ -1039,7 +1054,10 @@ export default function PicksPage() {
                       toggleEntrant={toggleEntrant}
                       hasSaved={hasSaved}
                       isLocked={isLocked}
-                      onCancel={() => setEditSection(null)}
+                      onCancel={() => {
+                        setEditSection(null);
+                        setFocusedEventId("");
+                      }}
                       onSave={handleSave}
                       saving={saving}
                       userId={userId}
@@ -1055,7 +1073,7 @@ export default function PicksPage() {
 
             {canShowRumbles && (editSection === "final_four" || !hasSaved) && (
               <>
-                {showEvents.map((event) => {
+                {visibleShowEvents.map((event) => {
                   const eventPick = getRumblePick(event.id);
                   const selectedEntrants = getSelectedEntrantOptions(event.id);
                   return (
@@ -1067,7 +1085,10 @@ export default function PicksPage() {
                       toggleFinalFour={toggleFinalFour}
                       hasSaved={hasSaved}
                       isLocked={isLocked}
-                      onCancel={() => setEditSection(null)}
+                      onCancel={() => {
+                        setEditSection(null);
+                        setFocusedEventId("");
+                      }}
                       onSave={handleSave}
                       saving={saving}
                     />
@@ -1094,7 +1115,7 @@ export default function PicksPage() {
 
             {canShowRumbles && (editSection === "key_picks" || !hasSaved) && (
               <>
-                {showEvents.map((event) => {
+                {visibleShowEvents.map((event) => {
                   const eventPick = getRumblePick(event.id);
                   const selectedEntrants = getSelectedEntrantOptions(event.id);
                   const selectedFinalFour = getSelectedFinalFourOptions(event.id);
@@ -1107,7 +1128,10 @@ export default function PicksPage() {
                       selectedFinalFour={selectedFinalFour}
                       isLocked={isLocked}
                       hasSaved={hasSaved}
-                      onCancel={() => setEditSection(null)}
+                      onCancel={() => {
+                        setEditSection(null);
+                        setFocusedEventId("");
+                      }}
                       onSave={handleSave}
                       saving={saving}
                       onPickChange={(fieldKey, value) =>

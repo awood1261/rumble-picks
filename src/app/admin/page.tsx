@@ -112,6 +112,7 @@ export default function AdminPage() {
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [adminTab, setAdminTab] = useState<"events" | "matches">("events");
+  const [focusedEventId, setFocusedEventId] = useState<string>("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [entryEntrantId, setEntryEntrantId] = useState("");
@@ -162,6 +163,10 @@ export default function AdminPage() {
       .filter((event) => event.show_id === activeShow.id)
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [activeShow, events]);
+  const visibleShowEvents = useMemo(() => {
+    if (!focusedEventId) return showEvents;
+    return showEvents.filter((event) => event.id === focusedEventId);
+  }, [focusedEventId, showEvents]);
   const activeEventId = useMemo(() => {
     if (selectedEventId && showEvents.some((event) => event.id === selectedEventId)) {
       return selectedEventId;
@@ -202,10 +207,19 @@ export default function AdminPage() {
   }, [eventShowId, selectedShowId]);
   useEffect(() => {
     if (!activeShow) return;
+    if (selectedShowId && activeShow.id !== selectedShowId) {
+      return;
+    }
     if (!showEvents.find((event) => event.id === selectedEventId)) {
       setSelectedEventId(showEvents[0]?.id ?? "");
     }
-  }, [activeShow, selectedEventId, showEvents]);
+  }, [activeShow, selectedEventId, selectedShowId, showEvents]);
+  useEffect(() => {
+    if (!focusedEventId) return;
+    if (!showEvents.find((event) => event.id === focusedEventId)) {
+      setFocusedEventId("");
+    }
+  }, [focusedEventId, showEvents]);
   useEffect(() => {
     if (!toastMessage) return;
     setToastVisible(true);
@@ -1319,11 +1333,22 @@ export default function AdminPage() {
             <div className="mt-6 grid gap-4 lg:grid-cols-2">
               {showEvents.length > 0 && (
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                    Rumble events on this show
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      Rumble events on this show
+                    </p>
+                    {focusedEventId && (
+                      <button
+                        className="text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:text-amber-100"
+                        type="button"
+                        onClick={() => setFocusedEventId("")}
+                      >
+                        Back to all events
+                      </button>
+                    )}
+                  </div>
                   <div className="mt-3 space-y-3 text-sm text-zinc-200">
-                    {showEvents.map((event) => (
+                    {visibleShowEvents.map((event) => (
                       <div
                         key={event.id}
                         className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
@@ -1342,6 +1367,7 @@ export default function AdminPage() {
                             if (event.show_id) {
                               setSelectedShowId(event.show_id);
                             }
+                            setFocusedEventId(event.id);
                             setSelectedEventId(event.id);
                             setAdminTab("events");
                             scrollToEventEditor();

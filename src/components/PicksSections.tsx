@@ -121,7 +121,7 @@ type RumbleSummarySectionProps = {
   entrantByIdAll: Map<string, EntrantRow>;
   userId: string | null;
   isLocked: boolean;
-  onEdit: (section: Exclude<EditSection, "matches" | null>) => void;
+  onEdit: (section: Exclude<EditSection, "matches" | null>, eventId: string) => void;
 };
 
 export const RumbleSummarySection = ({
@@ -278,7 +278,7 @@ export const RumbleSummarySection = ({
                 <button
                   className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
                   type="button"
-                  onClick={() => onEdit("entrants")}
+                  onClick={() => onEdit("entrants", event.id)}
                   disabled={isLocked}
                 >
                   <EditIcon />
@@ -316,7 +316,7 @@ export const RumbleSummarySection = ({
                 <button
                   className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
                   type="button"
-                  onClick={() => onEdit("final_four")}
+                  onClick={() => onEdit("final_four", event.id)}
                   disabled={isLocked}
                 >
                   <EditIcon />
@@ -354,7 +354,7 @@ export const RumbleSummarySection = ({
                 <button
                   className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200 hover:text-amber-100 disabled:cursor-not-allowed disabled:text-zinc-600"
                   type="button"
-                  onClick={() => onEdit("key_picks")}
+                  onClick={() => onEdit("key_picks", event.id)}
                   disabled={isLocked}
                 >
                   <EditIcon />
