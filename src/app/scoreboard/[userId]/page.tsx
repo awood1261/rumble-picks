@@ -167,6 +167,57 @@ export default function ScoreboardPicksPage() {
     return new Map(matches.map((match) => [match.id, match.winner_side_id]));
   }, [matches]);
 
+  const renderGhostStrip = (ids: string[], maxVisible = 3) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean);
+    if (uniqueIds.length === 0) return null;
+    const visible = uniqueIds.slice(0, maxVisible);
+    return (
+      <div className="pointer-events-none absolute inset-0 z-0 flex items-stretch justify-end -space-x-6 overflow-hidden opacity-60 transition-opacity duration-300">
+        {visible.map((id) => {
+          const entrant = entrantMap.get(id);
+          const name = entrant?.name ?? "Unknown";
+          return (
+            <div
+              key={id}
+              className="relative h-full w-20 overflow-hidden rounded-none border-l border-zinc-800 bg-gradient-to-b from-amber-400/40 via-zinc-900 to-zinc-950 shadow-sm sm:w-28"
+              title={name}
+            >
+              {entrant?.image_url ? (
+                <img
+                  src={entrant.image_url}
+                  alt={name}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  onError={(event) => {
+                    event.currentTarget.style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="h-full w-full" />
+              )}
+            </div>
+          );
+        })}
+        <div className="absolute inset-0 bg-gradient-to-l from-transparent via-zinc-950/35 to-zinc-950" />
+      </div>
+    );
+  };
+
+  const ChevronIcon = () => (
+    <svg
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+
   const getEliminationKey = (entry: RumbleEntryRow) =>
     entry.eliminated_at ? new Date(entry.eliminated_at).getTime() : Number.MAX_SAFE_INTEGER;
 
@@ -742,109 +793,164 @@ export default function ScoreboardPicksPage() {
                   </p>
                   <h2 className="text-lg font-semibold">{event.name}</h2>
                 </div>
-                <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-                    <h3 className="text-lg font-semibold">Entrants</h3>
-                    <p className="mt-2 text-sm text-zinc-400">
-                      {rumblePick.entrants.length} selected
-                    </p>
-                    {renderList(
-                      rumblePick.entrants,
-                      actuals.entrantSet,
-                      scoringRules.entrants,
-                      actuals.hasData
-                    )}
+                <div className="mt-4 grid gap-4">
+                  <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                    <details className="group peer">
+                      <summary className="relative flex cursor-pointer list-none items-center justify-between gap-3 overflow-hidden">
+                        <div className="relative z-10">
+                          <h3 className="text-lg font-semibold">Entrants</h3>
+                          <p className="mt-2 text-sm text-zinc-400">
+                            {rumblePick.entrants.length} selected
+                          </p>
+                        </div>
+                        <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
+                          <ChevronIcon />
+                        </span>
+                      </summary>
+                      <div className="mt-3">
+                        {renderList(
+                          rumblePick.entrants,
+                          actuals.entrantSet,
+                          scoringRules.entrants,
+                          actuals.hasData
+                        )}
+                      </div>
+                    </details>
+                    <div className="peer-open:hidden">
+                      {renderGhostStrip(rumblePick.entrants, 3)}
+                    </div>
                   </div>
 
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-                    <h3 className="text-lg font-semibold">Final Four</h3>
-                    <p className="mt-2 text-sm text-zinc-400">
-                      {rumblePick.final_four.length} selected
-                    </p>
-                    {renderList(
-                      rumblePick.final_four,
-                      actuals.finalFourSet,
-                      scoringRules.final_four,
-                      actuals.finalFourReady
-                    )}
+                  <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                    <details className="group peer">
+                      <summary className="relative flex cursor-pointer list-none items-center justify-between gap-3 overflow-hidden">
+                        <div className="relative z-10">
+                          <h3 className="text-lg font-semibold">Final Four</h3>
+                          <p className="mt-2 text-sm text-zinc-400">
+                            {rumblePick.final_four.length} selected
+                          </p>
+                        </div>
+                        <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
+                          <ChevronIcon />
+                        </span>
+                      </summary>
+                      <div className="mt-3">
+                        {renderList(
+                          rumblePick.final_four,
+                          actuals.finalFourSet,
+                          scoringRules.final_four,
+                          actuals.finalFourReady
+                        )}
+                      </div>
+                    </details>
+                    <div className="peer-open:hidden">
+                      {renderGhostStrip(rumblePick.final_four, 3)}
+                    </div>
                   </div>
 
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
-                    <h3 className="text-lg font-semibold">Key Picks</h3>
-                    <div className="mt-4 space-y-3 text-sm text-zinc-200">
-                      {[
+                  <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                    <details className="group peer">
+                      <summary className="relative flex cursor-pointer list-none items-center justify-between gap-3 overflow-hidden">
+                        <div className="relative z-10">
+                          <h3 className="text-lg font-semibold">Key Picks</h3>
+                          <p className="mt-2 text-sm text-zinc-400">
+                            Winner:{" "}
+                            {rumblePick.winner
+                              ? entrantMap.get(String(rumblePick.winner))?.name ?? "Selected"
+                              : "Not set"}
+                          </p>
+                        </div>
+                        <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
+                          <ChevronIcon />
+                        </span>
+                      </summary>
+                      <div className="mt-3 space-y-3 text-sm text-zinc-200">
+                        {[
+                          [
+                            "Winner",
+                            rumblePick.winner,
+                            actuals.winner,
+                            scoringRules.winner,
+                            actuals.winnerReady,
+                          ],
+                          [
+                            "Entry #1",
+                            rumblePick.entry_1,
+                            actuals.entry1,
+                            scoringRules.entry_1,
+                            actuals.entry1Ready,
+                          ],
+                          [
+                            "Entry #2",
+                            rumblePick.entry_2,
+                            actuals.entry2,
+                            scoringRules.entry_2,
+                            actuals.entry2Ready,
+                          ],
+                          [
+                            "Entry #30",
+                            rumblePick.entry_30,
+                            actuals.entry30,
+                            scoringRules.entry_30,
+                            actuals.entry30Ready,
+                          ],
+                          [
+                            "Most eliminations",
+                            rumblePick.most_eliminations,
+                            null,
+                            scoringRules.most_eliminations,
+                            actuals.mostElimsReady,
+                          ],
+                        ].map(([label, value, actual, points, isReady]) => {
+                          const entrant = value ? entrantMap.get(String(value)) : null;
+                          const ready = Boolean(isReady);
+                          const isCorrect =
+                            ready &&
+                            (label === "Most eliminations"
+                              ? value && actuals.topElims.has(String(value))
+                              : value && actual === value);
+                          return (
+                            <div
+                              key={label}
+                              className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
+                                !ready
+                                  ? "border-zinc-800"
+                                  : isCorrect
+                                    ? "border-emerald-400/60 bg-emerald-400/10"
+                                    : "border-red-500/50 bg-red-500/10"
+                              }`}
+                            >
+                              <span className="text-zinc-400">{label}</span>
+                              <EntrantCard
+                                name={entrant?.name ?? "Not set"}
+                                promotion={entrant?.promotion}
+                                className="justify-end"
+                              />
+                              {ready && (
+                                <span
+                                  className={`ml-3 text-[10px] font-semibold uppercase tracking-wide ${
+                                    isCorrect ? "text-emerald-200" : "text-red-200"
+                                  }`}
+                                >
+                                  {isCorrect ? `+${points} pts` : "0 pts"}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                    <div className="peer-open:hidden">
+                      {renderGhostStrip(
                         [
-                          "Winner",
                           rumblePick.winner,
-                          actuals.winner,
-                          scoringRules.winner,
-                          actuals.winnerReady,
-                        ],
-                        [
-                          "Entry #1",
                           rumblePick.entry_1,
-                          actuals.entry1,
-                          scoringRules.entry_1,
-                          actuals.entry1Ready,
-                        ],
-                        [
-                          "Entry #2",
                           rumblePick.entry_2,
-                          actuals.entry2,
-                          scoringRules.entry_2,
-                          actuals.entry2Ready,
-                        ],
-                        [
-                          "Entry #30",
                           rumblePick.entry_30,
-                          actuals.entry30,
-                          scoringRules.entry_30,
-                          actuals.entry30Ready,
-                        ],
-                        [
-                          "Most eliminations",
                           rumblePick.most_eliminations,
-                          null,
-                          scoringRules.most_eliminations,
-                          actuals.mostElimsReady,
-                        ],
-                      ].map(([label, value, actual, points, isReady]) => {
-                        const entrant = value ? entrantMap.get(String(value)) : null;
-                        const ready = Boolean(isReady);
-                        const isCorrect =
-                          ready &&
-                          (label === "Most eliminations"
-                            ? value && actuals.topElims.has(String(value))
-                            : value && actual === value);
-                        return (
-                          <div
-                            key={label}
-                            className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
-                              !ready
-                                ? "border-zinc-800"
-                                : isCorrect
-                                  ? "border-emerald-400/60 bg-emerald-400/10"
-                                  : "border-red-500/50 bg-red-500/10"
-                            }`}
-                          >
-                            <span className="text-zinc-400">{label}</span>
-                            <EntrantCard
-                              name={entrant?.name ?? "Not set"}
-                              promotion={entrant?.promotion}
-                              className="justify-end"
-                            />
-                            {ready && (
-                              <span
-                                className={`ml-3 text-[10px] font-semibold uppercase tracking-wide ${
-                                  isCorrect ? "text-emerald-200" : "text-red-200"
-                                }`}
-                              >
-                                {isCorrect ? `+${points} pts` : "0 pts"}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
+                        ].filter(Boolean) as string[],
+                        3
+                      )}
                     </div>
                   </div>
                 </div>
