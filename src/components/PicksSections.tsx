@@ -1,6 +1,6 @@
 "use client";
 
-import type { Dispatch, Ref, SetStateAction } from "react";
+import { useState, type Dispatch, type Ref, type SetStateAction } from "react";
 import { EntrantCard } from "./EntrantCard";
 import { scoringRules } from "../lib/scoringRules";
 import { KEY_PICK_FIELDS } from "../lib/picksCopy";
@@ -50,23 +50,17 @@ export const LockStatusBanner = ({
         <p className="mt-1 text-xs text-zinc-400">{lockInfo.detail}</p>
       </div>
     )}
-    {isLocked && (
+    {isLocked && rankInfo.rank ? (
       <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
-        {rankInfo.rank ? (
-          <span>
-            Your current rank:{" "}
-            <span className="font-semibold text-amber-200">
-              #{rankInfo.rank}
-            </span>{" "}
-            of {rankInfo.total}
-          </span>
-        ) : (
-          <span className="text-zinc-400">
-            Your rank will appear once scores are calculated for this show.
-          </span>
-        )}
+        <span>
+          Your current rank:{" "}
+          <span className="font-semibold text-amber-200">
+            #{rankInfo.rank}
+          </span>{" "}
+          of {rankInfo.total}
+        </span>
       </div>
-    )}
+    ) : null}
     {isLocked && (
       <div className="mt-6 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
         Picks are locked for this show.
@@ -92,25 +86,88 @@ export const ShowSelector = ({
   shows,
   selectedShowId,
   onChange,
-}: ShowSelectorProps) => (
-  <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-    <label className="text-sm text-zinc-300">
-      Show
-      <select
-        className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-        value={selectedShowId}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {shows.length === 0 && <option value="">No shows yet</option>}
-        {shows.map((show) => (
-          <option key={show.id} value={show.id}>
-            {show.name}
-          </option>
-        ))}
-      </select>
-    </label>
-  </section>
-);
+}: ShowSelectorProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedShow = shows.find((show) => show.id === selectedShowId) ?? null;
+
+  if (shows.length === 0) {
+    return (
+      <section className="mt-8">
+        <p className="text-sm text-zinc-400">No shows yet.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] uppercase tracking-[0.3em] text-zinc-500">
+            Current show
+          </p>
+          <h2 className="text-3xl font-semibold tracking-tight text-amber-100">
+            {selectedShow?.name ?? "Select a show"}
+          </h2>
+        </div>
+        {shows.length > 1 && (
+          <button
+            type="button"
+            className="text-sm font-semibold text-amber-200 transition hover:text-amber-100"
+            onClick={() => setIsOpen(true)}
+          >
+            Change show
+          </button>
+        )}
+      </div>
+
+      {shows.length > 1 && isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
+          <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-zinc-100">
+                Choose a show
+              </h3>
+              <button
+                type="button"
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs uppercase tracking-[0.3em] text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+                onClick={() => setIsOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {shows.map((show) => {
+                const isActive = show.id === selectedShowId;
+                return (
+                  <button
+                    key={show.id}
+                    type="button"
+                    className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                      isActive
+                        ? "border-amber-400/60 bg-amber-400/10 text-amber-100"
+                        : "border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:border-zinc-700"
+                    }`}
+                    onClick={() => {
+                      onChange(show.id);
+                      setIsOpen(false);
+                    }}
+                  >
+                    <span className="font-medium">{show.name}</span>
+                    {isActive && (
+                      <span className="text-xs uppercase tracking-[0.3em] text-amber-200">
+                        Active
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+};
 
 type RumbleSummarySectionProps = {
   event: EventRow;
