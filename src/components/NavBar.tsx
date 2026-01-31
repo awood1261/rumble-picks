@@ -89,15 +89,6 @@ export const NavBar = () => {
           >
             Picks
           </Link>
-          {isSignedIn && (
-            <Link
-              className={linkClass(pathname.startsWith("/profile"))}
-              href="/profile"
-              aria-current={pathname.startsWith("/profile") ? "page" : undefined}
-            >
-              Profile
-            </Link>
-          )}
           <Link
             className={linkClass(pathname.startsWith("/scoreboard"))}
             href="/scoreboard"
@@ -105,6 +96,32 @@ export const NavBar = () => {
           >
             Scores
           </Link>
+          {isSignedIn && (
+            <Link
+              className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-800 bg-black/60 text-zinc-200 transition hover:border-amber-400 hover:text-amber-200 ${
+                pathname.startsWith("/profile")
+                  ? "border-amber-400/70 text-amber-200"
+                  : ""
+              }`}
+              href="/profile"
+              aria-current={pathname.startsWith("/profile") ? "page" : undefined}
+              aria-label="Profile"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 21a8 8 0 0 0-16 0" />
+                <circle cx="12" cy="8" r="4" />
+              </svg>
+            </Link>
+          )}
           {isAdmin && (
             <Link
               className={linkClass(pathname.startsWith("/admin"))}
