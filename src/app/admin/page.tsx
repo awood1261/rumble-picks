@@ -108,6 +108,7 @@ export default function AdminPage() {
   const [showEditName, setShowEditName] = useState("");
   const [showEditStartsAt, setShowEditStartsAt] = useState("");
   const [showEditBusy, setShowEditBusy] = useState(false);
+  const [showDeleteBusy, setShowDeleteBusy] = useState(false);
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [selectedShowId, setSelectedShowId] = useState<string>("");
@@ -637,6 +638,107 @@ export default function AdminPage() {
     setToastMessage(`Show updated: ${updatedShow.name}.`);
     refreshData();
     setShowEditBusy(false);
+  };
+
+  const handleDeleteShow = async () => {
+    if (!activeShow) return;
+    const confirmed = window.confirm(
+      `Delete "${activeShow.name}" and all related events, matches, picks, and scores? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    setShowDeleteBusy(true);
+    setMessage(null);
+    try {
+      const { data: eventRows, error: eventError } = await supabase
+        .from("events")
+        .select("id")
+        .eq("show_id", activeShow.id);
+      if (eventError) throw eventError;
+      const eventIds = (eventRows ?? []).map((row) => row.id);
+
+      const { data: matchRows, error: matchError } = await supabase
+        .from("matches")
+        .select("id")
+        .eq("show_id", activeShow.id);
+      if (matchError) throw matchError;
+      const matchIds = (matchRows ?? []).map((row) => row.id);
+
+      if (matchIds.length > 0) {
+        const { error: matchEntrantError } = await supabase
+          .from("match_entrants")
+          .delete()
+          .in("match_id", matchIds);
+        if (matchEntrantError) throw matchEntrantError;
+
+        const { error: matchSideError } = await supabase
+          .from("match_sides")
+          .delete()
+          .in("match_id", matchIds);
+        if (matchSideError) throw matchSideError;
+      }
+
+      if (eventIds.length > 0) {
+        const { error: entryError } = await supabase
+          .from("rumble_entries")
+          .delete()
+          .in("event_id", eventIds);
+        if (entryError) throw entryError;
+
+        const { error: customEntrantError } = await supabase
+          .from("entrants")
+          .delete()
+          .in("event_id", eventIds)
+          .eq("is_custom", true);
+        if (customEntrantError) throw customEntrantError;
+      }
+
+      const { error: pickError } = await supabase
+        .from("picks")
+        .delete()
+        .eq("show_id", activeShow.id);
+      if (pickError) throw pickError;
+
+      const { error: scoreError } = await supabase
+        .from("scores")
+        .delete()
+        .eq("show_id", activeShow.id);
+      if (scoreError) throw scoreError;
+
+      if (eventIds.length > 0) {
+        const { error: eventsDeleteError } = await supabase
+          .from("events")
+          .delete()
+          .in("id", eventIds);
+        if (eventsDeleteError) throw eventsDeleteError;
+      }
+
+      if (matchIds.length > 0) {
+        const { error: matchesDeleteError } = await supabase
+          .from("matches")
+          .delete()
+          .in("id", matchIds);
+        if (matchesDeleteError) throw matchesDeleteError;
+      }
+
+      const { error: showDeleteError } = await supabase
+        .from("shows")
+        .delete()
+        .eq("id", activeShow.id);
+      if (showDeleteError) throw showDeleteError;
+
+      setShows((prev) => prev.filter((show) => show.id !== activeShow.id));
+      setSelectedShowId((prev) => {
+        if (prev !== activeShow.id) return prev;
+        const remaining = shows.filter((show) => show.id !== activeShow.id);
+        return remaining[0]?.id ?? "";
+      });
+      setToastMessage("Show deleted.");
+    } catch (error) {
+      const err = error as { message?: string };
+      setMessage(err?.message ?? "Failed to delete show.");
+    } finally {
+      setShowDeleteBusy(false);
+    }
   };
 
   const handleAddCustomEntrant = async () => {
@@ -1328,6 +1430,26 @@ export default function AdminPage() {
             }
             onSave={handleUpdateShow}
           />
+          {activeShow && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-red-200">
+                  Danger zone
+                </p>
+                <p className="mt-1 text-sm text-red-100">
+                  Deleting a show removes its events, matches, picks, and scores.
+                </p>
+              </div>
+              <button
+                className="inline-flex h-10 items-center justify-center rounded-full border border-red-400 px-4 text-[11px] font-semibold uppercase tracking-wide text-red-100 transition hover:border-red-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+                onClick={handleDeleteShow}
+                disabled={showDeleteBusy}
+              >
+                {showDeleteBusy ? "Deleting..." : "Delete show"}
+              </button>
+            </div>
+          )}
 
           {(showEvents.length > 0 || showMatches.length > 0) && (
             <div className="mt-6 grid gap-4 lg:grid-cols-2">
