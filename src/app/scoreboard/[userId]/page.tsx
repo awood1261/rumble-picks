@@ -521,6 +521,7 @@ export default function ScoreboardPicksPage() {
       return;
     }
 
+    let matchEntrantRowsList: MatchEntrantRow[] = [];
     if (matchList.length > 0) {
       const matchIds = matchList.map((match) => match.id);
       const [
@@ -546,8 +547,10 @@ export default function ScoreboardPicksPage() {
         setLoading(false);
         return;
       }
-      setMatchSides((matchSideRows ?? []) as MatchSideRow[]);
-      setMatchEntrants((matchEntrantRows ?? []) as MatchEntrantRow[]);
+      const sideRowsList = (matchSideRows ?? []) as MatchSideRow[];
+      matchEntrantRowsList = (matchEntrantRows ?? []) as MatchEntrantRow[];
+      setMatchSides(sideRowsList);
+      setMatchEntrants(matchEntrantRowsList);
     } else {
       setMatchSides([]);
       setMatchEntrants([]);
@@ -558,7 +561,7 @@ export default function ScoreboardPicksPage() {
     )
       .flatMap((pick) => [pick?.winner, pick?.loser])
       .filter(Boolean);
-    const matchEntrantIds = (matchEntrants ?? [])
+    const matchEntrantIds = matchEntrantRowsList
       .map((row) => row.entrant_id)
       .filter(Boolean);
     const rumblePickIds = Object.values(pickRow?.payload?.rumbles ?? {}).flatMap(
@@ -969,6 +972,9 @@ export default function ScoreboardPicksPage() {
                       .map((row) => entrantMap.get(row.entrant_id))
                       .filter(Boolean)
                   : [];
+                const pickEntrantIds = pickEntrants
+                  .map((entrant) => entrant?.id)
+                  .filter(Boolean) as string[];
                 const entrantCount = (matchEntrantsByMatch[match.id] ?? []).length;
                 const finishPick = payload.match_finish_picks?.[match.id];
                 const finishMethod = finishPick?.method ?? null;
@@ -997,7 +1003,7 @@ export default function ScoreboardPicksPage() {
                 return (
                   <div
                     key={match.id}
-                    className={`rounded-xl border px-3 py-2 ${
+                    className={`relative overflow-hidden rounded-xl border px-3 py-2 ${
                       !winner
                         ? "border-zinc-800"
                         : isCorrect
@@ -1005,111 +1011,121 @@ export default function ScoreboardPicksPage() {
                           : "border-red-500/50 bg-red-500/10"
                     }`}
                   >
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                            {match.kind}
-                          </p>
-                          <p className="text-sm font-semibold text-zinc-100">
-                            {match.name}
-                          </p>
+                    <details className="group peer">
+                      <summary className="relative flex cursor-pointer list-none items-start justify-between gap-3">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                                {match.kind}
+                              </p>
+                              <p className="text-sm font-semibold text-zinc-100">
+                                {match.name}
+                              </p>
+                            </div>
+                            {winner && (
+                              <span
+                                className={`text-[10px] font-semibold uppercase tracking-wide ${
+                                  isCorrect ? "text-emerald-200" : "text-red-200"
+                                }`}
+                              >
+                                {isCorrect ? `+${scoringRules.match_winner} pts` : "0 pts"}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs font-semibold text-zinc-200">
+                            Winner pick:{" "}
+                            <span className="font-semibold text-zinc-400">
+                              {pickEntrants.length > 0
+                                ? pickEntrants
+                                    .map((entrant) => entrant?.name)
+                                    .filter(Boolean)
+                                    .join(", ")
+                                : "Not set"}
+                            </span>
+                          </div>
                         </div>
-                        {winner && (
-                          <span
-                            className={`text-[10px] font-semibold uppercase tracking-wide ${
-                              isCorrect ? "text-emerald-200" : "text-red-200"
-                            }`}
-                          >
-                            {isCorrect ? `+${scoringRules.match_winner} pts` : "0 pts"}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs font-semibold text-zinc-200">
-                        Winner pick:{" "}
-                        <span className="font-semibold text-zinc-400">
-                          {pickEntrants.length > 0
-                            ? pickEntrants
-                                .map((entrant) => entrant?.name)
-                                .filter(Boolean)
-                                .join(", ")
-                            : "Not set"}
+                        <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
+                          <ChevronIcon />
                         </span>
-                      </div>
-                    </div>
-                    {showFinishDetails && (
-                      <div className="mt-3 space-y-2 text-xs text-zinc-400">
-                        <div className="flex items-center justify-between">
-                          <span>Finish</span>
-                          <span
-                            className={
-                              !match.finish_method
-                                ? "text-zinc-500"
-                                : finishMethodCorrect
-                                  ? "text-emerald-200"
-                                  : "text-red-200"
-                            }
-                          >
-                            {finishMethod ?? "Not set"}
-                            {match.finish_method
-                              ? ` • ${
-                                  finishMethodCorrect
-                                    ? `+${scoringRules.match_finish_method}`
-                                    : "0"
-                                } pts`
-                              : ""}
-                          </span>
+                      </summary>
+                      {showFinishDetails && (
+                        <div className="mt-3 space-y-2 text-xs text-zinc-400">
+                          <div className="flex items-center justify-between">
+                            <span>Finish</span>
+                            <span
+                              className={
+                                !match.finish_method
+                                  ? "text-zinc-500"
+                                  : finishMethodCorrect
+                                    ? "text-emerald-200"
+                                    : "text-red-200"
+                              }
+                            >
+                              {finishMethod ?? "Not set"}
+                              {match.finish_method
+                                ? ` • ${
+                                    finishMethodCorrect
+                                      ? `+${scoringRules.match_finish_method}`
+                                      : "0"
+                                  } pts`
+                                : ""}
+                            </span>
+                          </div>
+                          {(finishMethod === "pinfall" ||
+                            finishMethod === "submission") &&
+                            entrantCount > 2 && (
+                            <>
+                              <div className="flex items-center justify-between">
+                                <span>Winner</span>
+                                <span
+                                  className={
+                                    match.finish_winner_entrant_id
+                                      ? finishWinnerCorrect
+                                        ? "text-emerald-200"
+                                        : "text-red-200"
+                                      : "text-zinc-500"
+                                  }
+                                >
+                                  {finishWinner?.name ?? "Not set"}
+                                  {match.finish_winner_entrant_id
+                                    ? ` • ${
+                                        finishWinnerCorrect
+                                          ? `+${scoringRules.match_finish_winner}`
+                                          : "0"
+                                      } pts`
+                                    : ""}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span>Loser</span>
+                                <span
+                                  className={
+                                    match.finish_loser_entrant_id
+                                      ? finishLoserCorrect
+                                        ? "text-emerald-200"
+                                        : "text-red-200"
+                                      : "text-zinc-500"
+                                  }
+                                >
+                                  {finishLoser?.name ?? "Not set"}
+                                  {match.finish_loser_entrant_id
+                                    ? ` • ${
+                                        finishLoserCorrect
+                                          ? `+${scoringRules.match_finish_loser}`
+                                          : "0"
+                                      } pts`
+                                    : ""}
+                                </span>
+                              </div>
+                            </>
+                          )}
                         </div>
-                        {(finishMethod === "pinfall" ||
-                          finishMethod === "submission") &&
-                          entrantCount > 2 && (
-                          <>
-                            <div className="flex items-center justify-between">
-                              <span>Winner</span>
-                              <span
-                                className={
-                                  match.finish_winner_entrant_id
-                                    ? finishWinnerCorrect
-                                      ? "text-emerald-200"
-                                      : "text-red-200"
-                                    : "text-zinc-500"
-                                }
-                              >
-                                {finishWinner?.name ?? "Not set"}
-                                {match.finish_winner_entrant_id
-                                  ? ` • ${
-                                      finishWinnerCorrect
-                                        ? `+${scoringRules.match_finish_winner}`
-                                        : "0"
-                                    } pts`
-                                  : ""}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span>Loser</span>
-                              <span
-                                className={
-                                  match.finish_loser_entrant_id
-                                    ? finishLoserCorrect
-                                      ? "text-emerald-200"
-                                      : "text-red-200"
-                                    : "text-zinc-500"
-                                }
-                              >
-                                {finishLoser?.name ?? "Not set"}
-                                {match.finish_loser_entrant_id
-                                  ? ` • ${
-                                      finishLoserCorrect
-                                        ? `+${scoringRules.match_finish_loser}`
-                                        : "0"
-                                    } pts`
-                                  : ""}
-                              </span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
+                      )}
+                    </details>
+                    <div className="peer-open:hidden">
+                      {renderGhostStrip(pickEntrantIds, 3)}
+                    </div>
                   </div>
                 );
               })}
