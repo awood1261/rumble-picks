@@ -787,12 +787,7 @@ export default function ScoreboardPicksPage() {
             const actuals = actualsByEvent[event.id] ?? emptyActuals;
             return (
               <section key={event.id} className="mt-6">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-                    {event.rumble_gender ? `${event.rumble_gender} rumble` : "Rumble"}
-                  </p>
-                  <h2 className="text-lg font-semibold">{event.name}</h2>
-                </div>
+                <h2 className="text-lg font-semibold">{event.name}</h2>
                 <div className="mt-4 grid gap-4">
                   <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
                     <details className="group peer">
@@ -958,8 +953,8 @@ export default function ScoreboardPicksPage() {
             );
           })}
 
-        <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          <h2 className="text-lg font-semibold">Match Picks</h2>
+        <h2 className="text-lg font-semibold mt-10">Match Picks</h2>
+        <section className="mt-4 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           {matches.length === 0 ? (
             <p className="mt-3 text-sm text-zinc-400">No matches available.</p>
           ) : (
