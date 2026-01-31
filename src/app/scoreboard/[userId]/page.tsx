@@ -788,9 +788,20 @@ export default function ScoreboardPicksPage() {
           events.map((event) => {
             const rumblePick = payload.rumbles?.[event.id] ?? emptyRumblePick;
             const actuals = actualsByEvent[event.id] ?? emptyActuals;
+            const eventPoints = eventPointsByEvent[event.id] ?? {
+              entrants: 0,
+              finalFour: 0,
+              keyPicks: 0,
+              total: 0,
+            };
             return (
               <section key={event.id} className="mt-6">
-                <h2 className="text-lg font-semibold">{event.name}</h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-lg font-semibold">{event.name}</h2>
+                  <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                    {eventPoints.total} pts
+                  </span>
+                </div>
                 <div className="mt-4 grid gap-4">
                   <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
                     <details className="group peer">
@@ -799,6 +810,9 @@ export default function ScoreboardPicksPage() {
                           <h3 className="text-lg font-semibold">Entrants</h3>
                           <p className="mt-2 text-sm text-zinc-400">
                             {rumblePick.entrants.length} selected
+                          </p>
+                          <p className="mt-1 text-xs text-emerald-200">
+                            Points: {eventPoints.entrants}
                           </p>
                         </div>
                         <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
@@ -826,6 +840,9 @@ export default function ScoreboardPicksPage() {
                           <h3 className="text-lg font-semibold">Final Four</h3>
                           <p className="mt-2 text-sm text-zinc-400">
                             {rumblePick.final_four.length} selected
+                          </p>
+                          <p className="mt-1 text-xs text-emerald-200">
+                            Points: {eventPoints.finalFour}
                           </p>
                         </div>
                         <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
@@ -856,6 +873,9 @@ export default function ScoreboardPicksPage() {
                             {rumblePick.winner
                               ? entrantMap.get(String(rumblePick.winner))?.name ?? "Selected"
                               : "Not set"}
+                          </p>
+                          <p className="mt-1 text-xs text-emerald-200">
+                            Points: {eventPoints.keyPicks}
                           </p>
                         </div>
                         <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
@@ -957,7 +977,12 @@ export default function ScoreboardPicksPage() {
             );
           })}
 
-        <h2 className="text-lg font-semibold mt-10">Match Picks</h2>
+        <div className="mt-10 flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-semibold">Match Picks</h2>
+          <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+            {matchPointsSummary.total} pts
+          </span>
+        </div>
         <section className="mt-4 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           {matches.length === 0 ? (
             <p className="mt-3 text-sm text-zinc-400">No matches available.</p>
@@ -998,6 +1023,11 @@ export default function ScoreboardPicksPage() {
                     ? match.finish_loser_entrant_id === finishPick.loser
                     : false;
                 const isCorrect = winner && pick ? winner === pick : false;
+                const matchTotalPoints =
+                  (isCorrect ? scoringRules.match_winner : 0) +
+                  (finishMethodCorrect ? scoringRules.match_finish_method : 0) +
+                  (finishWinnerCorrect ? scoringRules.match_finish_winner : 0) +
+                  (finishLoserCorrect ? scoringRules.match_finish_loser : 0);
                 const showFinishDetails =
                   !!finishMethod || !!match.finish_method || !!finishPick;
 
@@ -1020,9 +1050,14 @@ export default function ScoreboardPicksPage() {
                               <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                                 {match.kind}
                               </p>
-                              <p className="text-sm font-semibold text-zinc-100">
-                                {match.name}
-                              </p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-semibold text-zinc-100">
+                                  {match.name}
+                                </p>
+                                <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                                  {matchTotalPoints} pts
+                                </span>
+                              </div>
                             </div>
                             {winner && (
                               <span
