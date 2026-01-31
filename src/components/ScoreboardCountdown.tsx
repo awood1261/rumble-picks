@@ -6,6 +6,7 @@ type ScoreboardCountdownProps = {
   intervalMs: number;
   lastUpdateAt: number;
   tickerItems?: string[];
+  onTickerClick?: () => void;
   className?: string;
 };
 
@@ -13,6 +14,7 @@ export const ScoreboardCountdown = ({
   intervalMs,
   lastUpdateAt,
   tickerItems = [],
+  onTickerClick,
   className,
 }: ScoreboardCountdownProps) => {
   const [countdownMs, setCountdownMs] = useState(intervalMs);
@@ -40,33 +42,39 @@ export const ScoreboardCountdown = ({
 
   return (
     <div className={className}>
-      <div
-        className={`countdown-banner mx-auto w-full max-w-5xl border border-amber-500/80 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-black shadow-lg shadow-black/30 ${
-          pulse ? "countdown-glow" : ""
-        }`}
-      >
-        Next update in <strong>{Math.ceil(countdownMs / 1000)}s</strong>
-      </div>
-      {tickerItems.length > 0 && (
-        <div className="ticker mx-auto mt-2 w-full max-w-5xl overflow-hidden rounded-full border border-zinc-800 bg-black/90 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-amber-200">
-          <div className="ticker-track">
-            <span className="ticker-items">
-              {tickerItems.map((item, index) => (
-                <span key={`${item}-${index}`} className="ticker-item">
-                  {item}
-                </span>
-              ))}
-            </span>
-            <span className="ticker-items" aria-hidden="true">
-              {tickerItems.map((item, index) => (
-                <span key={`${item}-dup-${index}`} className="ticker-item">
-                  {item}
-                </span>
-              ))}
-            </span>
-          </div>
+      <div className="mx-auto w-full max-w-5xl">
+        <div
+          className={`countdown-banner w-full border border-amber-500/80 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-black shadow-lg shadow-black/30 ${
+            pulse ? "countdown-glow" : ""
+          }`}
+        >
+          Next update in <strong>{Math.ceil(countdownMs / 1000)}s</strong>
         </div>
-      )}
+        {tickerItems.length > 0 && (
+          <button
+            className="ticker mt-2 w-full overflow-hidden rounded-full border border-zinc-800 bg-black/90 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-amber-200 transition hover:border-amber-300"
+            type="button"
+            onClick={onTickerClick}
+          >
+            <div className="ticker-track">
+              <span className="ticker-items">
+                {tickerItems.map((item, index) => (
+                  <span key={`${item}-${index}`} className="ticker-item">
+                    {item}
+                  </span>
+                ))}
+              </span>
+              <span className="ticker-items" aria-hidden="true">
+                {tickerItems.map((item, index) => (
+                  <span key={`${item}-dup-${index}`} className="ticker-item">
+                    {item}
+                  </span>
+                ))}
+              </span>
+            </div>
+          </button>
+        )}
+      </div>
       <style jsx>{`
         .countdown-banner {
           background: linear-gradient(180deg, #fbc400 0%, #f2b200 100%);
