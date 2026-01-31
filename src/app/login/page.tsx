@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import { APP_BASE_URL } from "../../lib/appConfig";
+import {
+  AVATAR_OPTIONS,
+  DEFAULT_AVATAR_KEY,
+} from "../../lib/avatarOptions";
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -13,6 +17,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [avatarKey, setAvatarKey] = useState(DEFAULT_AVATAR_KEY);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
@@ -67,6 +72,7 @@ export default function LoginPage() {
             emailRedirectTo: APP_BASE_URL,
             data: {
               display_name: displayName,
+              avatar_key: avatarKey,
             },
           },
         });
@@ -120,6 +126,42 @@ export default function LoginPage() {
                     onChange={(event) => setDisplayName(event.target.value)}
                     required
                   />
+                </div>
+              )}
+              {mode === "sign-up" && (
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-zinc-300">
+                      Choose an avatar
+                    </label>
+                    <span className="text-xs text-zinc-500">Optional</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
+                    {AVATAR_OPTIONS.map((option) => {
+                      const isActive = avatarKey === option.key;
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          className={`flex h-14 w-14 items-center justify-center rounded-2xl border transition ${
+                            isActive
+                              ? "border-amber-400/70 bg-amber-400/10"
+                              : "border-zinc-800 bg-zinc-950 hover:border-zinc-600"
+                          }`}
+                          onClick={() => setAvatarKey(option.key)}
+                          aria-pressed={isActive}
+                          aria-label={option.label}
+                        >
+                          <img
+                            src={option.src}
+                            alt={option.label}
+                            className="h-10 w-10"
+                            loading="lazy"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
               <div className="space-y-2 text-sm">

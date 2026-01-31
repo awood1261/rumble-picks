@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
+import { avatarSrcForKey } from "../lib/avatarOptions";
 
 export const NavBar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [avatarKey, setAvatarKey] = useState<string | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -20,14 +22,16 @@ export const NavBar = () => {
         if (userId) {
           supabase
             .from("profiles")
-            .select("is_admin")
+            .select("is_admin, avatar_key")
             .eq("id", userId)
             .maybeSingle()
             .then(({ data: profile }) => {
               setIsAdmin(Boolean(profile?.is_admin));
+              setAvatarKey(profile?.avatar_key ?? null);
             });
         } else {
           setIsAdmin(false);
+          setAvatarKey(null);
         }
       }
     });
@@ -39,14 +43,16 @@ export const NavBar = () => {
       if (userId) {
         supabase
           .from("profiles")
-          .select("is_admin")
+          .select("is_admin, avatar_key")
           .eq("id", userId)
           .maybeSingle()
           .then(({ data: profile }) => {
             setIsAdmin(Boolean(profile?.is_admin));
+            setAvatarKey(profile?.avatar_key ?? null);
           });
       } else {
         setIsAdmin(false);
+        setAvatarKey(null);
       }
     });
     return () => {
@@ -107,19 +113,11 @@ export const NavBar = () => {
               aria-current={pathname.startsWith("/profile") ? "page" : undefined}
               aria-label="Profile"
             >
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 21a8 8 0 0 0-16 0" />
-                <circle cx="12" cy="8" r="4" />
-              </svg>
+              <img
+                src={avatarSrcForKey(avatarKey)}
+                alt="Profile avatar"
+                className="h-6 w-6"
+              />
             </Link>
           )}
           {isAdmin && (

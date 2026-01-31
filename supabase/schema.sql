@@ -5,6 +5,7 @@ create extension if not exists "pgcrypto";
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
+  avatar_key text,
   is_admin boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -15,8 +16,12 @@ language plpgsql
 security definer
 as $$
 begin
-  insert into public.profiles (id, display_name)
-  values (new.id, coalesce(new.raw_user_meta_data->>'display_name', new.email));
+  insert into public.profiles (id, display_name, avatar_key)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'display_name', new.email),
+    new.raw_user_meta_data->>'avatar_key'
+  );
   return new;
 end;
 $$;

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
+import { avatarSrcForKey } from "../../lib/avatarOptions";
 import { ScoreboardCountdown } from "../../components/ScoreboardCountdown";
 import { scoringRules } from "../../lib/scoringRules";
 import { calculateScore } from "../../lib/scoring";
@@ -92,9 +93,10 @@ type MatchEntrantRow = {
 type ProfileRow = {
   id: string;
   display_name: string | null;
+  avatar_key: string | null;
 };
 
-type ScoreboardRow = ScoreRow & { display_name: string };
+type ScoreboardRow = ScoreRow & { display_name: string; avatar_key: string | null };
 
 const SCOREBOARD_POLL_INTERVAL_MS = 30000;
 
@@ -126,13 +128,17 @@ export default function ScoreboardPage() {
     const profileMap = new Map(
       profiles.map((profile) => [
         profile.id,
-        profile.display_name ?? "Anonymous",
+        {
+          display_name: profile.display_name ?? "Anonymous",
+          avatar_key: profile.avatar_key ?? null,
+        },
       ])
     );
     return scores
       .map((score) => ({
         ...score,
-        display_name: profileMap.get(score.user_id) ?? "Anonymous",
+        display_name: profileMap.get(score.user_id)?.display_name ?? "Anonymous",
+        avatar_key: profileMap.get(score.user_id)?.avatar_key ?? null,
       }))
       .sort((a, b) => b.points - a.points);
   }, [scores, profiles]);
@@ -329,7 +335,7 @@ export default function ScoreboardPage() {
     }
     const { data: profileRowsFresh, error: profileErrorFresh } = await supabase
       .from("profiles")
-      .select("id, display_name")
+      .select("id, display_name, avatar_key")
       .in("id", userIds);
     if (profileErrorFresh) {
       setMessage(profileErrorFresh.message);
@@ -801,7 +807,7 @@ export default function ScoreboardPage() {
                   return (
                   <Link
                     key={row.id}
-                    className={`rounded-2xl border px-4 py-4 transition hover:text-amber-200 ${
+                    className={`group rounded-2xl border px-4 py-4 transition hover:text-amber-200 ${
                       index === 0
                         ? "border-amber-400/60 bg-amber-400/10"
                         : "border-zinc-800 bg-zinc-950/50"
@@ -846,7 +852,18 @@ export default function ScoreboardPage() {
                         </span>
                       )}
                     </div>
-                    <p className="mt-3 text-lg font-semibold">{row.display_name}</p>
+                    <div className="mt-3 flex items-center gap-3">
+                      <img
+                        src={avatarSrcForKey(row.avatar_key)}
+                        alt={row.display_name}
+                        className="h-10 w-10 rounded-2xl border border-zinc-800 bg-black/40"
+                        loading="lazy"
+                      />
+                      <p className="text-lg font-semibold">{row.display_name}</p>
+                      <span className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-400/60 bg-black text-amber-200 transition group-hover:border-amber-300 group-hover:text-amber-100">
+                        <span className="text-base leading-none">›</span>
+                      </span>
+                    </div>
                     <p className="mt-1 text-sm text-zinc-400">
                       {row.points} points
                     </p>
@@ -875,38 +892,48 @@ export default function ScoreboardPage() {
                             </span>
                           )}
                         </span>
-                        <div>
-                          <p className="text-base font-semibold">
-                            {row.display_name}
-                          </p>
-                        <p className="text-xs text-zinc-400">
-                          Updated{" "}
-                          {new Date(row.updated_at).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                        {currentUserId === row.user_id && (
-                          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-sky-200">
-                            You
-                          </p>
-                        )}
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={avatarSrcForKey(row.avatar_key)}
+                            alt={row.display_name}
+                            className="h-9 w-9 rounded-2xl border border-zinc-800 bg-black/40"
+                            loading="lazy"
+                          />
+                          <div>
+                            <p className="text-base font-semibold">
+                              {row.display_name}
+                            </p>
+                            <p className="text-xs text-zinc-400">
+                              Updated{" "}
+                              {new Date(row.updated_at).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                            <div className="mt-1 text-left">
+                              <p className="text-lg font-semibold">
+                                {row.points}
+                              </p>
+                              <p className="text-[10px] text-zinc-500">points</p>
+                            </div>
+                            {currentUserId === row.user_id && (
+                              <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-sky-200">
+                                You
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-semibold">{row.points}</p>
-                      <p className="text-xs text-zinc-500">points</p>
-                    </div>
-                  </>
-                );
+                    </>
+                  );
 
-                const rowClassName = `flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between ${
+                const rowClassName = `group flex flex-col gap-2 py-4 transition sm:flex-row sm:items-center sm:justify-between ${
                   index % 2 === 0 ? "bg-zinc-950/40" : "bg-zinc-900/30"
                 } ${
                   currentUserId === row.user_id
                     ? "border border-sky-400/50 bg-sky-400/5"
                     : ""
-                }`;
+                } hover:bg-amber-500/5`;
 
                 if (!row.show_id) {
                   return (
@@ -922,10 +949,13 @@ export default function ScoreboardPage() {
                 return (
                   <Link
                     key={row.id}
-                    className={`${rowClassName} transition hover:text-amber-200`}
+                    className={`${rowClassName} hover:text-amber-200`}
                     href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
                   >
                     {content}
+                    <span className="mt-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-400/60 bg-black text-amber-200 transition group-hover:border-amber-300 group-hover:text-amber-100 sm:mt-0 sm:ml-6 sm:self-auto self-end">
+                      <span className="text-base leading-none">›</span>
+                    </span>
                   </Link>
                 );
               })}

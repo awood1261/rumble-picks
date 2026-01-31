@@ -3,11 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
+import {
+  AVATAR_OPTIONS,
+  DEFAULT_AVATAR_KEY,
+} from "../../lib/avatarOptions";
 
 export default function ProfilePage() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
+  const [avatarKey, setAvatarKey] = useState(DEFAULT_AVATAR_KEY);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -24,11 +29,12 @@ export default function ProfilePage() {
       setEmail(session.user.email ?? null);
       const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name")
+        .select("display_name, avatar_key")
         .eq("id", session.user.id)
         .maybeSingle();
       if (!ignore) {
         setDisplayName(profile?.display_name ?? "");
+        setAvatarKey(profile?.avatar_key ?? DEFAULT_AVATAR_KEY);
       }
     };
     load();
@@ -55,7 +61,7 @@ export default function ProfilePage() {
     }
     const { error: profileError } = await supabase
       .from("profiles")
-      .update({ display_name: trimmed })
+      .update({ display_name: trimmed, avatar_key: avatarKey })
       .eq("id", userId);
     if (profileError) {
       setMessage(profileError.message);
@@ -63,7 +69,7 @@ export default function ProfilePage() {
       return;
     }
     const { error: authError } = await supabase.auth.updateUser({
-      data: { display_name: trimmed },
+      data: { display_name: trimmed, avatar_key: avatarKey },
     });
     if (authError) {
       setMessage(authError.message);
@@ -97,13 +103,45 @@ export default function ProfilePage() {
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
             />
+            <div className="pt-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm text-zinc-300">Avatar</label>
+                <span className="text-xs text-zinc-500">Pick a look</span>
+              </div>
+              <div className="mt-3 grid grid-cols-4 gap-3 sm:grid-cols-5">
+                {AVATAR_OPTIONS.map((option) => {
+                  const isActive = avatarKey === option.key;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`flex h-14 w-14 items-center justify-center rounded-2xl border transition ${
+                        isActive
+                          ? "border-amber-400/70 bg-amber-400/10"
+                          : "border-zinc-800 bg-zinc-950 hover:border-zinc-600"
+                      }`}
+                      onClick={() => setAvatarKey(option.key)}
+                      aria-pressed={isActive}
+                      aria-label={option.label}
+                    >
+                      <img
+                        src={option.src}
+                        alt={option.label}
+                        className="h-10 w-10"
+                        loading="lazy"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <button
               className="inline-flex h-11 w-full items-center justify-center rounded-full border border-amber-400 text-sm font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
               type="button"
               onClick={handleUpdate}
               disabled={busy}
             >
-              {busy ? "Saving..." : "Save username"}
+              {busy ? "Saving..." : "Save profile"}
             </button>
           </div>
 
