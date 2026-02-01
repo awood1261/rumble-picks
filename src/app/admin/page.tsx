@@ -14,6 +14,7 @@ type EventRow = {
   rumble_gender: string | null;
   roster_year: number | null;
   show_id: string | null;
+  iron_person_entrant_id?: string | null;
 };
 
 type ShowRow = {
@@ -45,6 +46,15 @@ type RumbleEntryRow = {
   eliminated_at: string | null;
   eliminations_count: number;
   is_confirmed?: boolean;
+};
+
+type EventActionLogRow = {
+  id: string;
+  event_id: string;
+  action_type: string;
+  payload: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string;
 };
 
 type MatchRow = {
@@ -93,15 +103,20 @@ export default function AdminPage() {
   const [shows, setShows] = useState<ShowRow[]>([]);
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [entries, setEntries] = useState<RumbleEntryRow[]>([]);
+  const [entriesSnapshot, setEntriesSnapshot] = useState<RumbleEntryRow[]>([]);
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [showMatches, setShowMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
+  const [eventLogs, setEventLogs] = useState<EventActionLogRow[]>([]);
+  const [eventLogOpen, setEventLogOpen] = useState(false);
+  const [eventLogBusy, setEventLogBusy] = useState(false);
 
   const [eventName, setEventName] = useState("");
   const [eventGender, setEventGender] = useState("men");
   const [eventRosterYear, setEventRosterYear] = useState("");
   const [eventShowId, setEventShowId] = useState("");
+  const [eventIronPersonId, setEventIronPersonId] = useState("");
   const [showName, setShowName] = useState("");
   const [showStartsAt, setShowStartsAt] = useState("");
   const [showModalOpen, setShowModalOpen] = useState(false);
@@ -122,6 +137,7 @@ export default function AdminPage() {
   const [eliminateEntryId, setEliminateEntryId] = useState("");
   const [eliminatedById, setEliminatedById] = useState("");
   const [recalcBusy, setRecalcBusy] = useState(false);
+  const [bulkEntrySaveBusy, setBulkEntrySaveBusy] = useState(false);
   const [customEntrantName, setCustomEntrantName] = useState("");
   const [matchName, setMatchName] = useState("");
   const [matchKind, setMatchKind] = useState("match");
@@ -186,7 +202,8 @@ export default function AdminPage() {
       activeEvent?.roster_year ? String(activeEvent.roster_year) : ""
     );
     setEventShowId(activeEvent?.show_id ?? "");
-  }, [activeEvent?.roster_year, activeEvent?.show_id]);
+    setEventIronPersonId(activeEvent?.iron_person_entrant_id ?? "");
+  }, [activeEvent?.roster_year, activeEvent?.show_id, activeEvent?.iron_person_entrant_id]);
   useEffect(() => {
     if (!activeShow) {
       setShowEditName("");
@@ -222,6 +239,10 @@ export default function AdminPage() {
     }
   }, [focusedEventId, showEvents]);
   useEffect(() => {
+    if (!eventLogOpen || !activeEvent) return;
+    loadEventLogs();
+  }, [eventLogOpen, activeEvent?.id]);
+  useEffect(() => {
     if (!toastMessage) return;
     setToastVisible(true);
     const hideTimer = setTimeout(() => setToastVisible(false), 2600);
@@ -249,6 +270,150 @@ export default function AdminPage() {
   const entrantMap = useMemo(() => {
     return new Map(entrants.map((entrant) => [entrant.id, entrant]));
   }, [entrants]);
+  const logEventAction = async (
+    eventId: string,
+    actionType: string,
+    payload: Record<string, unknown>
+  ) => {
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user.id ?? null;
+    await supabase.from("event_action_log").insert({
+      event_id: eventId,
+      action_type: actionType,
+      payload,
+      created_by: userId,
+    });
+  };
+
+  const loadEventLogs = async () => {
+    if (!activeEvent) return;
+    const { data: logRows } = await supabase
+      .from("event_action_log")
+      .select("id, event_id, action_type, payload, created_by, created_at")
+      .eq("event_id", activeEvent.id)
+      .order("created_at", { ascending: false });
+    setEventLogs((logRows ?? []) as EventActionLogRow[]);
+  };
+
+  const formatLogSummary = (log: EventActionLogRow) => {
+    const payload = log.payload as Record<string, unknown>;
+    switch (log.action_type) {
+      case "add_entry":
+        return `Added ${payload.entrant_name ?? "entrant"}`;
+      case "remove_entry":
+        return `Removed ${payload.entrant_name ?? "entrant"}`;
+      case "update_entry":
+        return `Updated ${payload.entrant_name ?? "entrant"}`;
+      case "elimination":
+        return `Eliminated ${payload.eliminated_entrant_name ?? "entrant"}`;
+      default:
+        return "Updated event";
+    }
+  };
+
+  const getChangedEntries = () => {
+    const snapshotMap = new Map(entriesSnapshot.map((entry) => [entry.id, entry]));
+    return entries.filter((entry) => {
+      const before = snapshotMap.get(entry.id);
+      if (!before) return true;
+      return (
+        before.entry_number !== entry.entry_number ||
+        before.eliminations_count !== entry.eliminations_count ||
+        before.eliminated_by !== entry.eliminated_by ||
+        before.eliminated_at !== entry.eliminated_at ||
+        Boolean(before.is_confirmed) !== Boolean(entry.is_confirmed)
+      );
+    });
+  };
+
+  const handleUndoLog = async (log: EventActionLogRow) => {
+    if (!activeEvent) return;
+    setEventLogBusy(true);
+    setMessage(null);
+    try {
+      if (log.action_type === "add_entry") {
+        const entry = log.payload.entry as RumbleEntryRow | undefined;
+        if (entry?.id) {
+          const { error } = await supabase
+            .from("rumble_entries")
+            .delete()
+            .eq("id", entry.id);
+          if (error) throw error;
+        }
+      }
+      if (log.action_type === "remove_entry") {
+        const entry = log.payload.entry as RumbleEntryRow | undefined;
+        if (entry?.id) {
+          const { error } = await supabase.from("rumble_entries").insert({
+            id: entry.id,
+            event_id: log.event_id,
+            entrant_id: entry.entrant_id,
+            entry_number: entry.entry_number,
+            eliminated_by: entry.eliminated_by,
+            eliminated_at: entry.eliminated_at,
+            eliminations_count: entry.eliminations_count ?? 0,
+            is_confirmed: entry.is_confirmed ?? false,
+          });
+          if (error) throw error;
+        }
+      }
+      if (log.action_type === "update_entry") {
+        const before = log.payload.before as RumbleEntryRow | undefined;
+        if (before?.id) {
+          const { error } = await supabase
+            .from("rumble_entries")
+            .update({
+              entry_number: before.entry_number,
+              eliminated_by: before.eliminated_by,
+              eliminated_at: before.eliminated_at,
+              eliminations_count: before.eliminations_count ?? 0,
+              is_confirmed: before.is_confirmed ?? false,
+            })
+            .eq("id", before.id);
+          if (error) throw error;
+        }
+      }
+      if (log.action_type === "elimination") {
+        const eliminatedBefore =
+          log.payload.eliminated_entry_before as RumbleEntryRow | undefined;
+        const eliminatorBefore =
+          log.payload.eliminator_before as RumbleEntryRow | undefined;
+        if (eliminatedBefore?.id) {
+          const { error } = await supabase
+            .from("rumble_entries")
+            .update({
+              eliminated_by: eliminatedBefore.eliminated_by,
+              eliminated_at: eliminatedBefore.eliminated_at,
+            })
+            .eq("id", eliminatedBefore.id);
+          if (error) throw error;
+        }
+        if (eliminatorBefore?.id) {
+          const { error } = await supabase
+            .from("rumble_entries")
+            .update({
+              eliminations_count: eliminatorBefore.eliminations_count ?? 0,
+            })
+            .eq("id", eliminatorBefore.id);
+          if (error) throw error;
+        }
+      }
+      const { error: deleteLogError } = await supabase
+        .from("event_action_log")
+        .delete()
+        .eq("id", log.id);
+      if (deleteLogError) throw deleteLogError;
+      await handleRecalculateScores({ silent: true });
+      setEventLogs((prev) => prev.filter((item) => item.id !== log.id));
+      await loadEventLogs();
+      refreshData();
+    } catch (error) {
+      const err = error as { message?: string };
+      setMessage(err.message ?? "Failed to undo log entry.");
+    } finally {
+      setEventLogBusy(false);
+    }
+  };
   const matchSidesByMatch = useMemo(() => {
     return matchSides.reduce((map, side) => {
       if (!map[side.match_id]) {
@@ -356,7 +521,7 @@ export default function AdminPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("events")
-          .select("id, name, status, rumble_gender, roster_year, show_id")
+          .select("id, name, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
           .order("created_at", { ascending: false }),
         supabase
           .from("entrants")
@@ -433,7 +598,7 @@ export default function AdminPage() {
             .order("created_at", { ascending: false }),
           supabase
             .from("events")
-            .select("id, name, status, rumble_gender, roster_year, show_id")
+            .select("id, name, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
             .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
@@ -474,6 +639,7 @@ export default function AdminPage() {
       }
       setEntrants(entrantRows ?? []);
       setEntries(entryRows ?? []);
+      setEntriesSnapshot(entryRows ?? []);
       const matchListAll = (matchRows ?? []) as MatchRow[];
       const matchIdSet = new Set(matchListAll.map((match) => match.id));
       const matchSideList = (matchSideRows ?? []).filter((row) =>
@@ -821,6 +987,7 @@ export default function AdminPage() {
       .update({
         roster_year: eventRosterYear ? Number(eventRosterYear) : null,
         show_id: eventShowId || null,
+        iron_person_entrant_id: eventIronPersonId || null,
       })
       .eq("id", activeEvent.id);
     if (error) {
@@ -835,18 +1002,31 @@ export default function AdminPage() {
 
   const handleUpdateEntry = async (entry: RumbleEntryRow) => {
     setMessage(null);
+    const before = entries.find((item) => item.id === entry.id) ?? null;
+    const nextEliminatedAt = entry.eliminated_by
+      ? entry.eliminated_at ?? new Date().toISOString()
+      : null;
     const { error } = await supabase
       .from("rumble_entries")
       .update({
         entry_number: entry.entry_number,
         eliminations_count: entry.eliminations_count,
         eliminated_by: entry.eliminated_by || null,
+        eliminated_at: nextEliminatedAt,
         is_confirmed: entry.is_confirmed ?? false,
       })
       .eq("id", entry.id);
     if (error) {
       setMessage(error.message);
       return;
+    }
+    if (activeEvent && before) {
+      await logEventAction(activeEvent.id, "update_entry", {
+        entrant_id: entry.entrant_id,
+        entrant_name: entrantMap.get(entry.entrant_id)?.name ?? null,
+        before,
+        after: { ...entry, eliminated_at: nextEliminatedAt },
+      });
     }
     await handleRecalculateScores({ silent: true });
     setMessage("Entry updated.");
@@ -860,10 +1040,18 @@ export default function AdminPage() {
     );
     if (!shouldRemove) return;
     setMessage(null);
+    const existingEntry = entries.find((item) => item.id === entryId) ?? null;
     const { error } = await supabase.from("rumble_entries").delete().eq("id", entryId);
     if (error) {
       setMessage(error.message);
       return;
+    }
+    if (existingEntry) {
+      await logEventAction(activeEvent.id, "remove_entry", {
+        entry: existingEntry,
+        entrant_id: existingEntry.entrant_id,
+        entrant_name: entrantMap.get(existingEntry.entrant_id)?.name ?? null,
+      });
     }
     await handleRecalculateScores({ silent: true });
     setMessage("Entry removed.");
@@ -885,15 +1073,26 @@ export default function AdminPage() {
       setMessage("Entry number must be a number.");
       return;
     }
-    const { error } = await supabase.from("rumble_entries").insert({
-      event_id: activeEvent.id,
-      entrant_id: entryEntrantId,
-      entry_number: numberValue,
-      is_confirmed: entryConfirmed,
-    });
+    const { data: newEntry, error } = await supabase
+      .from("rumble_entries")
+      .insert({
+        event_id: activeEvent.id,
+        entrant_id: entryEntrantId,
+        entry_number: numberValue,
+        is_confirmed: entryConfirmed,
+      })
+      .select("id, entrant_id, entry_number, eliminated_by, eliminated_at, eliminations_count, is_confirmed")
+      .single();
     if (error) {
       setMessage(error.message);
       return;
+    }
+    if (newEntry) {
+      await logEventAction(activeEvent.id, "add_entry", {
+        entry: newEntry,
+        entrant_id: newEntry.entrant_id,
+        entrant_name: entrantMap.get(newEntry.entrant_id)?.name ?? null,
+      });
     }
     setEntryEntrantId("");
     setEntryNumber("");
@@ -1146,11 +1345,17 @@ export default function AdminPage() {
       setMessage("Choose a rumble entry to eliminate.");
       return;
     }
+    const eliminatedBefore =
+      entries.find((entry) => entry.id === eliminateEntryId) ?? null;
+    const eliminatorBefore =
+      eliminatedById &&
+      entries.find((entry) => entry.entrant_id === eliminatedById);
+    const eliminatedAt = new Date().toISOString();
     const { error } = await supabase
       .from("rumble_entries")
       .update({
         eliminated_by: eliminatedById || null,
-        eliminated_at: new Date().toISOString(),
+        eliminated_at: eliminatedAt,
       })
       .eq("id", eliminateEntryId);
     if (error) {
@@ -1175,10 +1380,92 @@ export default function AdminPage() {
       }
     }
 
+    if (activeEvent && eliminatedBefore) {
+      const eliminatedAfter: RumbleEntryRow = {
+        ...eliminatedBefore,
+        eliminated_by: eliminatedById || null,
+        eliminated_at: eliminatedAt,
+      };
+      const eliminatorAfter =
+        eliminatorBefore && eliminatedById
+          ? {
+              ...eliminatorBefore,
+              eliminations_count: (eliminatorBefore.eliminations_count ?? 0) + 1,
+            }
+          : null;
+      await logEventAction(activeEvent.id, "elimination", {
+        eliminated_entry_before: eliminatedBefore,
+        eliminated_entry_after: eliminatedAfter,
+        eliminator_before: eliminatorBefore ?? null,
+        eliminator_after: eliminatorAfter,
+        eliminated_entrant_name: entrantMap.get(eliminatedBefore.entrant_id)?.name ?? null,
+        eliminator_name: eliminatedById
+          ? entrantMap.get(eliminatedById)?.name ?? null
+          : null,
+      });
+    }
+
     await handleRecalculateScores({ silent: true });
     setEliminateEntryId("");
     setEliminatedById("");
     refreshData();
+  };
+
+  const handleSaveAllEntries = async () => {
+    if (!activeEvent) {
+      setMessage("Create an event first.");
+      return;
+    }
+    const changed = getChangedEntries();
+    if (changed.length === 0) {
+      setMessage("No entry changes to save.");
+      return;
+    }
+    setBulkEntrySaveBusy(true);
+    setMessage(null);
+    const snapshotMap = new Map(entriesSnapshot.map((entry) => [entry.id, entry]));
+    try {
+      for (const entry of changed) {
+        const nextEliminatedAt = entry.eliminated_by
+          ? entry.eliminated_at ?? new Date().toISOString()
+          : null;
+        const { error } = await supabase
+          .from("rumble_entries")
+          .update({
+            entry_number: entry.entry_number,
+            eliminations_count: entry.eliminations_count,
+            eliminated_by: entry.eliminated_by || null,
+            eliminated_at: nextEliminatedAt,
+            is_confirmed: entry.is_confirmed ?? false,
+          })
+          .eq("id", entry.id);
+        if (error) throw error;
+        const before = snapshotMap.get(entry.id);
+        if (before) {
+          await logEventAction(activeEvent.id, "update_entry", {
+            entrant_id: entry.entrant_id,
+            entrant_name: entrantMap.get(entry.entrant_id)?.name ?? null,
+            before,
+            after: { ...entry, eliminated_at: nextEliminatedAt },
+          });
+        }
+        setEntries((prev) =>
+          prev.map((item) =>
+            item.id === entry.id
+              ? { ...item, eliminated_at: nextEliminatedAt }
+              : item
+          )
+        );
+      }
+      await handleRecalculateScores({ silent: true });
+      setMessage(`Saved ${changed.length} entr${changed.length === 1 ? "y" : "ies"}.`);
+      refreshData();
+    } catch (error) {
+      const err = error as { message?: string };
+      setMessage(err.message ?? "Failed to save entries.");
+    } finally {
+      setBulkEntrySaveBusy(false);
+    }
   };
 
   const handleRecalculateScores = async (
@@ -1285,7 +1572,8 @@ export default function AdminPage() {
         scoringRules,
         matchList,
         matchEntrantList,
-        matchSideList
+        matchSideList,
+        { ironPersonId: activeEvent.iron_person_entrant_id ?? null }
       );
       return {
         user_id: pick.user_id,
@@ -1644,11 +1932,24 @@ export default function AdminPage() {
 
           {adminTab === "events" && (
             <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <h2 className="text-lg font-semibold">Edit event</h2>
-            <p className="mt-2 text-sm text-zinc-400">
-              Update the active event, manage custom entrants, and approve user
-              submissions.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Edit event</h2>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Update the active event, manage custom entrants, and approve user
+                  submissions.
+                </p>
+              </div>
+              {activeEvent && (
+                <button
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                  type="button"
+                  onClick={() => setEventLogOpen(true)}
+                >
+                  View event log
+                </button>
+              )}
+            </div>
             {!activeEvent ? (
               <p className="mt-4 text-sm text-zinc-400">
                 Select an event to edit.
@@ -1668,6 +1969,22 @@ export default function AdminPage() {
                     value={eventRosterYear}
                     onChange={(event) => setEventRosterYear(event.target.value)}
                   />
+                  <select
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    value={eventIronPersonId}
+                    onChange={(event) => setEventIronPersonId(event.target.value)}
+                  >
+                    <option value="">
+                      {activeEvent?.rumble_gender === "women"
+                        ? "Select iron woman (optional)"
+                        : "Select iron man (optional)"}
+                    </option>
+                    {eventEntrantOptions.map((entrant) => (
+                      <option key={entrant.id} value={entrant.id}>
+                        {entrant.name}
+                      </option>
+                    ))}
+                  </select>
                   <select
                     className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                     value={eventShowId}
@@ -2361,6 +2678,20 @@ export default function AdminPage() {
           <p className="mt-2 text-sm text-zinc-400">
             Edit entry numbers, eliminations, or the credited eliminator.
           </p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-zinc-500">
+              {getChangedEntries().length} unsaved change
+              {getChangedEntries().length === 1 ? "" : "s"}
+            </p>
+            <button
+              className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+              onClick={handleSaveAllEntries}
+              disabled={bulkEntrySaveBusy}
+            >
+              {bulkEntrySaveBusy ? "Saving..." : "Save all"}
+            </button>
+          </div>
           <div className="mt-6 max-h-[420px] space-y-4 overflow-y-auto pr-1">
             {entries.length === 0 ? (
               <p className="text-sm text-zinc-400">No entries yet.</p>
@@ -2526,6 +2857,61 @@ export default function AdminPage() {
             </button>
           </div>
         </section>
+
+        {eventLogOpen && activeEvent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+            <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-xl shadow-black/40">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-zinc-100">
+                    Event activity log
+                  </h3>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    {activeEvent.name}
+                  </p>
+                </div>
+                <button
+                  className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-4 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                  type="button"
+                  onClick={() => setEventLogOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="mt-5 max-h-[360px] space-y-3 overflow-y-auto">
+                {eventLogs.length === 0 ? (
+                  <p className="text-sm text-zinc-400">
+                    No entries yet for this event.
+                  </p>
+                ) : (
+                  eventLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200"
+                    >
+                      <div>
+                        <p className="font-medium text-zinc-100">
+                          {formatLogSummary(log)}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          {new Date(log.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        type="button"
+                        onClick={() => handleUndoLog(log)}
+                        disabled={eventLogBusy}
+                      >
+                        {eventLogBusy ? "Working..." : "Undo"}
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {showModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">

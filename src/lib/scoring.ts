@@ -7,6 +7,7 @@ export type PicksPayload = {
   entry_1?: string;
   entry_2?: string;
   entry_30?: string;
+  iron_person?: string;
   most_eliminations?: string;
   match_picks?: Record<string, string | null>;
   match_finish_picks?: Record<
@@ -53,7 +54,8 @@ export const calculateScore = (
   rules: ScoringRules,
   matches: MatchRow[] = [],
   matchEntrants: MatchEntrantRow[] = [],
-  matchSides: MatchSideRow[] = []
+  matchSides: MatchSideRow[] = [],
+  options?: { ironPersonId?: string | null }
 ) => {
   const breakdown: Record<string, number> = {};
   let points = 0;
@@ -62,6 +64,7 @@ export const calculateScore = (
   const remainingCount = rumbleEntries.filter((entry) => !entry.eliminated_at).length;
   const finalFourReady = totalEntries >= 4 && remainingCount <= 4;
   const winnerReady = totalEntries >= 30 && remainingCount === 1;
+  const ironReady = winnerReady;
   const mostElimsReady = winnerReady;
   const entrantIds = new Set(
     rumbleEntries
@@ -109,6 +112,23 @@ export const calculateScore = (
       ? rules.entry_30
       : 0;
   points += breakdown.entry_30;
+
+  const ironEntrant = ironReady
+    ? options?.ironPersonId ??
+      [...rumbleEntries]
+        .filter((entry) => entry.eliminated_at)
+        .sort(
+          (a, b) =>
+            new Date(b.eliminated_at as string).getTime() -
+            new Date(a.eliminated_at as string).getTime()
+        )[0]?.entrant_id ??
+      null
+    : null;
+  breakdown.iron_person =
+    ironReady && ironEntrant && payload.iron_person === ironEntrant
+      ? rules.iron_person
+      : 0;
+  points += breakdown.iron_person;
 
   const maxEliminations = rumbleEntries.reduce((max, entry) => {
     return Math.max(max, entry.eliminations_count ?? 0);

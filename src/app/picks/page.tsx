@@ -43,6 +43,7 @@ const emptyRumblePick: RumblePick = {
   entry_1: null,
   entry_2: null,
   entry_30: null,
+  iron_person: null,
   most_eliminations: null,
 };
 
@@ -54,11 +55,13 @@ const emptyPayload: PicksPayload = {
 
 const emptyActuals: EventActuals = {
   entrantSet: new Set(),
+  confirmedSet: new Set(),
   finalFourSet: new Set(),
   winner: null,
   entry1: null,
   entry2: null,
   entry30: null,
+  ironPerson: null,
   topElims: new Set(),
   hasData: false,
   totalEntries: 0,
@@ -68,6 +71,7 @@ const emptyActuals: EventActuals = {
   entry1Ready: false,
   entry2Ready: false,
   entry30Ready: false,
+  ironPersonReady: false,
   mostElimsReady: false,
 };
 
@@ -304,6 +308,9 @@ export default function PicksPage() {
       const eventEntries = rumbleEntries.filter(
         (entry) => entry.event_id === event.id
       );
+      const confirmedSet = new Set(
+        eventEntries.filter((entry) => entry.is_confirmed).map((entry) => entry.entrant_id)
+      );
       const entrantSet = new Set(
         eventEntries
           .filter((entry) => !entry.is_confirmed)
@@ -335,6 +342,18 @@ export default function PicksPage() {
       const entry1Ready = Boolean(entry1);
       const entry2Ready = Boolean(entry2);
       const entry30Ready = Boolean(entry30);
+      const ironPerson =
+        winnerReady
+          ? event.iron_person_entrant_id ??
+            [...eventEntries]
+              .filter((entry) => entry.eliminated_at)
+              .sort(
+                (a, b) =>
+                  new Date(b.eliminated_at as string).getTime() -
+                  new Date(a.eliminated_at as string).getTime()
+              )[0]?.entrant_id ?? null
+          : null;
+      const ironPersonReady = Boolean(ironPerson);
       const maxElims = eventEntries.reduce(
         (max, entry) => Math.max(max, entry.eliminations_count ?? 0),
         0
@@ -347,11 +366,13 @@ export default function PicksPage() {
 
       byEvent[event.id] = {
         entrantSet,
+        confirmedSet,
         finalFourSet: finalFourReady ? new Set(finalFour) : new Set(),
         winner,
         entry1,
         entry2,
         entry30,
+        ironPerson,
         topElims: mostElimsReady ? topElims : new Set(),
         hasData: totalEntries > 0,
         totalEntries,
@@ -361,6 +382,7 @@ export default function PicksPage() {
         entry1Ready,
         entry2Ready,
         entry30Ready,
+        ironPersonReady,
         mostElimsReady,
       };
     });
@@ -440,6 +462,11 @@ export default function PicksPage() {
         pick.entry_30 === actuals.entry30
           ? scoringRules.entry_30
           : 0) +
+        (actuals.ironPersonReady &&
+        pick.iron_person &&
+        pick.iron_person === actuals.ironPerson
+          ? scoringRules.iron_person
+          : 0) +
         (actuals.mostElimsReady &&
         pick.most_eliminations &&
         actuals.topElims.has(pick.most_eliminations)
@@ -455,6 +482,7 @@ export default function PicksPage() {
           actuals.entry1Ready ||
           actuals.entry2Ready ||
           actuals.entry30Ready ||
+          actuals.ironPersonReady ||
           actuals.mostElimsReady
           ? keyPicksTotal
           : 0,
@@ -497,7 +525,7 @@ export default function PicksPage() {
         .order("name", { ascending: true }),
       supabase
         .from("events")
-        .select("id, name, status, rumble_gender, roster_year, show_id")
+        .select("id, name, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
         .order("name", { ascending: true }),
     ]).then(([showsResult, eventsResult]) => {
       if (showsResult.error) {
@@ -752,6 +780,10 @@ export default function PicksPage() {
           entry_30:
             current.entry_30 && selected.has(current.entry_30)
               ? current.entry_30
+              : null,
+          iron_person:
+            current.iron_person && selected.has(current.iron_person)
+              ? current.iron_person
               : null,
           most_eliminations:
             current.most_eliminations && selected.has(current.most_eliminations)

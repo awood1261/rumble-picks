@@ -57,6 +57,7 @@ create table if not exists public.events (
   rumble_gender text,
   status text not null default 'draft',
   roster_year integer,
+  iron_person_entrant_id uuid references public.entrants(id),
   created_at timestamptz not null default now()
 );
 
@@ -129,9 +130,19 @@ create table if not exists public.rumble_entries (
   eliminated_by uuid references public.entrants(id),
   eliminated_at timestamptz,
   eliminations_count integer not null default 0,
+  is_confirmed boolean not null default false,
   created_at timestamptz not null default now(),
   unique (event_id, entrant_id),
   unique (event_id, entry_number)
+);
+
+create table if not exists public.event_action_log (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  action_type text not null,
+  payload jsonb not null,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.picks (
@@ -186,6 +197,9 @@ create trigger set_scores_updated_at
   before update on public.scores
   for each row execute procedure public.set_updated_at();
 
+alter table public.events
+  add column if not exists iron_person_entrant_id uuid references public.entrants(id);
+
 alter table public.profiles enable row level security;
 alter table public.shows enable row level security;
 alter table public.events enable row level security;
@@ -193,6 +207,7 @@ alter table public.entrants enable row level security;
 alter table public.matches enable row level security;
 alter table public.match_entrants enable row level security;
 alter table public.rumble_entries enable row level security;
+alter table public.event_action_log enable row level security;
 alter table public.match_sides enable row level security;
 alter table public.match_entrants enable row level security;
 alter table public.picks enable row level security;
@@ -300,6 +315,17 @@ create policy "Rumble entries are viewable by everyone"
 
 create policy "Rumble entries are modifiable by admins"
   on public.rumble_entries
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+create policy "Event action log is viewable by admins"
+  on public.event_action_log
+  for select
+  using (public.is_admin(auth.uid()));
+
+create policy "Event action log is modifiable by admins"
+  on public.event_action_log
   for all
   using (public.is_admin(auth.uid()))
   with check (public.is_admin(auth.uid()));

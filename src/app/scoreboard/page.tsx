@@ -32,6 +32,7 @@ type PickRow = {
         entry_1: string | null;
         entry_2: string | null;
         entry_30: string | null;
+        iron_person: string | null;
         most_eliminations: string | null;
       }
     >;
@@ -54,6 +55,7 @@ type EventRow = {
   name: string;
   show_id: string | null;
   rumble_gender: string | null;
+  iron_person_entrant_id?: string | null;
 };
 
 type RumbleEntryRow = {
@@ -176,6 +178,38 @@ export default function ScoreboardPage() {
     return winners;
   }, [rumbleEntries, showEvents]);
 
+  const matchEntrantCountByMatch = useMemo(() => {
+    return matchEntrants.reduce((map, item) => {
+      map[item.match_id] = (map[item.match_id] ?? 0) + 1;
+      return map;
+    }, {} as Record<string, number>);
+  }, [matchEntrants]);
+
+  const eventsComplete = useMemo(() => {
+    if (showEvents.length === 0) return true;
+    return showEvents.every((event) => Boolean(winnerEntrantsByEvent[event.id]));
+  }, [showEvents, winnerEntrantsByEvent]);
+
+  const matchesComplete = useMemo(() => {
+    if (matches.length === 0) return true;
+    return matches.every((match) => {
+      if (!match.winner_side_id || !match.finish_method) return false;
+      if (
+        (match.finish_method === "pinfall" ||
+          match.finish_method === "submission") &&
+        (matchEntrantCountByMatch[match.id] ?? 0) > 2
+      ) {
+        return (
+          Boolean(match.finish_winner_entrant_id) &&
+          Boolean(match.finish_loser_entrant_id)
+        );
+      }
+      return true;
+    });
+  }, [matches, matchEntrantCountByMatch]);
+
+  const showResultsComplete = eventsComplete && matchesComplete;
+
   const entrantMap = useMemo(() => {
     return new Map(eventEntrants.map((entrant) => [entrant.id, entrant]));
   }, [eventEntrants]);
@@ -229,7 +263,11 @@ export default function ScoreboardPage() {
   }, [entriesByEvent]);
 
   const computeRumbleScore = useCallback(
-    (pick: PickRow["payload"]["rumbles"][string] | undefined, entries: RumbleEntryRow[]) => {
+    (
+      pick: PickRow["payload"]["rumbles"][string] | undefined,
+      entries: RumbleEntryRow[],
+      ironOverride?: string | null
+    ) => {
       if (!pick) {
         return { points: 0, breakdown: {} as Record<string, number> };
       }
@@ -285,6 +323,19 @@ export default function ScoreboardPage() {
           pick.entry_2 && pick.entry_2 === entryTwo ? scoringRules.entry_2 : 0,
         entry_30:
           pick.entry_30 && pick.entry_30 === entryThirty ? scoringRules.entry_30 : 0,
+        iron_person:
+          winnerReady &&
+          pick.iron_person &&
+          (ironOverride ??
+            [...entries]
+              .filter((entry) => entry.eliminated_at)
+              .sort((a, b) => {
+                const aKey = a.eliminated_at ? new Date(a.eliminated_at).getTime() : 0;
+                const bKey = b.eliminated_at ? new Date(b.eliminated_at).getTime() : 0;
+                return bKey - aKey;
+              })[0]?.entrant_id) === pick.iron_person
+            ? scoringRules.iron_person
+            : 0,
         most_eliminations:
           mostElimsReady &&
           pick.most_eliminations &&
@@ -299,6 +350,7 @@ export default function ScoreboardPage() {
         breakdown.entry_1 +
         breakdown.entry_2 +
         breakdown.entry_30 +
+        breakdown.iron_person +
         breakdown.most_eliminations;
       return { points, breakdown };
     },
@@ -354,7 +406,11 @@ export default function ScoreboardPage() {
       showEvents.forEach((event) => {
         const entries = eventEntriesById[event.id] ?? [];
         const rumblePick = rumbles[event.id];
-        const rumbleScore = computeRumbleScore(rumblePick, entries);
+        const rumbleScore = computeRumbleScore(
+          rumblePick,
+          entries,
+          event.iron_person_entrant_id ?? null
+        );
         points += rumbleScore.points;
         Object.entries(rumbleScore.breakdown).forEach(([key, value]) => {
           breakdown[`${event.id}:${key}`] = value;
@@ -368,6 +424,7 @@ export default function ScoreboardPage() {
         entry_1: null,
         entry_2: null,
         entry_30: null,
+        iron_person: null,
         most_eliminations: null,
         match_picks: pick.payload?.match_picks ?? {},
         match_finish_picks: pick.payload?.match_finish_picks ?? {},
@@ -540,7 +597,7 @@ export default function ScoreboardPage() {
     const loadEvents = async () => {
       const { data: eventRows, error } = await supabase
         .from("events")
-        .select("id, name, show_id, rumble_gender")
+        .select("id, name, show_id, rumble_gender, iron_person_entrant_id")
         .order("name", { ascending: true });
       if (error) {
         setMessage(error.message);
@@ -831,8 +888,7 @@ export default function ScoreboardPage() {
                           </span>
                         )}
                       </span>
-                      {index === 0 &&
-                        showEvents.some((event) => winnerEntrantsByEvent[event.id]) && (
+                      {index === 0 && showResultsComplete && (
                         <span className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-amber-200">
                           <svg
                             className="h-10 w-10"

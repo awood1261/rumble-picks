@@ -3,7 +3,7 @@
 import { useState, type Dispatch, type Ref, type SetStateAction } from "react";
 import { EntrantCard } from "./EntrantCard";
 import { scoringRules } from "../lib/scoringRules";
-import { KEY_PICK_FIELDS } from "../lib/picksCopy";
+import { getKeyPickFields } from "../lib/picksCopy";
 import type {
   EditSection,
   EntrantRow,
@@ -242,7 +242,8 @@ export const RumbleSummarySection = ({
     correctSet: Set<string>,
     pointValue: number,
     actualsHasData: boolean,
-    totalEntries?: number
+    totalEntries?: number,
+    confirmedSet?: Set<string>
   ) => {
     if (ids.length === 0) {
       return <p className="text-sm text-zinc-400">None selected.</p>;
@@ -257,9 +258,12 @@ export const RumbleSummarySection = ({
           }))
           .sort((a, b) => a.name.localeCompare(b.name))
           .map(({ id, entrant, name }) => {
+            const isConfirmed = Boolean(confirmedSet?.has(id));
             const isCorrect = actualsHasData && correctSet.has(id);
             const showMisses =
               actualsHasData && (totalEntries === undefined || totalEntries >= 30);
+            const showConfirmed =
+              actualsHasData && totalEntries !== undefined && totalEntries >= 30 && isConfirmed;
             const status = entrant?.status ?? "approved";
             const isPending =
               status === "pending" && entrant?.created_by === userId;
@@ -271,7 +275,7 @@ export const RumbleSummarySection = ({
               <li
                 key={id}
                 className={`rounded-xl border px-3 py-2 ${
-                  !actualsHasData
+                  !actualsHasData || isConfirmed
                     ? "border-zinc-800"
                     : isCorrect
                       ? "border-emerald-400/60 bg-emerald-400/10"
@@ -295,7 +299,12 @@ export const RumbleSummarySection = ({
                     Approved
                   </p>
                 )}
-                {actualsHasData && (isCorrect || showMisses) && (
+                {showConfirmed && (
+                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                    Confirmed entrant
+                  </p>
+                )}
+                {actualsHasData && (isCorrect || showMisses) && !isConfirmed && (
                   <p
                     className={`mt-2 text-[10px] font-semibold uppercase tracking-wide ${
                       isCorrect ? "text-emerald-200" : "text-red-200"
@@ -352,7 +361,8 @@ export const RumbleSummarySection = ({
                     actuals.entrantSet,
                     scoringRules.entrants,
                     actuals.hasData,
-                    actuals.totalEntries
+                    actuals.totalEntries,
+                    actuals.confirmedSet
                   )}
                 </div>
               </div>
@@ -424,7 +434,10 @@ export const RumbleSummarySection = ({
                   Edit
                 </button>
                 <div className="mt-4 space-y-3 text-sm text-zinc-200">
-                  {[
+                  {(() => {
+                    const ironLabel =
+                      event.rumble_gender === "women" ? "Iron woman" : "Iron man";
+                    return [
                     [
                       "Winner",
                       eventPick.winner,
@@ -454,13 +467,21 @@ export const RumbleSummarySection = ({
                       actuals.entry30Ready,
                     ],
                     [
+                      ironLabel,
+                      eventPick.iron_person,
+                      actuals.ironPerson,
+                      scoringRules.iron_person,
+                      actuals.ironPersonReady,
+                    ],
+                    [
                       "Most eliminations",
                       eventPick.most_eliminations,
                       null,
                       scoringRules.most_eliminations,
                       actuals.mostElimsReady,
                     ],
-                  ].map(([label, value, actual, pointsValue, isReady]) => {
+                  ];
+                  })().map(([label, value, actual, pointsValue, isReady]) => {
                     const entrant = value ? getEntrant(String(value)) : null;
                     const ready = Boolean(isReady);
                     const isCorrect =
@@ -507,6 +528,7 @@ export const RumbleSummarySection = ({
                 eventPick.entry_1,
                 eventPick.entry_2,
                 eventPick.entry_30,
+                eventPick.iron_person,
                 eventPick.most_eliminations,
               ].filter(Boolean) as string[],
               3,
@@ -1323,7 +1345,7 @@ export const KeyPicksEditor = ({
       )}
     </div>
     <div className="mt-4 space-y-4">
-      {KEY_PICK_FIELDS.map((field) => (
+      {getKeyPickFields(event.rumble_gender).map((field) => (
         <label key={field.key} className="flex flex-col text-sm text-zinc-300">
           {field.label}
           <select

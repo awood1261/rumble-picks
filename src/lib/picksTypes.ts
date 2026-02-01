@@ -5,6 +5,7 @@ export type EventRow = {
   rumble_gender: string | null;
   roster_year: number | null;
   show_id: string | null;
+  iron_person_entrant_id?: string | null;
 };
 
 export type ShowRow = {
@@ -34,6 +35,7 @@ export type RumblePick = {
   entry_1: string | null;
   entry_2: string | null;
   entry_30: string | null;
+  iron_person: string | null;
   most_eliminations: string | null;
 };
 
@@ -82,11 +84,13 @@ export type MatchSideRow = {
 
 export type EventActuals = {
   entrantSet: Set<string>;
+  confirmedSet?: Set<string>;
   finalFourSet: Set<string>;
   winner: string | null;
   entry1: string | null;
   entry2: string | null;
   entry30: string | null;
+  ironPerson: string | null;
   topElims: Set<string>;
   hasData: boolean;
   totalEntries: number;
@@ -96,6 +100,7 @@ export type EventActuals = {
   entry1Ready: boolean;
   entry2Ready: boolean;
   entry30Ready: boolean;
+  ironPersonReady: boolean;
   mostElimsReady: boolean;
 };
 

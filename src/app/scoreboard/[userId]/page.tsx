@@ -14,6 +14,7 @@ type RumblePick = {
   entry_1: string | null;
   entry_2: string | null;
   entry_30: string | null;
+  iron_person: string | null;
   most_eliminations: string | null;
 };
 
@@ -38,6 +39,7 @@ type EventRow = {
   name: string;
   show_id: string | null;
   rumble_gender: string | null;
+  iron_person_entrant_id?: string | null;
 };
 
 type ShowRow = {
@@ -91,16 +93,19 @@ const emptyRumblePick: RumblePick = {
   entry_1: null,
   entry_2: null,
   entry_30: null,
+  iron_person: null,
   most_eliminations: null,
 };
 
 const emptyActuals = {
   entrantSet: new Set<string>(),
+  confirmedSet: new Set<string>(),
   finalFourSet: new Set<string>(),
   winner: null,
   entry1: null,
   entry2: null,
   entry30: null,
+  ironPerson: null,
   topElims: new Set<string>(),
   hasData: false,
   totalEntries: 0,
@@ -110,6 +115,7 @@ const emptyActuals = {
   entry1Ready: false,
   entry2Ready: false,
   entry30Ready: false,
+  ironPersonReady: false,
   mostElimsReady: false,
 };
 
@@ -229,6 +235,7 @@ export default function ScoreboardPicksPage() {
       string,
       {
         entrantSet: Set<string>;
+        confirmedSet: Set<string>;
         finalFourSet: Set<string>;
         winner: string | null;
         entry1: string | null;
@@ -241,6 +248,9 @@ export default function ScoreboardPicksPage() {
     events.forEach((event) => {
       const eventEntries = rumbleEntries.filter(
         (entry) => entry.event_id === event.id
+      );
+      const confirmedSet = new Set(
+        eventEntries.filter((entry) => entry.is_confirmed).map((entry) => entry.entrant_id)
       );
       const entrantSet = new Set(
         eventEntries
@@ -272,6 +282,18 @@ export default function ScoreboardPicksPage() {
       const entry1Ready = Boolean(entry1);
       const entry2Ready = Boolean(entry2);
       const entry30Ready = Boolean(entry30);
+      const ironPerson =
+        winnerReady
+          ? event.iron_person_entrant_id ??
+            [...eventEntries]
+              .filter((entry) => entry.eliminated_at)
+              .sort(
+                (a, b) =>
+                  new Date(b.eliminated_at as string).getTime() -
+                  new Date(a.eliminated_at as string).getTime()
+              )[0]?.entrant_id ?? null
+          : null;
+      const ironPersonReady = Boolean(ironPerson);
       const mostElimsReady = totalEntries >= 30 && remainingCount === 1;
       const maxElims = eventEntries.reduce(
         (max, entry) => Math.max(max, entry.eliminations_count ?? 0),
@@ -285,11 +307,13 @@ export default function ScoreboardPicksPage() {
 
       byEvent[event.id] = {
         entrantSet,
+        confirmedSet,
         finalFourSet: finalFourReady ? new Set(finalFour) : new Set(),
         winner,
         entry1,
         entry2,
         entry30,
+        ironPerson,
         topElims: mostElimsReady ? topElims : new Set(),
         hasData: totalEntries > 0,
         totalEntries,
@@ -299,6 +323,7 @@ export default function ScoreboardPicksPage() {
         entry1Ready,
         entry2Ready,
         entry30Ready,
+        ironPersonReady,
         mostElimsReady,
       };
     });
@@ -345,6 +370,11 @@ export default function ScoreboardPicksPage() {
         pick.entry_30 === actuals.entry30
           ? scoringRules.entry_30
           : 0) +
+        (actuals.ironPersonReady &&
+        pick.iron_person &&
+        pick.iron_person === actuals.ironPerson
+          ? scoringRules.iron_person
+          : 0) +
         (actuals.mostElimsReady &&
         pick.most_eliminations &&
         actuals.topElims.has(pick.most_eliminations)
@@ -362,6 +392,7 @@ export default function ScoreboardPicksPage() {
           actuals.entry1Ready ||
           actuals.entry2Ready ||
           actuals.entry30Ready ||
+          actuals.ironPersonReady ||
           actuals.mostElimsReady
             ? keyPicks
             : 0,
@@ -475,7 +506,7 @@ export default function ScoreboardPicksPage() {
         .maybeSingle(),
       supabase
         .from("events")
-        .select("id, name, show_id, rumble_gender")
+        .select("id, name, show_id, rumble_gender, iron_person_entrant_id")
         .eq("show_id", validShowId),
       supabase
         .from("profiles")
@@ -649,7 +680,8 @@ export default function ScoreboardPicksPage() {
     correctSet: Set<string>,
     points: number,
     actualsHasData: boolean,
-    totalEntries?: number
+    totalEntries?: number,
+    confirmedSet?: Set<string>
   ) => {
     if (!ids || ids.length === 0) {
       return <p className="text-sm text-zinc-400">None selected.</p>;
@@ -658,14 +690,17 @@ export default function ScoreboardPicksPage() {
       <ul className="mt-4 space-y-2 text-sm text-zinc-200">
         {ids.map((id) => {
           const entrant = entrantMap.get(id);
+          const isConfirmed = Boolean(confirmedSet?.has(id));
           const isCorrect = actualsHasData && correctSet.has(id);
           const showMisses =
             actualsHasData && (totalEntries === undefined || totalEntries >= 30);
+          const showConfirmed =
+            actualsHasData && totalEntries !== undefined && totalEntries >= 30 && isConfirmed;
           return (
             <li
               key={id}
               className={`rounded-xl border px-3 py-2 ${
-                !actualsHasData
+                !actualsHasData || isConfirmed
                   ? "border-zinc-800"
                   : isCorrect
                     ? "border-emerald-400/60 bg-emerald-400/10"
@@ -679,7 +714,12 @@ export default function ScoreboardPicksPage() {
                 promotion={entrant?.promotion}
                 imageUrl={entrant?.image_url}
               />
-              {actualsHasData && (isCorrect || showMisses) && (
+              {showConfirmed && (
+                <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                  Confirmed entrant
+                </p>
+              )}
+              {actualsHasData && (isCorrect || showMisses) && !isConfirmed && (
                 <p
                   className={`mt-2 text-[10px] font-semibold uppercase tracking-wide ${
                     isCorrect ? "text-emerald-200" : "text-red-200"
@@ -794,7 +834,8 @@ export default function ScoreboardPicksPage() {
                           actuals.entrantSet,
                           scoringRules.entrants,
                           actuals.hasData,
-                          actuals.totalEntries
+                          actuals.totalEntries,
+                          actuals.confirmedSet
                         )}
                       </div>
                     </details>
@@ -853,7 +894,10 @@ export default function ScoreboardPicksPage() {
                         </span>
                       </summary>
                       <div className="mt-3 space-y-3 text-sm text-zinc-200">
-                        {[
+                        {(() => {
+                          const ironLabel =
+                            event.rumble_gender === "women" ? "Iron woman" : "Iron man";
+                          return [
                           [
                             "Winner",
                             rumblePick.winner,
@@ -883,13 +927,21 @@ export default function ScoreboardPicksPage() {
                             actuals.entry30Ready,
                           ],
                           [
+                            ironLabel,
+                            rumblePick.iron_person,
+                            actuals.ironPerson,
+                            scoringRules.iron_person,
+                            actuals.ironPersonReady,
+                          ],
+                          [
                             "Most eliminations",
                             rumblePick.most_eliminations,
                             null,
                             scoringRules.most_eliminations,
                             actuals.mostElimsReady,
                           ],
-                        ].map(([label, value, actual, points, isReady]) => {
+                        ];
+                        })().map(([label, value, actual, points, isReady]) => {
                           const entrant = value ? entrantMap.get(String(value)) : null;
                           const ready = Boolean(isReady);
                           const isCorrect =
@@ -936,6 +988,7 @@ export default function ScoreboardPicksPage() {
                           rumblePick.entry_1,
                           rumblePick.entry_2,
                           rumblePick.entry_30,
+                          rumblePick.iron_person,
                           rumblePick.most_eliminations,
                         ].filter(Boolean) as string[],
                         3
