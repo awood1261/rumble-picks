@@ -501,7 +501,7 @@ export default function ScoreboardPicksPage() {
         .maybeSingle(),
       supabase
         .from("shows")
-        .select("id, name")
+        .select("id, name, image_url")
         .eq("id", validShowId)
         .maybeSingle(),
       supabase

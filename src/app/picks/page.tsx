@@ -521,7 +521,7 @@ export default function PicksPage() {
     Promise.all([
       supabase
         .from("shows")
-        .select("id, name, status, starts_at")
+        .select("id, name, image_url, status, starts_at")
         .order("name", { ascending: true }),
       supabase
         .from("events")
@@ -1018,7 +1018,6 @@ export default function PicksPage() {
         <ShowSelector
           shows={shows}
           selectedShowId={selectedShowId}
-          onChange={setSelectedShowId}
         />
 
         {hasEvents && !hasEntrantsForShow && (

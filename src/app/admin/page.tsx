@@ -118,9 +118,11 @@ export default function AdminPage() {
   const [eventShowId, setEventShowId] = useState("");
   const [eventIronPersonId, setEventIronPersonId] = useState("");
   const [showName, setShowName] = useState("");
+  const [showImageUrl, setShowImageUrl] = useState("");
   const [showStartsAt, setShowStartsAt] = useState("");
   const [showModalOpen, setShowModalOpen] = useState(false);
   const [showEditName, setShowEditName] = useState("");
+  const [showEditImageUrl, setShowEditImageUrl] = useState("");
   const [showEditStartsAt, setShowEditStartsAt] = useState("");
   const [showEditBusy, setShowEditBusy] = useState(false);
   const [showDeleteBusy, setShowDeleteBusy] = useState(false);
@@ -207,12 +209,14 @@ export default function AdminPage() {
   useEffect(() => {
     if (!activeShow) {
       setShowEditName("");
+      setShowEditImageUrl("");
       setShowEditStartsAt("");
       return;
     }
     setShowEditName(activeShow.name ?? "");
+    setShowEditImageUrl(activeShow.image_url ?? "");
     setShowEditStartsAt(formatLocalDateTime(activeShow.starts_at ?? null));
-  }, [activeShow?.id, activeShow?.name, activeShow?.starts_at]);
+  }, [activeShow?.id, activeShow?.name, activeShow?.image_url, activeShow?.starts_at]);
   useEffect(() => {
     if (!selectedShowId && activeShow?.id) {
       setSelectedShowId(activeShow.id);
@@ -521,7 +525,7 @@ export default function AdminPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("events")
-          .select("id, name, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
+          .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
           .order("created_at", { ascending: false }),
         supabase
           .from("entrants")
@@ -598,7 +602,7 @@ export default function AdminPage() {
             .order("created_at", { ascending: false }),
           supabase
             .from("events")
-            .select("id, name, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
+            .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
             .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
@@ -752,16 +756,18 @@ export default function AdminPage() {
       .from("shows")
       .insert({
         name: showName.trim(),
+        image_url: showImageUrl.trim() || null,
         status: "draft",
         starts_at: showStartsAt ? new Date(showStartsAt).toISOString() : null,
       })
-      .select("id, name")
+      .select("id, name, image_url")
       .single();
     if (error || !newShow) {
       setMessage(error?.message ?? "Failed to create show.");
       return;
     }
     setShowName("");
+    setShowImageUrl("");
     setShowStartsAt("");
     setSelectedShowId(newShow.id);
     setEventShowId(newShow.id);
@@ -783,6 +789,7 @@ export default function AdminPage() {
     setMessage(null);
     const payload = {
       name: showEditName.trim(),
+      image_url: showEditImageUrl.trim() || null,
       starts_at: showEditStartsAt
         ? new Date(showEditStartsAt).toISOString()
         : null,
@@ -791,7 +798,7 @@ export default function AdminPage() {
       .from("shows")
       .update(payload)
       .eq("id", activeShow.id)
-      .select("id, name, starts_at, status")
+      .select("id, name, image_url, starts_at, status")
       .single();
     if (error || !updatedShow) {
       setMessage(error?.message ?? "Unable to update show.");
@@ -1709,6 +1716,8 @@ export default function AdminPage() {
             activeShowName={activeShow?.name ?? null}
             name={showEditName}
             setName={setShowEditName}
+            imageUrl={showEditImageUrl}
+            setImageUrl={setShowEditImageUrl}
             startsAt={showEditStartsAt}
             setStartsAt={setShowEditStartsAt}
             saving={showEditBusy}
@@ -2926,6 +2935,12 @@ export default function AdminPage() {
                   placeholder="Show name"
                   value={showName}
                   onChange={(event) => setShowName(event.target.value)}
+                />
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                  placeholder="Show image URL"
+                  value={showImageUrl}
+                  onChange={(event) => setShowImageUrl(event.target.value)}
                 />
                 <input
                   className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"

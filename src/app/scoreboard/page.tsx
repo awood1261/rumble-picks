@@ -578,7 +578,7 @@ export default function ScoreboardPage() {
     const loadShows = async () => {
       const { data: showRows, error: showError } = await supabase
         .from("shows")
-        .select("id, name")
+        .select("id, name, image_url")
         .order("starts_at", { ascending: true });
       if (showError) {
         setMessage(showError.message);

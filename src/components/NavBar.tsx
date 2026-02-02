@@ -89,6 +89,13 @@ export const NavBar = () => {
         </Link>
         <div className="flex flex-nowrap items-center gap-3 text-xs font-semibold uppercase tracking-wide text-zinc-300">
           <Link
+            className={linkClass(pathname.startsWith("/shows"))}
+            href="/shows"
+            aria-current={pathname.startsWith("/shows") ? "page" : undefined}
+          >
+            Shows
+          </Link>
+          <Link
             className={linkClass(pathname.startsWith("/picks"))}
             href="/picks"
             aria-current={pathname.startsWith("/picks") ? "page" : undefined}

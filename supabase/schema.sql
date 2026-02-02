@@ -44,10 +44,14 @@ $$;
 create table if not exists public.shows (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  image_url text,
   starts_at timestamptz,
   status text not null default 'draft',
   created_at timestamptz not null default now()
 );
+
+alter table public.shows
+  add column if not exists image_url text;
 
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),

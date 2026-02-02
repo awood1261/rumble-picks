@@ -4,6 +4,8 @@ type ShowEditorProps = {
   activeShowName: string | null;
   name: string;
   setName: (value: string) => void;
+  imageUrl: string;
+  setImageUrl: (value: string) => void;
   startsAt: string;
   setStartsAt: (value: string) => void;
   saving: boolean;
@@ -16,6 +18,8 @@ export const ShowEditor = ({
   activeShowName,
   name,
   setName,
+  imageUrl,
+  setImageUrl,
   startsAt,
   setStartsAt,
   saving,
@@ -42,12 +46,19 @@ export const ShowEditor = ({
         Use current time
       </button>
     </div>
-    <div className="mt-4 grid gap-3 lg:grid-cols-[1.5fr_1fr_auto]">
+    <div className="mt-4 grid gap-3 lg:grid-cols-[1.3fr_1.2fr_1fr_auto]">
       <input
         className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
         placeholder="Show name"
         value={name}
         onChange={(event) => setName(event.target.value)}
+        disabled={disabled}
+      />
+      <input
+        className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+        placeholder="Show image URL"
+        value={imageUrl}
+        onChange={(event) => setImageUrl(event.target.value)}
         disabled={disabled}
       />
       <input

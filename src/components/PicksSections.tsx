@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type Dispatch, type Ref, type SetStateAction } from "react";
+import { type Dispatch, type Ref, type SetStateAction } from "react";
+import Link from "next/link";
 import { EntrantCard } from "./EntrantCard";
 import { scoringRules } from "../lib/scoringRules";
 import { getKeyPickFields } from "../lib/picksCopy";
@@ -79,15 +80,12 @@ export const MessageBanner = ({ message }: { message: string | null }) =>
 type ShowSelectorProps = {
   shows: ShowRow[];
   selectedShowId: string;
-  onChange: (showId: string) => void;
 };
 
 export const ShowSelector = ({
   shows,
   selectedShowId,
-  onChange,
 }: ShowSelectorProps) => {
-  const [isOpen, setIsOpen] = useState(false);
   const selectedShow = shows.find((show) => show.id === selectedShowId) ?? null;
 
   if (shows.length === 0) {
@@ -110,61 +108,14 @@ export const ShowSelector = ({
           </h2>
         </div>
         {shows.length > 1 && (
-          <button
-            type="button"
+          <Link
+            href="/shows"
             className="text-sm font-semibold text-amber-200 transition hover:text-amber-100"
-            onClick={() => setIsOpen(true)}
           >
             Change show
-          </button>
+          </Link>
         )}
       </div>
-
-      {shows.length > 1 && isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
-          <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-zinc-100">
-                Choose a show
-              </h3>
-              <button
-                type="button"
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs uppercase tracking-[0.3em] text-zinc-300 transition hover:border-zinc-500 hover:text-white"
-                onClick={() => setIsOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="mt-4 space-y-2">
-              {shows.map((show) => {
-                const isActive = show.id === selectedShowId;
-                return (
-                  <button
-                    key={show.id}
-                    type="button"
-                    className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                      isActive
-                        ? "border-amber-400/60 bg-amber-400/10 text-amber-100"
-                        : "border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:border-zinc-700"
-                    }`}
-                    onClick={() => {
-                      onChange(show.id);
-                      setIsOpen(false);
-                    }}
-                  >
-                    <span className="font-medium">{show.name}</span>
-                    {isActive && (
-                      <span className="text-xs uppercase tracking-[0.3em] text-amber-200">
-                        Active
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 };
