@@ -986,7 +986,7 @@ export const MatchPicksSection = ({
   onSave,
   saving,
 }: MatchPicksSectionProps) => (
-  <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+  <section className="mt-8">
     <div className="flex items-center justify-between">
       <div>
         <h2 className="text-lg font-semibold">Match Picks</h2>
@@ -1047,6 +1047,9 @@ export const MatchPicksSection = ({
           const showFinishWinner = !isSingles && !isTripleOrFatal;
           const showFinishLoser = !isSingles;
           const hasWinnerPick = Boolean(payload.match_picks[match.id]);
+          const matchupEntrants = sideEntries.slice(0, 2).map((side) => side.entrants[0] ?? null);
+          const leftSide = sideEntries[0];
+          const rightSide = sideEntries[1];
 
           return (
             <div
@@ -1072,50 +1075,120 @@ export const MatchPicksSection = ({
                 </p>
               )}
               {sideEntries.length > 0 && (
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  {sideEntries.map(({ side, label, entrants }) => {
-                    const isSelected = payload.match_picks[match.id] === side.id;
-                    return (
-                      <button
-                        key={side.id}
-                        type="button"
-                        onClick={() =>
-                          setPayload((prev) => ({
-                            ...prev,
-                            match_picks: {
-                              ...prev.match_picks,
-                              [match.id]: side.id,
-                            },
-                          }))
-                        }
-                        disabled={isLocked}
-                        className={`rounded-xl border px-3 py-2 text-left transition ${
-                          isSelected
-                            ? "border-amber-400/60 bg-amber-400/10"
-                            : "border-zinc-800 bg-zinc-900/60 hover:border-amber-400/60"
-                        } ${isLocked ? "cursor-not-allowed opacity-70" : ""}`}
-                        aria-pressed={isSelected}
-                      >
-                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                          {label}
-                        </p>
-                        {entrants.length === 0 ? (
-                          <p className="mt-2 text-xs text-zinc-500">No participants.</p>
-                        ) : (
-                          <div className="mt-2 space-y-2">
-                            {entrants.map((entrant) => (
-                              <EntrantCard
-                                key={entrant.id}
-                                name={entrant.name}
-                                promotion={entrant.promotion}
-                                imageUrl={entrant.image_url}
+                <div className="mt-3 space-y-3">
+                  {matchupEntrants.length === 2 && leftSide && rightSide && (
+                    <div className="relative h-58 overflow-hidden rounded-2xl border border-zinc-800 bg-black/40 md:h-64 lg:h-102">
+                      <div className="grid h-full w-full grid-cols-2">
+                        {matchupEntrants.map((entrant, index) => (
+                          <div
+                            key={`${match.id}-matchup-${index}`}
+                            className="relative h-full w-full overflow-hidden"
+                          >
+                            {entrant?.image_url ? (
+                              <img
+                                src={entrant.image_url}
+                                alt={entrant.name}
+                                className="h-full w-full object-cover"
                               />
-                            ))}
+                            ) : (
+                              <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                            {entrant?.name && (
+                              <div className="absolute inset-x-0 bottom-0 z-10 p-3 text-center">
+                                <span className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-100 drop-shadow">
+                                  {entrant.name}
+                                </span>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </button>
-                    );
-                  })}
+                        ))}
+                      </div>
+                      <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/15" />
+                      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+                        <span className="rounded-full bg-black px-3 py-1 text-ms lg:text-lg uppercase tracking-[0.4em] text-amber-200 shadow-lg">
+                          VS
+                        </span>
+                      </div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-zinc-950/20" />
+                      {!isLocked && (
+                        <>
+                          <button
+                            type="button"
+                            className={`absolute left-0 top-0 h-full w-1/2 transition ${
+                              payload.match_picks[match.id] === leftSide.side.id
+                                ? "bg-amber-400/20 ring-2 ring-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.35)]"
+                                : "hover:bg-white/5"
+                            }`}
+                            onClick={() =>
+                              setPayload((prev) => ({
+                                ...prev,
+                                match_picks: {
+                                  ...prev.match_picks,
+                                  [match.id]: leftSide.side.id,
+                                },
+                              }))
+                            }
+                            aria-label={`Select ${leftSide.label} as winner`}
+                          />
+                          <button
+                            type="button"
+                            className={`absolute right-0 top-0 h-full w-1/2 transition ${
+                              payload.match_picks[match.id] === rightSide.side.id
+                                ? "bg-amber-400/20 ring-2 ring-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.35)]"
+                                : "hover:bg-white/5"
+                            }`}
+                            onClick={() =>
+                              setPayload((prev) => ({
+                                ...prev,
+                                match_picks: {
+                                  ...prev.match_picks,
+                                  [match.id]: rightSide.side.id,
+                                },
+                              }))
+                            }
+                            aria-label={`Select ${rightSide.label} as winner`}
+                          />
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {sideEntries.length > 2 && (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {sideEntries.map(({ side, label, entrants }) => {
+                        const isSelected = payload.match_picks[match.id] === side.id;
+                        return (
+                          <button
+                            key={side.id}
+                            type="button"
+                            onClick={() =>
+                              setPayload((prev) => ({
+                                ...prev,
+                                match_picks: {
+                                  ...prev.match_picks,
+                                  [match.id]: side.id,
+                                },
+                              }))
+                            }
+                            disabled={isLocked}
+                            className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
+                              isSelected
+                                ? "border-amber-400/60 bg-amber-400/10 text-amber-100"
+                                : "border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:border-amber-400/60"
+                            } ${isLocked ? "cursor-not-allowed opacity-70" : ""}`}
+                            aria-pressed={isSelected}
+                          >
+                            <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                              {label}
+                            </p>
+                            <p className="mt-1 text-sm font-semibold">
+                              {entrants.map((entrant) => entrant.name).join(" • ")}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
