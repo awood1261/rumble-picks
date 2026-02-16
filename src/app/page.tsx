@@ -1,9 +1,5 @@
-import type { Metadata } from "next";
 import Link from "next/link";
-
-export const metadata: Metadata = {
-  title: "Home",
-};
+import { AdminConsoleLink } from "../components/AdminConsoleLink";
 
 export default function Home() {
   return (
@@ -14,9 +10,6 @@ export default function Home() {
           src="/images/bp-logo-text-tag.png"
           alt="BoutPick. Make Your Call"
         />
-        <p className="text-sm uppercase tracking-[0.3em] text-zinc-400">
-          Card Wide Predictions
-        </p>
         <h1 className="mt-6 text-balance text-4xl font-semibold leading-tight sm:text-5xl">
           Live event picks. Fan-vs-fan bragging rights.
         </h1>
@@ -47,12 +40,7 @@ export default function Home() {
             No account? You can sign up in seconds.
           </span>
         </div>
-        <Link
-          className="mt-8 text-xs uppercase tracking-[0.3em] text-zinc-500 transition hover:text-amber-300"
-          href="/admin"
-        >
-          Admin console
-        </Link>
+        <AdminConsoleLink />
       </main>
     </div>
   );
