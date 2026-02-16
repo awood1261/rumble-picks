@@ -103,7 +103,7 @@ export default function LoginPage() {
       <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center px-6 py-24">
         <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900/70 p-8 shadow-xl shadow-black/40">
           <h1 className="text-3xl font-semibold tracking-tight">
-            {sessionEmail ? "You are signed in" : "Welcome to Rumble Picks"}
+            {sessionEmail ? "You are signed in" : "Welcome to BoutPick"}
           </h1>
           <p className="mt-3 text-sm text-zinc-400">
             {sessionEmail

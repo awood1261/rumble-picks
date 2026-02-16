@@ -15,13 +15,13 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Rumble Picks",
-    template: "Rumble Picks: %s",
+    default: "BoutPick",
+    template: "BoutPick: %s",
   },
-  description: "Royal Rumble prediction game and live scoreboard.",
+  description: "BoutPick predictions and live scoreboard.",
   icons: {
-    icon: "/images/rumble-picks-logo.png",
-    apple: "/images/rumble-picks-logo.png",
+    icon: "/images/bp-logo.png",
+    apple: "/images/bp-logo.png",
   },
 };
 

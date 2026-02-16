@@ -32,9 +32,9 @@ export default function QrPage() {
         <img
           className="h-16 w-auto sm:h-20"
           src="/images/rumble-picks-logo.png"
-          alt="Rumble Picks"
+          alt="BoutPick"
         />
-        <h1 className="mt-6 text-3xl font-semibold">Scan to join Rumble Picks</h1>
+        <h1 className="mt-6 text-3xl font-semibold">Scan to join BoutPick</h1>
         <p className="mt-3 text-sm text-zinc-400">
           Share this QR code to open the app on a phone and jump straight into
           the picks.
@@ -44,7 +44,7 @@ export default function QrPage() {
             <img
               className="h-60 w-60 rounded-2xl border border-zinc-800 bg-zinc-950 p-3"
               src={qrDataUrl}
-              alt="Rumble Picks QR code"
+              alt="BoutPick QR code"
             />
           ) : (
             <div className="flex h-60 w-60 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950 text-sm text-zinc-400">

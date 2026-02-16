@@ -93,10 +93,10 @@ export const NavBar = () => {
         <Link
           className="absolute left-1/2 flex -translate-x-1/2 items-center md:static md:translate-x-0"
           href="/"
-          aria-label="Rumble Picks"
+          aria-label="BoutPick"
         >
           <img
-            className="h-20 w-auto sm:h-24 md:h-24"
+            className="h-14 w-auto sm:h-14"
             src="/images/bp-logo.png"
             alt="BoutPick"
           />
