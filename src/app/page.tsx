@@ -18,11 +18,11 @@ export default function Home() {
           Card Wide Predictions
         </p>
         <h1 className="mt-6 text-balance text-4xl font-semibold leading-tight sm:text-5xl">
-          Make your picks. Crown the champ.
+          Live event picks. Fan-vs-fan bragging rights.
         </h1>
         <p className="mt-6 max-w-2xl text-balance text-lg text-zinc-300">
-          Sign in to submit your predictions, watch the scoreboard
-          update in real time, and see who has the best eye bell-to-bell.
+          Show up, lock in your picks, and climb the leaderboard. See what other
+          diehards chose and prove you know the card best.
         </p>
         <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
           <Link
