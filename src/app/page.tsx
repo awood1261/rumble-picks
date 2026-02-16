@@ -8,7 +8,12 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center justify-center px-6 py-24 text-center">
+      <main className="mx-auto flex w-full max-w-5xl flex-col items-center justify-center px-6 py-6 sm:py-12 text-center">
+        <img
+          className="w-52 sm:w-xl"
+          src="/images/bp-logo-text-tag.png"
+          alt="BoutPick. Make Your Call"
+        />
         <p className="text-sm uppercase tracking-[0.3em] text-zinc-400">
           Card Wide Predictions
         </p>
