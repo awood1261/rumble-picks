@@ -80,7 +80,7 @@ export const NavBar = () => {
       <nav className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
         <button
           type="button"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-800 bg-black/60 text-zinc-200 transition hover:border-amber-400 hover:text-amber-200 md:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-800 bg-black/60 text-zinc-200 transition hover:border-amber-400 hover:text-amber-200 md:hidden"
           aria-label="Open menu"
           aria-expanded={menuOpen}
           onClick={() => {
@@ -88,7 +88,7 @@ export const NavBar = () => {
             setProfileMenuOpen(false);
           }}
         >
-          <span className="text-base">☰</span>
+          <span className="text-lg">☰</span>
         </button>
         <Link
           className="absolute left-1/2 flex -translate-x-1/2 items-center md:static md:translate-x-0"

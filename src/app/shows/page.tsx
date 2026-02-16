@@ -52,7 +52,7 @@ export default function ShowsPage() {
         ) : promotions.length === 0 ? (
           <p className="mt-8 text-sm text-zinc-400">No promotions available.</p>
         ) : (
-          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-3">
             {promotions.map((promotion) => (
               <Link
                 key={promotion.id}
