@@ -4,6 +4,9 @@ type ShowEditorProps = {
   activeShowName: string | null;
   name: string;
   setName: (value: string) => void;
+  promotions: { id: string; name: string }[];
+  promotionId: string;
+  setPromotionId: (value: string) => void;
   imageUrl: string;
   setImageUrl: (value: string) => void;
   startsAt: string;
@@ -18,6 +21,9 @@ export const ShowEditor = ({
   activeShowName,
   name,
   setName,
+  promotions,
+  promotionId,
+  setPromotionId,
   imageUrl,
   setImageUrl,
   startsAt,
@@ -46,7 +52,7 @@ export const ShowEditor = ({
         Use current time
       </button>
     </div>
-    <div className="mt-4 grid gap-3 lg:grid-cols-[1.3fr_1.2fr_1fr_auto]">
+    <div className="mt-4 grid gap-3 lg:grid-cols-[1.2fr_1fr_1.2fr_1fr_auto]">
       <input
         className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
         placeholder="Show name"
@@ -54,6 +60,19 @@ export const ShowEditor = ({
         onChange={(event) => setName(event.target.value)}
         disabled={disabled}
       />
+      <select
+        className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+        value={promotionId}
+        onChange={(event) => setPromotionId(event.target.value)}
+        disabled={disabled}
+      >
+        <option value="">Select promotion</option>
+        {promotions.map((promotion) => (
+          <option key={promotion.id} value={promotion.id}>
+            {promotion.name}
+          </option>
+        ))}
+      </select>
       <input
         className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
         placeholder="Show image URL"

@@ -20,8 +20,16 @@ type EventRow = {
 type ShowRow = {
   id: string;
   name: string;
+  image_url: string | null;
+  promotion_id: string | null;
   starts_at: string | null;
   status: string;
+};
+
+type PromotionRow = {
+  id: string;
+  name: string;
+  image_url: string | null;
 };
 
 type EntrantRow = {
@@ -101,6 +109,7 @@ export default function AdminPage() {
 
   const [events, setEvents] = useState<EventRow[]>([]);
   const [shows, setShows] = useState<ShowRow[]>([]);
+  const [promotions, setPromotions] = useState<PromotionRow[]>([]);
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [entries, setEntries] = useState<RumbleEntryRow[]>([]);
   const [entriesSnapshot, setEntriesSnapshot] = useState<RumbleEntryRow[]>([]);
@@ -118,10 +127,15 @@ export default function AdminPage() {
   const [eventShowId, setEventShowId] = useState("");
   const [eventIronPersonId, setEventIronPersonId] = useState("");
   const [showName, setShowName] = useState("");
+  const [showPromotionId, setShowPromotionId] = useState("");
   const [showImageUrl, setShowImageUrl] = useState("");
   const [showStartsAt, setShowStartsAt] = useState("");
   const [showModalOpen, setShowModalOpen] = useState(false);
+  const [promotionModalOpen, setPromotionModalOpen] = useState(false);
+  const [promotionName, setPromotionName] = useState("");
+  const [promotionImageUrl, setPromotionImageUrl] = useState("");
   const [showEditName, setShowEditName] = useState("");
+  const [showEditPromotionId, setShowEditPromotionId] = useState("");
   const [showEditImageUrl, setShowEditImageUrl] = useState("");
   const [showEditStartsAt, setShowEditStartsAt] = useState("");
   const [showEditBusy, setShowEditBusy] = useState(false);
@@ -209,14 +223,22 @@ export default function AdminPage() {
   useEffect(() => {
     if (!activeShow) {
       setShowEditName("");
+      setShowEditPromotionId("");
       setShowEditImageUrl("");
       setShowEditStartsAt("");
       return;
     }
     setShowEditName(activeShow.name ?? "");
+    setShowEditPromotionId(activeShow.promotion_id ?? "");
     setShowEditImageUrl(activeShow.image_url ?? "");
     setShowEditStartsAt(formatLocalDateTime(activeShow.starts_at ?? null));
-  }, [activeShow?.id, activeShow?.name, activeShow?.image_url, activeShow?.starts_at]);
+  }, [
+    activeShow?.id,
+    activeShow?.name,
+    activeShow?.image_url,
+    activeShow?.promotion_id,
+    activeShow?.starts_at,
+  ]);
   useEffect(() => {
     if (!selectedShowId && activeShow?.id) {
       setSelectedShowId(activeShow.id);
@@ -513,6 +535,7 @@ export default function AdminPage() {
       const showIdForQuery = selectedShowId || null;
       const [
         { data: showRows },
+        { data: promotionRows },
         { data: eventRows },
         { data: entrantRows },
         { data: matchRows },
@@ -521,8 +544,12 @@ export default function AdminPage() {
       ] = await Promise.all([
         supabase
           .from("shows")
-          .select("id, name, status, starts_at")
+          .select("id, name, image_url, promotion_id, status, starts_at")
           .order("created_at", { ascending: false }),
+        supabase
+          .from("promotions")
+          .select("id, name, image_url")
+          .order("name", { ascending: true }),
         supabase
           .from("events")
           .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
@@ -553,6 +580,7 @@ export default function AdminPage() {
           .select("id, match_id, entrant_id, side_id"),
       ]);
       setShows(showRows ?? []);
+      setPromotions(promotionRows ?? []);
       setEvents(eventRows ?? []);
       setEntrants(entrantRows ?? []);
       const matchListAll = (matchRows ?? []) as MatchRow[];
@@ -589,6 +617,7 @@ export default function AdminPage() {
         const showIdForQuery = selectedShowId || activeEvent.show_id || null;
         const [
           { data: showRows },
+          { data: promotionRows },
           { data: eventRows },
           { data: entrantRows },
           { data: entryRows },
@@ -598,8 +627,12 @@ export default function AdminPage() {
       ] = await Promise.all([
           supabase
             .from("shows")
-            .select("id, name, status, starts_at")
+            .select("id, name, image_url, promotion_id, status, starts_at")
             .order("created_at", { ascending: false }),
+          supabase
+            .from("promotions")
+            .select("id, name, image_url")
+            .order("name", { ascending: true }),
           supabase
             .from("events")
             .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
@@ -637,6 +670,7 @@ export default function AdminPage() {
             .select("id, match_id, entrant_id, side_id"),
         ]);
       setShows(showRows ?? []);
+      setPromotions(promotionRows ?? []);
       setEvents(eventRows ?? []);
       if (!selectedShowId && showRows && showRows.length > 0) {
         setSelectedShowId(showRows[0].id);
@@ -752,27 +786,58 @@ export default function AdminPage() {
       setMessage("Show name is required.");
       return;
     }
+    if (!showPromotionId) {
+      setMessage("Select a promotion for the show.");
+      return;
+    }
     const { data: newShow, error } = await supabase
       .from("shows")
       .insert({
         name: showName.trim(),
+        promotion_id: showPromotionId,
         image_url: showImageUrl.trim() || null,
         status: "draft",
         starts_at: showStartsAt ? new Date(showStartsAt).toISOString() : null,
       })
-      .select("id, name, image_url")
+      .select("id, name, image_url, promotion_id")
       .single();
     if (error || !newShow) {
       setMessage(error?.message ?? "Failed to create show.");
       return;
     }
     setShowName("");
+    setShowPromotionId("");
     setShowImageUrl("");
     setShowStartsAt("");
     setSelectedShowId(newShow.id);
     setEventShowId(newShow.id);
     setShowModalOpen(false);
     setToastMessage(`Show created: ${newShow.name}. Active show updated.`);
+    refreshData();
+  };
+
+  const handleCreatePromotion = async () => {
+    setMessage(null);
+    if (!promotionName.trim()) {
+      setMessage("Promotion name is required.");
+      return;
+    }
+    const { data: newPromotion, error } = await supabase
+      .from("promotions")
+      .insert({
+        name: promotionName.trim(),
+        image_url: promotionImageUrl.trim() || null,
+      })
+      .select("id, name, image_url")
+      .single();
+    if (error || !newPromotion) {
+      setMessage(error?.message ?? "Failed to create promotion.");
+      return;
+    }
+    setPromotionName("");
+    setPromotionImageUrl("");
+    setPromotionModalOpen(false);
+    setToastMessage(`Promotion created: ${newPromotion.name}.`);
     refreshData();
   };
 
@@ -785,10 +850,15 @@ export default function AdminPage() {
       setMessage("Show name is required.");
       return;
     }
+    if (!showEditPromotionId) {
+      setMessage("Select a promotion for the show.");
+      return;
+    }
     setShowEditBusy(true);
     setMessage(null);
     const payload = {
       name: showEditName.trim(),
+      promotion_id: showEditPromotionId,
       image_url: showEditImageUrl.trim() || null,
       starts_at: showEditStartsAt
         ? new Date(showEditStartsAt).toISOString()
@@ -798,7 +868,7 @@ export default function AdminPage() {
       .from("shows")
       .update(payload)
       .eq("id", activeShow.id)
-      .select("id, name, image_url, starts_at, status")
+      .select("id, name, image_url, promotion_id, starts_at, status")
       .single();
     if (error || !updatedShow) {
       setMessage(error?.message ?? "Unable to update show.");
@@ -1716,6 +1786,9 @@ export default function AdminPage() {
             activeShowName={activeShow?.name ?? null}
             name={showEditName}
             setName={setShowEditName}
+            promotions={promotions}
+            promotionId={showEditPromotionId}
+            setPromotionId={setShowEditPromotionId}
             imageUrl={showEditImageUrl}
             setImageUrl={setShowEditImageUrl}
             startsAt={showEditStartsAt}
@@ -2936,6 +3009,18 @@ export default function AdminPage() {
                   value={showName}
                   onChange={(event) => setShowName(event.target.value)}
                 />
+                <select
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                  value={showPromotionId}
+                  onChange={(event) => setShowPromotionId(event.target.value)}
+                >
+                  <option value="">Select promotion</option>
+                  {promotions.map((promotion) => (
+                    <option key={promotion.id} value={promotion.id}>
+                      {promotion.name}
+                    </option>
+                  ))}
+                </select>
                 <input
                   className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
                   placeholder="Show image URL"
@@ -2948,6 +3033,16 @@ export default function AdminPage() {
                   value={showStartsAt}
                   onChange={(event) => setShowStartsAt(event.target.value)}
                 />
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-400">
+                <span>Need a new promotion?</span>
+                <button
+                  className="inline-flex items-center justify-center rounded-full border border-zinc-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
+                  type="button"
+                  onClick={() => setPromotionModalOpen(true)}
+                >
+                  Add promotion
+                </button>
               </div>
               <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
                 <button
@@ -2963,6 +3058,49 @@ export default function AdminPage() {
                   onClick={handleCreateShow}
                 >
                   Save show
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {promotionModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+            <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-xl shadow-black/40">
+              <h3 className="text-lg font-semibold text-zinc-100">
+                Create promotion
+              </h3>
+              <p className="mt-2 text-sm text-zinc-400">
+                Add a promotion grouping for shows.
+              </p>
+              <div className="mt-4 space-y-3">
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                  placeholder="Promotion name"
+                  value={promotionName}
+                  onChange={(event) => setPromotionName(event.target.value)}
+                />
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                  placeholder="Promotion image URL"
+                  value={promotionImageUrl}
+                  onChange={(event) => setPromotionImageUrl(event.target.value)}
+                />
+              </div>
+              <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+                <button
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                  type="button"
+                  onClick={() => setPromotionModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="inline-flex h-10 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
+                  type="button"
+                  onClick={handleCreatePromotion}
+                >
+                  Save promotion
                 </button>
               </div>
             </div>

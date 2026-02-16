@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { supabase } from "../../../lib/supabaseClient";
-import type { ShowRow } from "../../../lib/picksTypes";
+import { supabase } from "../../../../lib/supabaseClient";
+import type { ShowRow } from "../../../../lib/picksTypes";
 
 export default function ShowDetailPage() {
   const params = useParams();
-  const showId = typeof params?.id === "string" ? params.id : "";
+  const showId = typeof params?.showId === "string" ? params.showId : "";
+  const promotionId =
+    typeof params?.promotionId === "string" ? params.promotionId : "";
   const [show, setShow] = useState<ShowRow | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -18,7 +20,7 @@ export default function ShowDetailPage() {
     const load = async () => {
       const { data, error } = await supabase
         .from("shows")
-        .select("id, name, image_url, starts_at, status")
+        .select("id, name, image_url, starts_at, status, promotion_id")
         .eq("id", showId)
         .maybeSingle();
       if (ignore) return;
@@ -43,7 +45,7 @@ export default function ShowDetailPage() {
             className="mt-4 inline-flex rounded-full border border-amber-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
             href="/shows"
           >
-            Back to shows
+            Back to promotions
           </Link>
         </main>
       </div>
@@ -104,7 +106,7 @@ export default function ShowDetailPage() {
         <div className="mt-8">
           <Link
             className="inline-flex rounded-full border border-zinc-700 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-white"
-            href="/shows"
+            href={promotionId ? `/shows/${promotionId}` : "/shows"}
           >
             Back to shows
           </Link>

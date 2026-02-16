@@ -45,6 +45,7 @@ create table if not exists public.shows (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   image_url text,
+  promotion_id uuid references public.promotions(id) on delete set null,
   starts_at timestamptz,
   status text not null default 'draft',
   created_at timestamptz not null default now()
@@ -52,6 +53,16 @@ create table if not exists public.shows (
 
 alter table public.shows
   add column if not exists image_url text;
+
+alter table public.shows
+  add column if not exists promotion_id uuid references public.promotions(id) on delete set null;
+
+create table if not exists public.promotions (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  image_url text,
+  created_at timestamptz not null default now()
+);
 
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
@@ -205,6 +216,7 @@ alter table public.events
   add column if not exists iron_person_entrant_id uuid references public.entrants(id);
 
 alter table public.profiles enable row level security;
+alter table public.promotions enable row level security;
 alter table public.shows enable row level security;
 alter table public.events enable row level security;
 alter table public.entrants enable row level security;
@@ -233,6 +245,18 @@ create policy "Profiles are updateable by owner"
   for update
   using (auth.uid() = id)
   with check (auth.uid() = id);
+
+-- Promotions: public read, admin writes.
+create policy "Promotions are viewable by everyone"
+  on public.promotions
+  for select
+  using (true);
+
+create policy "Promotions are modifiable by admins"
+  on public.promotions
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
 
 -- Public read access for event data; admin-only writes.
 create policy "Shows are viewable by everyone"

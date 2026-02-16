@@ -12,8 +12,15 @@ export type ShowRow = {
   id: string;
   name: string;
   image_url: string | null;
+  promotion_id: string | null;
   starts_at: string | null;
   status: string;
+};
+
+export type PromotionRow = {
+  id: string;
+  name: string;
+  image_url: string | null;
 };
 
 export type EntrantRow = {

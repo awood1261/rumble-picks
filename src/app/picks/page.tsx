@@ -521,7 +521,7 @@ export default function PicksPage() {
     Promise.all([
       supabase
         .from("shows")
-        .select("id, name, image_url, status, starts_at")
+        .select("id, name, image_url, promotion_id, status, starts_at")
         .order("name", { ascending: true }),
       supabase
         .from("events")
