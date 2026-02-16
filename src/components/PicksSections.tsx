@@ -999,6 +999,55 @@ type MatchPicksSectionProps = {
   saving: boolean;
 };
 
+type SegmentedOption = {
+  value: string;
+  label: string;
+};
+
+type SegmentedPillsProps = {
+  options: SegmentedOption[];
+  selectedValue: string | null;
+  onSelect: (value: string) => void;
+  disabled?: boolean;
+  className?: string;
+};
+
+const SegmentedPills = ({
+  options,
+  selectedValue,
+  onSelect,
+  disabled = false,
+  className = "",
+}: SegmentedPillsProps) => (
+  <div
+    className={`flex w-full p-1 ${className}`}
+  >
+    {options.map((option, index) => {
+      const isSelected = selectedValue === option.value;
+      const isFirst = index === 0;
+      const isLast = index === options.length - 1;
+      return (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onSelect(option.value)}
+          disabled={disabled}
+          aria-pressed={isSelected}
+          className={`relative flex-1 border px-5 py-3 text-[10px] uppercase transition ${
+            isSelected
+              ? "z-10 border-amber-400/70 bg-amber-400/20 text-amber-100"
+              : "border-zinc-800 text-zinc-300 hover:text-amber-200"
+          } ${isFirst ? "rounded-l-full" : ""} ${isLast ? "rounded-r-full" : ""} ${
+            !isFirst ? "-ml-px" : ""
+          } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+        >
+          {option.label}
+        </button>
+      );
+    })}
+  </div>
+);
+
 export const MatchPicksSection = ({
   matches,
   matchSidesByMatch,
@@ -1085,6 +1134,11 @@ export const MatchPicksSection = ({
           const matchupEntrants = sideEntries.slice(0, 2).map((side) => side.entrants[0] ?? null);
           const leftSide = sideEntries[0];
           const rightSide = sideEntries[1];
+          const finishOptions = [
+            { value: "pinfall", label: "Pinfall" },
+            { value: "submission", label: "Submission" },
+            { value: "disqualification", label: "Disqualify" },
+          ];
 
           return (
             <div
@@ -1235,55 +1289,32 @@ export const MatchPicksSection = ({
                     <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                       Match length
                     </p>
-                    <div className="mt-2 inline-flex flex-wrap rounded-full bg-zinc-950 p-1">
-                      {lengthOptions.map((option) => {
-                        const isSelected = lengthPick === option.value;
-                        const index = lengthOptions.findIndex(
-                          (item) => item.value === option.value
-                        );
-                        const isFirst = index === 0;
-                        const isLast = index === lengthOptions.length - 1;
-                        return (
-                          <button
-                            key={`${match.id}-${option.value}`}
-                            type="button"
-                            onClick={() =>
-                              setPayload((prev) => ({
-                                ...prev,
-                                match_length_picks: {
-                                  ...prev.match_length_picks,
-                                  [match.id]: option.value,
-                                },
-                              }))
-                            }
-                            disabled={isLocked}
-                            aria-pressed={isSelected}
-                            className={`relative border px-5 py-3 text-xs uppercase transition ${
-                              isSelected
-                                ? "z-10 border-amber-400/70 bg-amber-400/20 text-amber-100"
-                                : "border-zinc-800 text-zinc-300 hover:text-amber-200"
-                            } ${isFirst ? "rounded-l-full" : ""} ${
-                              isLast ? "rounded-r-full" : ""
-                            } ${!isFirst ? "-ml-px" : ""} ${
-                              isLocked ? "cursor-not-allowed opacity-60" : ""
-                            }`}
-                          >
-                            {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <SegmentedPills
+                      options={lengthOptions}
+                      selectedValue={lengthPick}
+                      disabled={isLocked}
+                      onSelect={(value) =>
+                        setPayload((prev) => ({
+                          ...prev,
+                          match_length_picks: {
+                            ...prev.match_length_picks,
+                            [match.id]: value,
+                          },
+                        }))
+                      }
+                      className="mt-2"
+                    />
                   </div>
                   <div className="mt-4">
                     <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                       Finish type
                     </p>
-                    <div className="mt-2 grid gap-3 md:grid-cols-3">
-                    <select
-                      className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                      value={finishPick.method ?? ""}
-                      onChange={(event) => {
-                        const method = event.target.value || null;
+                    <SegmentedPills
+                      options={finishOptions}
+                      selectedValue={finishPick.method}
+                      disabled={isLocked || !hasWinnerPick}
+                      onSelect={(value) => {
+                        const method = value;
                         setPayload((prev) => ({
                           ...prev,
                           match_finish_picks: {
@@ -1304,77 +1335,75 @@ export const MatchPicksSection = ({
                           },
                         }));
                       }}
-                      disabled={isLocked || !hasWinnerPick}
-                    >
-                      <option value="">Select finish</option>
-                      <option value="pinfall">Pinfall</option>
-                      <option value="submission">Submission</option>
-                      <option value="disqualification">Disqualification</option>
-                    </select>
-                    {showFinishWinner && (
-                      <select
-                        className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                        value={finishPick.winner ?? ""}
-                        onChange={(event) =>
-                          setPayload((prev) => ({
-                            ...prev,
-                            match_finish_picks: {
-                              ...prev.match_finish_picks,
-                              [match.id]: {
-                                ...finishPick,
-                                winner: event.target.value || null,
+                      className="mt-2"
+                    />
+                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                      {showFinishWinner && (
+                        <select
+                          className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                          value={finishPick.winner ?? ""}
+                          onChange={(event) =>
+                            setPayload((prev) => ({
+                              ...prev,
+                              match_finish_picks: {
+                                ...prev.match_finish_picks,
+                                [match.id]: {
+                                  ...finishPick,
+                                  winner: event.target.value || null,
+                                },
                               },
-                            },
-                          }))
-                        }
-                        disabled={
-                          isLocked ||
-                          !hasWinnerPick ||
-                          !finishRequiresEntrants ||
-                          (isTag && !winningSideId)
-                        }
-                      >
-                        <option value="">Winner (pin/sub)</option>
-                        {(isTag ? winningSideEntrants : sortedEntrants).map(
-                          (entrant) => (
-                            <option key={entrant.id} value={entrant.id}>
-                              {entrant.name}
-                            </option>
-                          )
-                        )}
-                      </select>
-                    )}
-                    {showFinishLoser && (
-                      <select
-                        className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                        value={finishPick.loser ?? ""}
-                        onChange={(event) =>
-                          setPayload((prev) => ({
-                            ...prev,
-                            match_finish_picks: {
-                              ...prev.match_finish_picks,
-                              [match.id]: {
-                                ...finishPick,
-                                loser: event.target.value || null,
+                            }))
+                          }
+                          disabled={
+                            isLocked ||
+                            !hasWinnerPick ||
+                            !finishRequiresEntrants ||
+                            (isTag && !winningSideId)
+                          }
+                        >
+                          <option value="">Winner (pin/sub)</option>
+                          {(isTag ? winningSideEntrants : sortedEntrants).map(
+                            (entrant) => (
+                              <option key={entrant.id} value={entrant.id}>
+                                {entrant.name}
+                              </option>
+                            )
+                          )}
+                        </select>
+                      )}
+                      {showFinishLoser && (
+                        <select
+                          className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                          value={finishPick.loser ?? ""}
+                          onChange={(event) =>
+                            setPayload((prev) => ({
+                              ...prev,
+                              match_finish_picks: {
+                                ...prev.match_finish_picks,
+                                [match.id]: {
+                                  ...finishPick,
+                                  loser: event.target.value || null,
+                                },
                               },
-                            },
-                          }))
-                        }
-                        disabled={
-                          isLocked ||
-                          !hasWinnerPick ||
-                          !finishRequiresEntrants ||
-                          (isTag && !winningSideId)
-                        }
-                      >
-                        <option value="">Loser (pin/sub)</option>
-                        {(isTag ? losingSideEntrants : sortedEntrants).map((entrant) => (
-                          <option key={entrant.id} value={entrant.id}>
-                            {entrant.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                            }))
+                          }
+                          disabled={
+                            isLocked ||
+                            !hasWinnerPick ||
+                            !finishRequiresEntrants ||
+                            (isTag && !winningSideId)
+                          }
+                        >
+                          <option value="">Loser (pin/sub)</option>
+                          {(isTag ? losingSideEntrants : sortedEntrants).map(
+                            (entrant) => (
+                              <option key={entrant.id} value={entrant.id}>
+                                {entrant.name}
+                              </option>
+                            )
+                          )}
+                        </select>
+                      )}
                     </div>
                   </div>
                   <p className="mt-2 text-xs text-zinc-500">
