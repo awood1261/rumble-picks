@@ -51,6 +51,7 @@ const emptyPayload: PicksPayload = {
   rumbles: {},
   match_picks: {},
   match_finish_picks: {},
+  match_length_picks: {},
 };
 
 const emptyActuals: EventActuals = {
@@ -590,7 +591,7 @@ export default function PicksPage() {
     const { data: matchRows, error: matchError } = await supabase
       .from("matches")
       .select(
-        "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id"
+        "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length"
       )
       .eq("show_id", selectedShowId)
       .order("created_at", { ascending: true });
@@ -686,6 +687,11 @@ export default function PicksPage() {
               string,
               { method: string | null; winner: string | null; loser: string | null }
             >) ?? {},
+          match_length_picks:
+            (savedPayload.match_length_picks as Record<
+              string,
+              "sprint" | "standard" | "epic" | null
+            >) ?? {},
         });
         setHasSaved(true);
       } else {
@@ -693,6 +699,7 @@ export default function PicksPage() {
           rumbles: nextRumbles,
           match_picks: {},
           match_finish_picks: {},
+          match_length_picks: {},
         });
       }
     };
@@ -753,6 +760,11 @@ export default function PicksPage() {
           matchIdSet.has(matchId)
         )
       );
+      const matchLengthPicks = Object.fromEntries(
+        Object.entries(prev.match_length_picks ?? {}).filter(([matchId]) =>
+          matchIdSet.has(matchId)
+        )
+      );
 
       const nextRumbles: Record<string, RumblePick> = {};
       showEvents.forEach((event) => {
@@ -797,6 +809,7 @@ export default function PicksPage() {
         rumbles: nextRumbles,
         match_picks: matchPicks,
         match_finish_picks: matchFinishPicks,
+        match_length_picks: matchLengthPicks,
       };
     });
   }, [matches, showEvents, confirmedEntrantsByEvent]);

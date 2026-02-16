@@ -41,6 +41,7 @@ type PickRow = {
       string,
       { method: string | null; winner: string | null; loser: string | null }
     >;
+    match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
   };
   updated_at: string;
 };
@@ -78,6 +79,7 @@ type MatchRow = {
   finish_method: string | null;
   finish_winner_entrant_id: string | null;
   finish_loser_entrant_id: string | null;
+  match_length?: string | null;
 };
 
 type MatchSideRow = {
@@ -193,7 +195,9 @@ export default function ScoreboardPage() {
   const matchesComplete = useMemo(() => {
     if (matches.length === 0) return true;
     return matches.every((match) => {
-      if (!match.winner_side_id || !match.finish_method) return false;
+      if (!match.winner_side_id || !match.finish_method || !match.match_length) {
+        return false;
+      }
       if (
         (match.finish_method === "pinfall" ||
           match.finish_method === "submission") &&
@@ -428,6 +432,7 @@ export default function ScoreboardPage() {
         most_eliminations: null,
         match_picks: pick.payload?.match_picks ?? {},
         match_finish_picks: pick.payload?.match_finish_picks ?? {},
+        match_length_picks: pick.payload?.match_length_picks ?? {},
       };
       const matchScore = calculateScore(
         matchPayload,
@@ -440,6 +445,7 @@ export default function ScoreboardPage() {
       points += matchScore.points;
       breakdown.matches = matchScore.breakdown.matches ?? 0;
       breakdown.match_finish_method = matchScore.breakdown.match_finish_method ?? 0;
+      breakdown.match_length = matchScore.breakdown.match_length ?? 0;
 
       return {
         id: pick.id,
@@ -645,7 +651,7 @@ export default function ScoreboardPage() {
       const { data: matchRows, error } = await supabase
         .from("matches")
         .select(
-          "id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id"
+          "id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length"
         )
         .eq("show_id", selectedShowId)
         .order("created_at", { ascending: true });

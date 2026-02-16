@@ -810,6 +810,7 @@ export const MatchSummarySection = ({
             : [];
           const entrantCount = (matchEntrantsByMatch[match.id] ?? []).length;
           const finishPick = payload.match_finish_picks[match.id];
+          const lengthPick = payload.match_length_picks?.[match.id] ?? null;
           const finishMethod = finishPick?.method ?? null;
           const finishWinner = finishPick?.winner
             ? entrantByIdAll.get(finishPick.winner)
@@ -821,6 +822,10 @@ export const MatchSummarySection = ({
             match.finish_method && finishMethod
               ? match.finish_method === finishMethod
               : false;
+          const matchLengthCorrect =
+            match.match_length && lengthPick
+              ? match.match_length === lengthPick
+              : false;
           const finishWinnerCorrect =
             match.finish_winner_entrant_id && finishPick?.winner
               ? match.finish_winner_entrant_id === finishPick.winner
@@ -831,7 +836,7 @@ export const MatchSummarySection = ({
               : false;
           const isCorrect = winner && pick ? winner === pick : false;
           const showFinishDetails =
-            !!finishMethod || !!match.finish_method || !!finishPick;
+            !!finishMethod || !!match.finish_method || !!finishPick || !!lengthPick;
 
           return (
             <div
@@ -880,6 +885,27 @@ export const MatchSummarySection = ({
               </div>
               {showFinishDetails && (
                 <div className="mt-3 space-y-2 text-xs text-zinc-400">
+                  <div className="flex items-center justify-between">
+                    <span>Match length</span>
+                    <span
+                      className={
+                        !match.match_length
+                          ? "text-zinc-500"
+                          : matchLengthCorrect
+                            ? "text-emerald-200"
+                            : "text-red-200"
+                      }
+                    >
+                      {lengthPick ? lengthPick.replace("_", " ") : "Not set"}
+                      {match.match_length
+                        ? ` • ${
+                            matchLengthCorrect
+                              ? `+${scoringRules.match_length}`
+                              : "0"
+                          } pts`
+                        : ""}
+                    </span>
+                  </div>
                   <div className="flex items-center justify-between">
                     <span>Finish</span>
                     <span
@@ -1030,6 +1056,15 @@ export const MatchPicksSection = ({
             winner: null,
             loser: null,
           };
+          const lengthPick = payload.match_length_picks?.[match.id] ?? null;
+          const lengthOptions: Array<{
+            value: "sprint" | "standard" | "epic";
+            label: string;
+          }> = [
+            { value: "sprint", label: "Sprint" },
+            { value: "standard", label: "Standard" },
+            { value: "epic", label: "Epic" },
+          ];
           const matchType = match.match_type;
           const isSingles = matchType === "singles";
           const isTripleOrFatal =
@@ -1191,11 +1226,59 @@ export const MatchPicksSection = ({
                   )}
                 </div>
               )}
-              <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                    Finish prediction
-                  </p>
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <div className="mt-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                  Finish prediction
+                </p>
+                <div className="mt-2 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
+                  <div className="mt-3">
+                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      Match length
+                    </p>
+                    <div className="mt-2 inline-flex flex-wrap rounded-full bg-zinc-950 p-1">
+                      {lengthOptions.map((option) => {
+                        const isSelected = lengthPick === option.value;
+                        const index = lengthOptions.findIndex(
+                          (item) => item.value === option.value
+                        );
+                        const isFirst = index === 0;
+                        const isLast = index === lengthOptions.length - 1;
+                        return (
+                          <button
+                            key={`${match.id}-${option.value}`}
+                            type="button"
+                            onClick={() =>
+                              setPayload((prev) => ({
+                                ...prev,
+                                match_length_picks: {
+                                  ...prev.match_length_picks,
+                                  [match.id]: option.value,
+                                },
+                              }))
+                            }
+                            disabled={isLocked}
+                            aria-pressed={isSelected}
+                            className={`relative border px-5 py-3 text-xs uppercase transition ${
+                              isSelected
+                                ? "z-10 border-amber-400/70 bg-amber-400/20 text-amber-100"
+                                : "border-zinc-800 text-zinc-300 hover:text-amber-200"
+                            } ${isFirst ? "rounded-l-full" : ""} ${
+                              isLast ? "rounded-r-full" : ""
+                            } ${!isFirst ? "-ml-px" : ""} ${
+                              isLocked ? "cursor-not-allowed opacity-60" : ""
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      Finish type
+                    </p>
+                    <div className="mt-2 grid gap-3 md:grid-cols-3">
                     <select
                       className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                       value={finishPick.method ?? ""}
@@ -1292,11 +1375,13 @@ export const MatchPicksSection = ({
                         ))}
                       </select>
                     )}
+                    </div>
                   </div>
                   <p className="mt-2 text-xs text-zinc-500">
                     Pick how the match ends (applies to singles too).
                   </p>
                 </div>
+              </div>
             </div>
           );
         })}

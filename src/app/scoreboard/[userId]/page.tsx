@@ -25,6 +25,7 @@ type PicksPayload = {
     string,
     { method: string | null; winner: string | null; loser: string | null }
   >;
+  match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
 };
 
 type EntrantRow = {
@@ -70,6 +71,7 @@ type MatchRow = {
   finish_method: string | null;
   finish_winner_entrant_id: string | null;
   finish_loser_entrant_id: string | null;
+  match_length?: string | null;
 };
 
 type MatchSideRow = {
@@ -427,6 +429,7 @@ export default function ScoreboardPicksPage() {
       finishMethod: 0,
       finishWinner: 0,
       finishLoser: 0,
+      matchLength: 0,
       total: 0,
     };
     const entrantCountByMatch = matchEntrants.reduce((map, row) => {
@@ -437,6 +440,10 @@ export default function ScoreboardPicksPage() {
       const pick = payload?.match_picks?.[match.id] ?? null;
       if (match.winner_side_id && pick && pick === match.winner_side_id) {
         summary.winner += scoringRules.match_winner;
+      }
+      const lengthPick = payload?.match_length_picks?.[match.id] ?? null;
+      if (match.match_length && lengthPick === match.match_length) {
+        summary.matchLength += scoringRules.match_length;
       }
       const entrantCount = entrantCountByMatch[match.id] ?? 0;
       if (!match.finish_method) {
@@ -471,7 +478,8 @@ export default function ScoreboardPicksPage() {
       summary.winner +
       summary.finishMethod +
       summary.finishWinner +
-      summary.finishLoser;
+      summary.finishLoser +
+      summary.matchLength;
     return summary;
   }, [matchEntrants, matches, payload]);
 
@@ -516,7 +524,7 @@ export default function ScoreboardPicksPage() {
       supabase
         .from("matches")
         .select(
-          "id, name, kind, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id"
+          "id, name, kind, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length"
         )
         .eq("show_id", validShowId)
         .order("created_at", { ascending: true }),
@@ -1026,6 +1034,7 @@ export default function ScoreboardPicksPage() {
                   .filter(Boolean) as string[];
                 const entrantCount = (matchEntrantsByMatch[match.id] ?? []).length;
                 const finishPick = payload.match_finish_picks?.[match.id];
+                const lengthPick = payload.match_length_picks?.[match.id] ?? null;
                 const finishMethod = finishPick?.method ?? null;
                 const finishWinner = finishPick?.winner
                   ? entrantMap.get(finishPick.winner)
@@ -1045,14 +1054,19 @@ export default function ScoreboardPicksPage() {
                   match.finish_loser_entrant_id && finishPick?.loser
                     ? match.finish_loser_entrant_id === finishPick.loser
                     : false;
+                const matchLengthCorrect =
+                  match.match_length && lengthPick
+                    ? match.match_length === lengthPick
+                    : false;
                 const isCorrect = winner && pick ? winner === pick : false;
                 const matchTotalPoints =
                   (isCorrect ? scoringRules.match_winner : 0) +
                   (finishMethodCorrect ? scoringRules.match_finish_method : 0) +
                   (finishWinnerCorrect ? scoringRules.match_finish_winner : 0) +
-                  (finishLoserCorrect ? scoringRules.match_finish_loser : 0);
+                  (finishLoserCorrect ? scoringRules.match_finish_loser : 0) +
+                  (matchLengthCorrect ? scoringRules.match_length : 0);
                 const showFinishDetails =
-                  !!finishMethod || !!match.finish_method || !!finishPick;
+                  !!finishMethod || !!match.finish_method || !!finishPick || !!lengthPick;
 
                 return (
                   <div
@@ -1110,6 +1124,27 @@ export default function ScoreboardPicksPage() {
                       </summary>
                       {showFinishDetails && (
                         <div className="mt-3 space-y-2 text-xs text-zinc-400">
+                          <div className="flex items-center justify-between">
+                            <span>Match length</span>
+                            <span
+                              className={
+                                !match.match_length
+                                  ? "text-zinc-500"
+                                  : matchLengthCorrect
+                                    ? "text-emerald-200"
+                                    : "text-red-200"
+                              }
+                            >
+                              {lengthPick ? lengthPick.replace("_", " ") : "Not set"}
+                              {match.match_length
+                                ? ` • ${
+                                    matchLengthCorrect
+                                      ? `+${scoringRules.match_length}`
+                                      : "0"
+                                  } pts`
+                                : ""}
+                            </span>
+                          </div>
                           <div className="flex items-center justify-between">
                             <span>Finish</span>
                             <span

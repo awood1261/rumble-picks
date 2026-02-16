@@ -76,6 +76,7 @@ type MatchRow = {
   finish_method: string | null;
   finish_winner_entrant_id: string | null;
   finish_loser_entrant_id: string | null;
+  match_length?: string | null;
   roster_year: number | null;
   roster_gender: string | null;
   event_id: string | null;
@@ -168,6 +169,7 @@ export default function AdminPage() {
   const [matchFinishEdits, setMatchFinishEdits] = useState<
     Record<string, { method: string; winner: string; loser: string }>
   >({});
+  const [matchLengthEdits, setMatchLengthEdits] = useState<Record<string, string>>({});
   const [matchParticipantsOpen, setMatchParticipantsOpen] = useState<
     Record<string, boolean>
   >({});
@@ -564,7 +566,7 @@ export default function AdminPage() {
           const query = supabase
             .from("matches")
             .select(
-              "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, roster_year, roster_gender, event_id, show_id"
+              "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, roster_year, roster_gender, event_id, show_id"
             )
             .order("created_at", { ascending: true });
           if (showIdForQuery) {
@@ -613,6 +615,15 @@ export default function AdminPage() {
         });
         return next;
       });
+      setMatchLengthEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (!next[match.id] && match.match_length) {
+            next[match.id] = match.match_length;
+          }
+        });
+        return next;
+      });
     } else {
         const showIdForQuery = selectedShowId || activeEvent.show_id || null;
         const [
@@ -654,7 +665,7 @@ export default function AdminPage() {
             const query = supabase
               .from("matches")
               .select(
-                "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, roster_year, roster_gender, event_id, show_id"
+                "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, roster_year, roster_gender, event_id, show_id"
               )
               .order("created_at", { ascending: true });
             if (showIdForQuery) {
@@ -704,6 +715,15 @@ export default function AdminPage() {
         matchSideList.forEach((side) => {
           if (!next[side.id]) {
             next[side.id] = side.label ?? "";
+          }
+        });
+        return next;
+      });
+      setMatchLengthEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (!next[match.id] && match.match_length) {
+            next[match.id] = match.match_length;
           }
         });
         return next;
@@ -1367,6 +1387,22 @@ export default function AdminPage() {
     refreshData();
   };
 
+  const handleSetMatchLength = async (matchId: string, length: string) => {
+    setMessage(null);
+    const normalized = length || null;
+    const { error } = await supabase
+      .from("matches")
+      .update({ match_length: normalized })
+      .eq("id", matchId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await handleRecalculateScores({ silent: true });
+    setToastMessage("Match length updated.");
+    refreshData();
+  };
+
   const handleDeleteMatch = async (matchId: string) => {
     setMessage(null);
     const { error } = await supabase.from("matches").delete().eq("id", matchId);
@@ -1388,6 +1424,7 @@ export default function AdminPage() {
         finish_method: null,
         finish_winner_entrant_id: null,
         finish_loser_entrant_id: null,
+        match_length: null,
       })
       .eq("id", matchId);
     if (error) {
@@ -1395,6 +1432,7 @@ export default function AdminPage() {
       return;
     }
     setToastMessage("Match results cleared.");
+    setMatchLengthEdits((prev) => ({ ...prev, [matchId]: "" }));
     refreshData();
   };
 
@@ -1577,7 +1615,7 @@ export default function AdminPage() {
       supabase
         .from("matches")
         .select(
-          "id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id"
+          "id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length"
         )
         .eq("event_id", activeEvent.id),
       supabase
@@ -1627,6 +1665,10 @@ export default function AdminPage() {
       id: string;
       winner_entrant_id: string | null;
       winner_side_id: string | null;
+      finish_method: string | null;
+      finish_winner_entrant_id: string | null;
+      finish_loser_entrant_id: string | null;
+      match_length?: string | null;
     }[];
     const matchIdSet = new Set(matchList.map((match) => match.id));
     const matchEntrantList = (matchEntrantRows ?? [])
@@ -2349,6 +2391,13 @@ export default function AdminPage() {
                   winner: match.finish_winner_entrant_id ?? "",
                   loser: match.finish_loser_entrant_id ?? "",
                 };
+                const matchLengthState =
+                  matchLengthEdits[match.id] ?? match.match_length ?? "";
+                const matchLengthOptions = [
+                  { value: "sprint", label: "Sprint" },
+                  { value: "standard", label: "Standard" },
+                  { value: "epic", label: "Epic" },
+                ];
                 const finishRequiresEntrants =
                   finishState.method === "pinfall" ||
                   finishState.method === "submission";
@@ -2450,6 +2499,39 @@ export default function AdminPage() {
                       <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                         Match finish
                       </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {matchLengthOptions.map((option) => {
+                          const isSelected = matchLengthState === option.value;
+                          return (
+                            <button
+                              key={`${match.id}-${option.value}`}
+                              type="button"
+                              onClick={() =>
+                                setMatchLengthEdits((prev) => ({
+                                  ...prev,
+                                  [match.id]: option.value,
+                                }))
+                              }
+                              className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${
+                                isSelected
+                                  ? "border-amber-400/70 bg-amber-400/20 text-amber-100"
+                                  : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-amber-400/60 hover:text-amber-200"
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                        <button
+                          className="ml-auto inline-flex h-8 items-center justify-center rounded-full border border-amber-400 px-3 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                          type="button"
+                          onClick={() =>
+                            handleSetMatchLength(match.id, matchLengthState)
+                          }
+                        >
+                          Save length
+                        </button>
+                      </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-3">
                         <select
                           className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"

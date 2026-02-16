@@ -14,6 +14,7 @@ export type PicksPayload = {
     string,
     { method: string | null; winner: string | null; loser: string | null }
   >;
+  match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
 };
 
 export type RumbleEntryRow = {
@@ -31,6 +32,7 @@ export type MatchRow = {
   finish_method: string | null;
   finish_winner_entrant_id: string | null;
   finish_loser_entrant_id: string | null;
+  match_length?: string | null;
 };
 
 export type MatchEntrantRow = {
@@ -154,6 +156,7 @@ export const calculateScore = (
 
   const matchPicks = payload.match_picks ?? {};
   const matchFinishPicks = payload.match_finish_picks ?? {};
+  const matchLengthPicks = payload.match_length_picks ?? {};
   const entrantCountByMatch = matchEntrants.reduce((map, item) => {
     map[item.match_id] = (map[item.match_id] ?? 0) + 1;
     return map;
@@ -199,8 +202,15 @@ export const calculateScore = (
 
   breakdown.matches = matchPoints;
   breakdown.match_finish_method = matchFinishPoints;
+  const matchLengthPoints = matches.reduce((total, match) => {
+    const pick = matchLengthPicks[match.id];
+    if (!match.match_length || !pick) return total;
+    return pick === match.match_length ? total + rules.match_length : total;
+  }, 0);
+  breakdown.match_length = matchLengthPoints;
   points += matchPoints;
   points += matchFinishPoints;
+  points += matchLengthPoints;
 
   return { points, breakdown };
 };
