@@ -119,7 +119,7 @@ export default function LoginPage() {
                     Username
                   </label>
                   <input
-                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-amber-400"
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-base text-zinc-100 outline-none transition focus:border-amber-400"
                     id="displayName"
                     type="text"
                     value={displayName}
@@ -169,7 +169,7 @@ export default function LoginPage() {
                   Email
                 </label>
                 <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-amber-400"
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-base text-zinc-100 outline-none transition focus:border-amber-400"
                   id="email"
                   type="email"
                   value={email}
@@ -182,7 +182,7 @@ export default function LoginPage() {
                   Password
                 </label>
                 <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-zinc-100 outline-none transition focus:border-amber-400"
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-base text-zinc-100 outline-none transition focus:border-amber-400"
                   id="password"
                   type="password"
                   value={password}
