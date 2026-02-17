@@ -77,6 +77,7 @@ type MatchRow = {
   finish_winner_entrant_id: string | null;
   finish_loser_entrant_id: string | null;
   match_length?: string | null;
+  match_interference?: string | null;
   roster_year: number | null;
   roster_gender: string | null;
   event_id: string | null;
@@ -170,6 +171,9 @@ export default function AdminPage() {
     Record<string, { method: string; winner: string; loser: string }>
   >({});
   const [matchLengthEdits, setMatchLengthEdits] = useState<Record<string, string>>({});
+  const [matchInterferenceEdits, setMatchInterferenceEdits] = useState<
+    Record<string, string>
+  >({});
   const [matchParticipantsOpen, setMatchParticipantsOpen] = useState<
     Record<string, boolean>
   >({});
@@ -184,6 +188,23 @@ export default function AdminPage() {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
       date.getDate()
     )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  const formatMatchTypeLabel = (value: string) => {
+    switch (value) {
+      case "tag_3":
+        return "Trios";
+      case "tag":
+        return "Tag";
+      case "singles":
+        return "Singles";
+      case "triple_threat":
+        return "Triple Threat";
+      case "fatal_4_way":
+        return "Fatal 4-Way";
+      default:
+        return value.replace("_", " ");
+    }
   };
 
   const activeShow = useMemo(() => {
@@ -566,7 +587,7 @@ export default function AdminPage() {
           const query = supabase
             .from("matches")
             .select(
-              "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, roster_year, roster_gender, event_id, show_id"
+              "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
             )
             .order("created_at", { ascending: true });
           if (showIdForQuery) {
@@ -624,6 +645,15 @@ export default function AdminPage() {
         });
         return next;
       });
+      setMatchInterferenceEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (!next[match.id] && match.match_interference) {
+            next[match.id] = match.match_interference;
+          }
+        });
+        return next;
+      });
     } else {
         const showIdForQuery = selectedShowId || activeEvent.show_id || null;
         const [
@@ -665,7 +695,7 @@ export default function AdminPage() {
             const query = supabase
               .from("matches")
               .select(
-                "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, roster_year, roster_gender, event_id, show_id"
+                "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
               )
               .order("created_at", { ascending: true });
             if (showIdForQuery) {
@@ -724,6 +754,15 @@ export default function AdminPage() {
         matchListAll.forEach((match) => {
           if (!next[match.id] && match.match_length) {
             next[match.id] = match.match_length;
+          }
+        });
+        return next;
+      });
+      setMatchInterferenceEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (!next[match.id] && match.match_interference) {
+            next[match.id] = match.match_interference;
           }
         });
         return next;
@@ -1228,6 +1267,7 @@ export default function AdminPage() {
     const sideCounts: Record<string, number> = {
       singles: 2,
       tag: 2,
+      tag_3: 2,
       triple_threat: 3,
       fatal_4_way: 4,
       multi: 2,
@@ -1403,6 +1443,22 @@ export default function AdminPage() {
     refreshData();
   };
 
+  const handleSetMatchInterference = async (matchId: string, value: string) => {
+    setMessage(null);
+    const normalized = value || null;
+    const { error } = await supabase
+      .from("matches")
+      .update({ match_interference: normalized })
+      .eq("id", matchId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await handleRecalculateScores({ silent: true });
+    setToastMessage("Match interference updated.");
+    refreshData();
+  };
+
   const handleDeleteMatch = async (matchId: string) => {
     setMessage(null);
     const { error } = await supabase.from("matches").delete().eq("id", matchId);
@@ -1425,6 +1481,7 @@ export default function AdminPage() {
         finish_winner_entrant_id: null,
         finish_loser_entrant_id: null,
         match_length: null,
+        match_interference: null,
       })
       .eq("id", matchId);
     if (error) {
@@ -1615,7 +1672,7 @@ export default function AdminPage() {
       supabase
         .from("matches")
         .select(
-          "id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length"
+          "id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
         )
         .eq("event_id", activeEvent.id),
       supabase
@@ -1669,6 +1726,7 @@ export default function AdminPage() {
       finish_winner_entrant_id: string | null;
       finish_loser_entrant_id: string | null;
       match_length?: string | null;
+      match_interference?: string | null;
     }[];
     const matchIdSet = new Set(matchList.map((match) => match.id));
     const matchEntrantList = (matchEntrantRows ?? [])
@@ -1929,7 +1987,7 @@ export default function AdminPage() {
                         <div>
                           <p className="font-medium text-zinc-100">{match.name}</p>
                           <p className="text-xs text-zinc-500">
-                            {(match.match_type ?? "match").replace("_", " ")}
+                            {formatMatchTypeLabel(match.match_type ?? "match")}
                             {match.event_id
                               ? ` • ${eventNameById.get(match.event_id) ?? "Unassigned"}`
                               : ""}
@@ -2321,6 +2379,7 @@ export default function AdminPage() {
               >
                 <option value="singles">Singles (1 vs 1)</option>
                 <option value="tag">Tag (2 vs 2)</option>
+                <option value="tag_3">Tag (3 vs 3)</option>
                 <option value="triple_threat">Triple Threat</option>
                 <option value="fatal_4_way">Fatal 4-Way</option>
                 <option value="multi">Multi-person</option>
@@ -2393,10 +2452,16 @@ export default function AdminPage() {
                 };
                 const matchLengthState =
                   matchLengthEdits[match.id] ?? match.match_length ?? "";
+                const matchInterferenceState =
+                  matchInterferenceEdits[match.id] ?? match.match_interference ?? "";
                 const matchLengthOptions = [
                   { value: "sprint", label: "Sprint" },
                   { value: "standard", label: "Standard" },
                   { value: "epic", label: "Epic" },
+                ];
+                const matchInterferenceOptions = [
+                  { value: "yes", label: "Yes" },
+                  { value: "no", label: "No" },
                 ];
                 const finishRequiresEntrants =
                   finishState.method === "pinfall" ||
@@ -2405,7 +2470,7 @@ export default function AdminPage() {
                 const isSingles = matchType === "singles";
                 const isTripleOrFatal =
                   matchType === "triple_threat" || matchType === "fatal_4_way";
-                const isTag = matchType === "tag";
+                const isTag = matchType === "tag" || matchType === "tag_3";
                 const winnerSideId = match.winner_side_id ?? "";
                 const winningSideEntrants =
                   sideEntries.find((side) => side.side.id === winnerSideId)?.entrants ??
@@ -2432,7 +2497,7 @@ export default function AdminPage() {
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div className="flex flex-col gap-2">
                         <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                          {match.kind} · {match.match_type.replace("_", " ")}
+                          {match.kind} · {formatMatchTypeLabel(match.match_type)}
                           {match.roster_year ? ` · ${match.roster_year}` : ""}
                           {match.roster_gender ? ` · ${match.roster_gender}` : ""}
                         </p>
@@ -2530,6 +2595,42 @@ export default function AdminPage() {
                           }
                         >
                           Save length
+                        </button>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {matchInterferenceOptions.map((option) => {
+                          const isSelected = matchInterferenceState === option.value;
+                          return (
+                            <button
+                              key={`${match.id}-interference-${option.value}`}
+                              type="button"
+                              onClick={() =>
+                                setMatchInterferenceEdits((prev) => ({
+                                  ...prev,
+                                  [match.id]: option.value,
+                                }))
+                              }
+                              className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${
+                                isSelected
+                                  ? "border-amber-400/70 bg-amber-400/20 text-amber-100"
+                                  : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-amber-400/60 hover:text-amber-200"
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                        <button
+                          className="ml-auto inline-flex h-8 items-center justify-center rounded-full border border-amber-400 px-3 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                          type="button"
+                          onClick={() =>
+                            handleSetMatchInterference(
+                              match.id,
+                              matchInterferenceState
+                            )
+                          }
+                        >
+                          Save interference
                         </button>
                       </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-3">

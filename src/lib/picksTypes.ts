@@ -55,6 +55,7 @@ export type PicksPayload = {
     { method: string | null; winner: string | null; loser: string | null }
   >;
   match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
+  match_interference_picks?: Record<string, "yes" | "no" | null>;
 };
 
 export type RumbleEntryRow = {
@@ -78,6 +79,7 @@ export type MatchRow = {
   finish_winner_entrant_id: string | null;
   finish_loser_entrant_id: string | null;
   match_length?: string | null;
+  match_interference?: string | null;
 };
 
 export type MatchEntrantRow = {

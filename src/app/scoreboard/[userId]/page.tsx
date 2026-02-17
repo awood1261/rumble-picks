@@ -26,6 +26,7 @@ type PicksPayload = {
     { method: string | null; winner: string | null; loser: string | null }
   >;
   match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
+  match_interference_picks?: Record<string, "yes" | "no" | null>;
 };
 
 type EntrantRow = {
@@ -72,6 +73,7 @@ type MatchRow = {
   finish_winner_entrant_id: string | null;
   finish_loser_entrant_id: string | null;
   match_length?: string | null;
+  match_interference?: string | null;
 };
 
 type MatchSideRow = {
@@ -430,6 +432,7 @@ export default function ScoreboardPicksPage() {
       finishWinner: 0,
       finishLoser: 0,
       matchLength: 0,
+      matchInterference: 0,
       total: 0,
     };
     const entrantCountByMatch = matchEntrants.reduce((map, row) => {
@@ -444,6 +447,10 @@ export default function ScoreboardPicksPage() {
       const lengthPick = payload?.match_length_picks?.[match.id] ?? null;
       if (match.match_length && lengthPick === match.match_length) {
         summary.matchLength += scoringRules.match_length;
+      }
+      const interferencePick = payload?.match_interference_picks?.[match.id] ?? null;
+      if (match.match_interference && interferencePick === match.match_interference) {
+        summary.matchInterference += scoringRules.match_interference;
       }
       const entrantCount = entrantCountByMatch[match.id] ?? 0;
       if (!match.finish_method) {
@@ -479,7 +486,8 @@ export default function ScoreboardPicksPage() {
       summary.finishMethod +
       summary.finishWinner +
       summary.finishLoser +
-      summary.matchLength;
+      summary.matchLength +
+      summary.matchInterference;
     return summary;
   }, [matchEntrants, matches, payload]);
 
@@ -524,7 +532,7 @@ export default function ScoreboardPicksPage() {
       supabase
         .from("matches")
         .select(
-          "id, name, kind, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length"
+          "id, name, kind, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
         )
         .eq("show_id", validShowId)
         .order("created_at", { ascending: true }),
@@ -1035,6 +1043,8 @@ export default function ScoreboardPicksPage() {
                 const entrantCount = (matchEntrantsByMatch[match.id] ?? []).length;
                 const finishPick = payload.match_finish_picks?.[match.id];
                 const lengthPick = payload.match_length_picks?.[match.id] ?? null;
+                const interferencePick =
+                  payload.match_interference_picks?.[match.id] ?? null;
                 const finishMethod = finishPick?.method ?? null;
                 const finishWinner = finishPick?.winner
                   ? entrantMap.get(finishPick.winner)
@@ -1058,15 +1068,24 @@ export default function ScoreboardPicksPage() {
                   match.match_length && lengthPick
                     ? match.match_length === lengthPick
                     : false;
+                const matchInterferenceCorrect =
+                  match.match_interference && interferencePick
+                    ? match.match_interference === interferencePick
+                    : false;
                 const isCorrect = winner && pick ? winner === pick : false;
                 const matchTotalPoints =
                   (isCorrect ? scoringRules.match_winner : 0) +
                   (finishMethodCorrect ? scoringRules.match_finish_method : 0) +
                   (finishWinnerCorrect ? scoringRules.match_finish_winner : 0) +
                   (finishLoserCorrect ? scoringRules.match_finish_loser : 0) +
-                  (matchLengthCorrect ? scoringRules.match_length : 0);
+                  (matchLengthCorrect ? scoringRules.match_length : 0) +
+                  (matchInterferenceCorrect ? scoringRules.match_interference : 0);
                 const showFinishDetails =
-                  !!finishMethod || !!match.finish_method || !!finishPick || !!lengthPick;
+                  !!finishMethod ||
+                  !!match.finish_method ||
+                  !!finishPick ||
+                  !!lengthPick ||
+                  !!interferencePick;
 
                 return (
                   <div
@@ -1140,6 +1159,31 @@ export default function ScoreboardPicksPage() {
                                 ? ` • ${
                                     matchLengthCorrect
                                       ? `+${scoringRules.match_length}`
+                                      : "0"
+                                  } pts`
+                                : ""}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Interference</span>
+                            <span
+                              className={
+                                !match.match_interference
+                                  ? "text-zinc-500"
+                                  : matchInterferenceCorrect
+                                    ? "text-emerald-200"
+                                    : "text-red-200"
+                              }
+                            >
+                              {interferencePick
+                                ? interferencePick === "yes"
+                                  ? "Yes"
+                                  : "No"
+                                : "Not set"}
+                              {match.match_interference
+                                ? ` • ${
+                                    matchInterferenceCorrect
+                                      ? `+${scoringRules.match_interference}`
                                       : "0"
                                   } pts`
                                 : ""}

@@ -80,6 +80,7 @@ type MatchRow = {
   finish_winner_entrant_id: string | null;
   finish_loser_entrant_id: string | null;
   match_length?: string | null;
+  match_interference?: string | null;
 };
 
 type MatchSideRow = {
@@ -195,7 +196,12 @@ export default function ScoreboardPage() {
   const matchesComplete = useMemo(() => {
     if (matches.length === 0) return true;
     return matches.every((match) => {
-      if (!match.winner_side_id || !match.finish_method || !match.match_length) {
+      if (
+        !match.winner_side_id ||
+        !match.finish_method ||
+        !match.match_length ||
+        !match.match_interference
+      ) {
         return false;
       }
       if (
@@ -433,6 +439,7 @@ export default function ScoreboardPage() {
         match_picks: pick.payload?.match_picks ?? {},
         match_finish_picks: pick.payload?.match_finish_picks ?? {},
         match_length_picks: pick.payload?.match_length_picks ?? {},
+        match_interference_picks: pick.payload?.match_interference_picks ?? {},
       };
       const matchScore = calculateScore(
         matchPayload,
@@ -446,6 +453,7 @@ export default function ScoreboardPage() {
       breakdown.matches = matchScore.breakdown.matches ?? 0;
       breakdown.match_finish_method = matchScore.breakdown.match_finish_method ?? 0;
       breakdown.match_length = matchScore.breakdown.match_length ?? 0;
+      breakdown.match_interference = matchScore.breakdown.match_interference ?? 0;
 
       return {
         id: pick.id,
@@ -651,7 +659,7 @@ export default function ScoreboardPage() {
       const { data: matchRows, error } = await supabase
         .from("matches")
         .select(
-          "id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length"
+          "id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
         )
         .eq("show_id", selectedShowId)
         .order("created_at", { ascending: true });

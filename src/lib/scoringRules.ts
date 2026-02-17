@@ -12,6 +12,7 @@ export type ScoringRules = {
   match_finish_winner: number;
   match_finish_loser: number;
   match_length: number;
+  match_interference: number;
 };
 
 export const scoringRules: ScoringRules = {
@@ -28,4 +29,5 @@ export const scoringRules: ScoringRules = {
   match_finish_winner: 2,
   match_finish_loser: 2,
   match_length: 2,
+  match_interference: 2,
 };

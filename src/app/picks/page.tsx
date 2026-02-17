@@ -52,6 +52,7 @@ const emptyPayload: PicksPayload = {
   match_picks: {},
   match_finish_picks: {},
   match_length_picks: {},
+  match_interference_picks: {},
 };
 
 const emptyActuals: EventActuals = {
@@ -591,7 +592,7 @@ export default function PicksPage() {
     const { data: matchRows, error: matchError } = await supabase
       .from("matches")
       .select(
-        "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length"
+        "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
       )
       .eq("show_id", selectedShowId)
       .order("created_at", { ascending: true });
@@ -692,6 +693,11 @@ export default function PicksPage() {
               string,
               "sprint" | "standard" | "epic" | null
             >) ?? {},
+          match_interference_picks:
+            (savedPayload.match_interference_picks as Record<
+              string,
+              "yes" | "no" | null
+            >) ?? {},
         });
         setHasSaved(true);
       } else {
@@ -700,6 +706,7 @@ export default function PicksPage() {
           match_picks: {},
           match_finish_picks: {},
           match_length_picks: {},
+          match_interference_picks: {},
         });
       }
     };
@@ -765,6 +772,11 @@ export default function PicksPage() {
           matchIdSet.has(matchId)
         )
       );
+      const matchInterferencePicks = Object.fromEntries(
+        Object.entries(prev.match_interference_picks ?? {}).filter(([matchId]) =>
+          matchIdSet.has(matchId)
+        )
+      );
 
       const nextRumbles: Record<string, RumblePick> = {};
       showEvents.forEach((event) => {
@@ -810,6 +822,7 @@ export default function PicksPage() {
         match_picks: matchPicks,
         match_finish_picks: matchFinishPicks,
         match_length_picks: matchLengthPicks,
+        match_interference_picks: matchInterferencePicks,
       };
     });
   }, [matches, showEvents, confirmedEntrantsByEvent]);
@@ -1018,9 +1031,19 @@ export default function PicksPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
+        {shows.length > 1 && (
+          <div className="mb-3 flex justify-start">
+            <a
+              href="/shows"
+              className="text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:text-amber-100"
+            >
+              Change show
+            </a>
+          </div>
+        )}
         <PicksHeader
           title="Make your predictions"
-          subtitle="Choose a show and lock in your rumble picks before bell time."
+          subtitle="Lock in your picks here before bell time."
         />
         <LockStatusBanner
           isLocked={isLocked}

@@ -107,14 +107,6 @@ export const ShowSelector = ({
             {selectedShow?.name ?? "Select a show"}
           </h2>
         </div>
-        {shows.length > 1 && (
-          <Link
-            href="/shows"
-            className="text-sm font-semibold text-amber-200 transition hover:text-amber-100"
-          >
-            Change show
-          </Link>
-        )}
       </div>
     </section>
   );
@@ -834,9 +826,19 @@ export const MatchSummarySection = ({
             match.finish_loser_entrant_id && finishPick?.loser
               ? match.finish_loser_entrant_id === finishPick.loser
               : false;
+          const interferencePick =
+            payload.match_interference_picks?.[match.id] ?? null;
+          const matchInterferenceCorrect =
+            match.match_interference && interferencePick
+              ? match.match_interference === interferencePick
+              : false;
           const isCorrect = winner && pick ? winner === pick : false;
           const showFinishDetails =
-            !!finishMethod || !!match.finish_method || !!finishPick || !!lengthPick;
+            !!finishMethod ||
+            !!match.finish_method ||
+            !!finishPick ||
+            !!lengthPick ||
+            !!interferencePick;
 
           return (
             <div
@@ -901,6 +903,31 @@ export const MatchSummarySection = ({
                         ? ` • ${
                             matchLengthCorrect
                               ? `+${scoringRules.match_length}`
+                              : "0"
+                          } pts`
+                        : ""}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Interference</span>
+                    <span
+                      className={
+                        !match.match_interference
+                          ? "text-zinc-500"
+                          : matchInterferenceCorrect
+                            ? "text-emerald-200"
+                            : "text-red-200"
+                      }
+                    >
+                      {interferencePick
+                        ? interferencePick === "yes"
+                          ? "Yes"
+                          : "No"
+                        : "Not set"}
+                      {match.match_interference
+                        ? ` • ${
+                            matchInterferenceCorrect
+                              ? `+${scoringRules.match_interference}`
                               : "0"
                           } pts`
                         : ""}
@@ -1106,6 +1133,8 @@ export const MatchPicksSection = ({
             loser: null,
           };
           const lengthPick = payload.match_length_picks?.[match.id] ?? null;
+          const interferencePick =
+            payload.match_interference_picks?.[match.id] ?? null;
           const lengthOptions: Array<{
             value: "sprint" | "standard" | "epic";
             label: string;
@@ -1114,11 +1143,15 @@ export const MatchPicksSection = ({
             { value: "standard", label: "Standard" },
             { value: "epic", label: "Epic" },
           ];
+          const interferenceOptions = [
+            { value: "yes", label: "Yes" },
+            { value: "no", label: "No" },
+          ];
           const matchType = match.match_type;
           const isSingles = matchType === "singles";
           const isTripleOrFatal =
             matchType === "triple_threat" || matchType === "fatal_4_way";
-          const isTag = matchType === "tag";
+          const isTag = matchType === "tag" || matchType === "tag_3";
           const winningSideId = payload.match_picks[match.id] ?? null;
           const winningSideEntrants =
             sideEntries.find((side) => side.side.id === winningSideId)?.entrants ??
@@ -1131,9 +1164,14 @@ export const MatchPicksSection = ({
           const showFinishWinner = !isSingles && !isTripleOrFatal;
           const showFinishLoser = !isSingles;
           const hasWinnerPick = Boolean(payload.match_picks[match.id]);
-          const matchupEntrants = sideEntries.slice(0, 2).map((side) => side.entrants[0] ?? null);
           const leftSide = sideEntries[0];
           const rightSide = sideEntries[1];
+          const leftEntrants = leftSide?.entrants ?? [];
+          const rightEntrants = rightSide?.entrants ?? [];
+          const hasMatchup =
+            Boolean(leftSide && rightSide) &&
+            (leftEntrants.length > 0 || rightEntrants.length > 0);
+          const sideGridClass = isTag ? "grid-cols-2 auto-rows-fr" : "grid-cols-1";
           const finishOptions = [
             { value: "pinfall", label: "Pinfall" },
             { value: "submission", label: "Submission" },
@@ -1165,31 +1203,42 @@ export const MatchPicksSection = ({
               )}
               {sideEntries.length > 0 && (
                 <div className="mt-3 space-y-3">
-                  {matchupEntrants.length === 2 && leftSide && rightSide && (
+                  {hasMatchup && leftSide && rightSide && (
                     <div className="relative h-58 overflow-hidden rounded-2xl border border-zinc-800 bg-black/40 md:h-64 lg:h-102">
                       <div className="grid h-full w-full grid-cols-2">
-                        {matchupEntrants.map((entrant, index) => (
+                        {[leftEntrants, rightEntrants].map((entrants, index) => (
                           <div
                             key={`${match.id}-matchup-${index}`}
                             className="relative h-full w-full overflow-hidden"
                           >
-                            {entrant?.image_url ? (
-                              <img
-                                src={entrant.image_url}
-                                alt={entrant.name}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
-                            )}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                            {entrant?.name && (
-                              <div className="absolute inset-x-0 bottom-0 z-10 p-3 text-center">
-                                <span className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-100 drop-shadow">
-                                  {entrant.name}
-                                </span>
-                              </div>
-                            )}
+                            <div className={`grid h-full w-full ${sideGridClass}`}>
+                              {entrants.length > 0 ? (
+                                entrants.map((entrant) => (
+                                  <div
+                                    key={`${match.id}-${index}-${entrant.id}`}
+                                    className="relative h-full w-full overflow-hidden"
+                                  >
+                                    {entrant.image_url ? (
+                                      <img
+                                        src={entrant.image_url}
+                                        alt={entrant.name}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
+                                    )}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                                    <div className="absolute inset-x-0 bottom-0 z-10 p-2 text-center">
+                                      <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-100 drop-shadow">
+                                        {entrant.name}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1405,6 +1454,26 @@ export const MatchPicksSection = ({
                         </select>
                       )}
                     </div>
+                  </div>
+                  <div className="mt-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      Interference
+                    </p>
+                    <SegmentedPills
+                      options={interferenceOptions}
+                      selectedValue={interferencePick}
+                      disabled={isLocked || !hasWinnerPick}
+                      onSelect={(value) =>
+                        setPayload((prev) => ({
+                          ...prev,
+                          match_interference_picks: {
+                            ...prev.match_interference_picks,
+                            [match.id]: value as "yes" | "no",
+                          },
+                        }))
+                      }
+                      className="mt-2"
+                    />
                   </div>
                   <p className="mt-2 text-xs text-zinc-500">
                     Pick how the match ends (applies to singles too).
