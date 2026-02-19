@@ -53,13 +53,15 @@ export default function PromotionShowsPage() {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100">
         <main className="mx-auto w-full max-w-4xl px-6 py-10">
+          <div className="mb-6">
+            <Link
+              className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200 hover:text-amber-100"
+              href="/shows"
+            >
+              ← Back to promotions
+            </Link>
+          </div>
           <p className="text-sm text-zinc-400">Missing promotion.</p>
-          <Link
-            className="mt-4 inline-flex rounded-full border border-amber-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-            href="/shows"
-          >
-            Back to promotions
-          </Link>
         </main>
       </div>
     );
@@ -67,7 +69,15 @@ export default function PromotionShowsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <main className="mx-auto w-full max-w-6xl px-6 py-10">
+      <main className="mx-auto w-full max-w-6xl px-6 pb-10 pt-6">
+        <div className="mb-6">
+          <Link
+            className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200 hover:text-amber-100"
+            href="/shows"
+          >
+            ← Back to promotions
+          </Link>
+        </div>
         {message && (
           <div className="rounded-2xl border border-zinc-800 bg-black/50 px-4 py-3 text-sm text-zinc-200">
             {message}
@@ -93,12 +103,6 @@ export default function PromotionShowsPage() {
               </h1>
             </div>
           </div>
-          <Link
-            className="inline-flex rounded-full border border-zinc-700 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-white"
-            href="/shows"
-          >
-            Back to promotions
-          </Link>
         </div>
 
         {shows.length === 0 ? (

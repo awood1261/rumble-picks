@@ -1107,9 +1107,6 @@ export const MatchPicksSection = ({
     <div className="flex items-center justify-between">
       <div>
         <h2 className="text-lg font-semibold">Match Picks</h2>
-        <p className="mt-2 text-sm text-zinc-400">
-          Pick winners for the matches on the card.
-        </p>
       </div>
       {hasSaved && (
         <button

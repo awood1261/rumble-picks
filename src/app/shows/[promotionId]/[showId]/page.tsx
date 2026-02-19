@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabaseClient";
@@ -14,6 +14,17 @@ export default function ShowDetailPage() {
   const [show, setShow] = useState<ShowRow | null>(null);
   const [promotion, setPromotion] = useState<PromotionRow | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  const formattedStart = useMemo(() => {
+    if (!show?.starts_at) return null;
+    const date = new Date(show.starts_at);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [show?.starts_at]);
 
   useEffect(() => {
     let ignore = false;
@@ -56,13 +67,15 @@ export default function ShowDetailPage() {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100">
         <main className="mx-auto w-full max-w-4xl px-6 py-10">
+          <div className="mb-6">
+            <Link
+              className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200 hover:text-amber-100"
+              href={promotionId ? `/shows/${promotionId}` : "/shows"}
+            >
+              ← Back to shows
+            </Link>
+          </div>
           <p className="text-sm text-zinc-400">Missing show id.</p>
-          <Link
-            className="mt-4 inline-flex rounded-full border border-amber-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-            href="/shows"
-          >
-            Back to promotions
-          </Link>
         </main>
       </div>
     );
@@ -81,7 +94,7 @@ export default function ShowDetailPage() {
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-black/55 to-black/90" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(251,196,0,0.22),_transparent_55%)]" />
-      <main className="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-6 py-12">
+      <main className="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-6 pb-12 pt-6">
         {message && (
           <div className="mb-6 rounded-2xl border border-zinc-800 bg-black/50 px-4 py-3 text-sm text-zinc-200">
             {message}
@@ -104,7 +117,7 @@ export default function ShowDetailPage() {
               ) : null}
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
-                  Tonight’s card
+                  {formattedStart ?? "Show date TBD"}
                 </p>
                 <h1 className="mt-3 text-4xl font-semibold text-amber-100 sm:text-5xl">
                   {show.name}
@@ -131,14 +144,6 @@ export default function ShowDetailPage() {
           </div>
         )}
 
-        <div className="mt-10">
-          <Link
-            className="inline-flex rounded-full border border-zinc-700 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-white"
-            href={promotionId ? `/shows/${promotionId}` : "/shows"}
-          >
-            Back to shows
-          </Link>
-        </div>
       </main>
     </div>
   );

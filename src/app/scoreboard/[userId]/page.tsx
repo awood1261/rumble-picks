@@ -783,17 +783,19 @@ export default function ScoreboardPicksPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <main className="mx-auto w-full max-w-6xl px-6 py-16">
-        <header className="flex flex-col gap-2">
-          <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-            Picks
-          </p>
+      <main className="mx-auto w-full max-w-6xl px-6 pb-16 pt-6">
+        <div className="mb-6">
           <Link
             className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200 hover:text-amber-100"
             href={validShowId ? `/scoreboard?show=${validShowId}` : "/scoreboard"}
           >
             ← Back to scoreboard
           </Link>
+        </div>
+        <header className="flex flex-col gap-2">
+          <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
+            Picks
+          </p>
           <h1 className="text-3xl font-semibold">
             {profile?.display_name ?? "Rumble Fan"}
           </h1>
