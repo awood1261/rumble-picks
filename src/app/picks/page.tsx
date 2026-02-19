@@ -27,6 +27,7 @@ import type {
   MatchRow,
   MatchSideRow,
   PicksPayload,
+  PromotionRow,
   RankInfo,
   RumbleEntryRow,
   RumblePick,
@@ -86,6 +87,7 @@ export default function PicksPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const [shows, setShows] = useState<ShowRow[]>([]);
+  const [promotions, setPromotions] = useState<PromotionRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
@@ -114,6 +116,13 @@ export default function PicksPage() {
     () => events.filter((event) => event.show_id === selectedShowId),
     [events, selectedShowId]
   );
+  const selectedPromotionImageUrl = useMemo(() => {
+    if (!selectedShow?.promotion_id) return null;
+    return (
+      promotions.find((promotion) => promotion.id === selectedShow.promotion_id)
+        ?.image_url ?? null
+    );
+  }, [promotions, selectedShow?.promotion_id]);
   const visibleShowEvents = useMemo(() => {
     if (!focusedEventId) return showEvents;
     return showEvents.filter((event) => event.id === focusedEventId);
@@ -526,12 +535,20 @@ export default function PicksPage() {
         .select("id, name, image_url, promotion_id, status, starts_at")
         .order("name", { ascending: true }),
       supabase
+        .from("promotions")
+        .select("id, name, image_url")
+        .order("name", { ascending: true }),
+      supabase
         .from("events")
         .select("id, name, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
         .order("name", { ascending: true }),
-    ]).then(([showsResult, eventsResult]) => {
+    ]).then(([showsResult, promotionsResult, eventsResult]) => {
       if (showsResult.error) {
         setMessage(showsResult.error.message);
+        return;
+      }
+      if (promotionsResult.error) {
+        setMessage(promotionsResult.error.message);
         return;
       }
       if (eventsResult.error) {
@@ -540,6 +557,7 @@ export default function PicksPage() {
       }
       const showRows = showsResult.data ?? [];
       setShows(showRows);
+      setPromotions(promotionsResult.data ?? []);
       setEvents(eventsResult.data ?? []);
       if (showRows.length > 0) {
         setSelectedShowId((prev) => prev || queryShowId || showRows[0].id);
@@ -1054,6 +1072,7 @@ export default function PicksPage() {
         <ShowSelector
           shows={shows}
           selectedShowId={selectedShowId}
+          promotionImageUrl={selectedPromotionImageUrl}
         />
 
         {hasEvents && !hasEntrantsForShow && (

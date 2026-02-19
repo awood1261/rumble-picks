@@ -82,11 +82,13 @@ export const MessageBanner = ({ message }: { message: string | null }) =>
 type ShowSelectorProps = {
   shows: ShowRow[];
   selectedShowId: string;
+  promotionImageUrl?: string | null;
 };
 
 export const ShowSelector = ({
   shows,
   selectedShowId,
+  promotionImageUrl,
 }: ShowSelectorProps) => {
   const selectedShow = shows.find((show) => show.id === selectedShowId) ?? null;
 
@@ -101,13 +103,24 @@ export const ShowSelector = ({
   return (
     <section className="mt-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-4">
+          {promotionImageUrl ? (
+            <div className="h-12 w-12 overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+              <img
+                src={promotionImageUrl}
+                alt={selectedShow?.name ?? "Promotion"}
+                className="h-full w-full object-cover"
+              />
+            </div>
+          ) : null}
+          <div className="flex flex-col gap-1">
           <p className="text-[11px] uppercase tracking-[0.3em] text-zinc-500">
             Current show
           </p>
           <h2 className="text-3xl font-semibold tracking-tight text-amber-100">
             {selectedShow?.name ?? "Select a show"}
           </h2>
+          </div>
         </div>
       </div>
     </section>

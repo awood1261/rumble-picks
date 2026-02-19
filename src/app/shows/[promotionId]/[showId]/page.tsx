@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabaseClient";
-import type { ShowRow } from "../../../../lib/picksTypes";
+import type { PromotionRow, ShowRow } from "../../../../lib/picksTypes";
 
 export default function ShowDetailPage() {
   const params = useParams();
@@ -12,6 +12,7 @@ export default function ShowDetailPage() {
   const promotionId =
     typeof params?.promotionId === "string" ? params.promotionId : "";
   const [show, setShow] = useState<ShowRow | null>(null);
+  const [promotion, setPromotion] = useState<PromotionRow | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,6 +29,21 @@ export default function ShowDetailPage() {
         setMessage(error.message);
       } else {
         setShow(data ?? null);
+      }
+      if (data?.promotion_id) {
+        const { data: promotionRow, error: promotionError } = await supabase
+          .from("promotions")
+          .select("id, name, image_url")
+          .eq("id", data.promotion_id)
+          .maybeSingle();
+        if (ignore) return;
+        if (promotionError) {
+          setMessage(promotionError.message);
+        } else {
+          setPromotion(promotionRow ?? null);
+        }
+      } else {
+        setPromotion(null);
       }
     };
     load();
@@ -76,12 +92,25 @@ export default function ShowDetailPage() {
           <p className="text-sm text-zinc-400">Loading show...</p>
         ) : (
           <div className="max-w-2xl">
-            <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
-              Tonight’s card
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold text-amber-100 sm:text-5xl">
-              {show.name}
-            </h1>
+            <div className="flex items-center gap-4">
+              {promotion?.image_url ? (
+                <div className="h-12 w-12 overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+                  <img
+                    src={promotion.image_url}
+                    alt={promotion?.name ?? show.name}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : null}
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
+                  Tonight’s card
+                </p>
+                <h1 className="mt-3 text-4xl font-semibold text-amber-100 sm:text-5xl">
+                  {show.name}
+                </h1>
+              </div>
+            </div>
             <p className="mt-4 text-sm text-zinc-200 sm:text-base">
               Lock in your picks before bell time and compare with other fans.
             </p>
