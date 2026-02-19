@@ -96,8 +96,8 @@ export const NavBar = () => {
           aria-label="BoutPick"
         >
           <img
-            className="h-14 w-auto sm:h-14"
-            src="/images/bp-logo.png"
+            className="h-8 w-auto sm:h-10"
+            src="/images/bp-logo-text-only.png"
             alt="BoutPick"
           />
         </Link>
