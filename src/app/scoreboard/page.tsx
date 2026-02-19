@@ -49,6 +49,7 @@ type PickRow = {
 type ShowRow = {
   id: string;
   name: string;
+  tagline?: string | null;
 };
 
 type EventRow = {

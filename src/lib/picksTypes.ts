@@ -11,6 +11,7 @@ export type EventRow = {
 export type ShowRow = {
   id: string;
   name: string;
+  tagline?: string | null;
   image_url: string | null;
   promotion_id: string | null;
   starts_at: string | null;

@@ -34,7 +34,7 @@ export default function ShowDetailPage() {
     const load = async () => {
       const { data, error } = await supabase
         .from("shows")
-        .select("id, name, image_url, starts_at, status, promotion_id")
+        .select("id, name, tagline, image_url, starts_at, status, promotion_id")
         .eq("id", showId)
         .maybeSingle();
       if (ignore) return;
@@ -144,9 +144,11 @@ export default function ShowDetailPage() {
                 </h1>
               </div>
             </div>
-            <p className="mt-4 text-sm text-zinc-200 sm:text-base">
-              Lock in your picks before bell time and compare with other fans.
-            </p>
+            {show.tagline ? (
+              <p className="mt-4 text-sm text-amber-100 sm:text-base">
+                {show.tagline}
+              </p>
+            ) : null}
             <div className="mt-8 flex flex-wrap gap-3">
               {isSignedIn ? (
                 <Link

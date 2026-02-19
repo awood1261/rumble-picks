@@ -9,6 +9,8 @@ type ShowEditorProps = {
   setPromotionId: (value: string) => void;
   imageUrl: string;
   setImageUrl: (value: string) => void;
+  tagline: string;
+  setTagline: (value: string) => void;
   startsAt: string;
   setStartsAt: (value: string) => void;
   saving: boolean;
@@ -26,6 +28,8 @@ export const ShowEditor = ({
   setPromotionId,
   imageUrl,
   setImageUrl,
+  tagline,
+  setTagline,
   startsAt,
   setStartsAt,
   saving,
@@ -96,5 +100,12 @@ export const ShowEditor = ({
         {saving ? "Saving…" : "Save show"}
       </button>
     </div>
+    <input
+      className="mt-3 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+      placeholder="Show tagline"
+      value={tagline}
+      onChange={(event) => setTagline(event.target.value)}
+      disabled={disabled}
+    />
   </div>
 );

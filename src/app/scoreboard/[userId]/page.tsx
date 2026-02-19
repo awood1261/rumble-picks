@@ -47,6 +47,7 @@ type EventRow = {
 type ShowRow = {
   id: string;
   name: string;
+  tagline?: string | null;
 };
 
 type ProfileRow = {

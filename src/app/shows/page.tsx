@@ -60,9 +60,6 @@ export default function ShowsPage() {
                 className="group relative aspect-[3/4] overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5 transition hover:border-amber-400/60"
               >
                 <div className="relative z-10">
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                    Promotion
-                  </p>
                   <h2 className="mt-2 text-xl font-semibold text-amber-100">
                     {promotion.name}
                   </h2>

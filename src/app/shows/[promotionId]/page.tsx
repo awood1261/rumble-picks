@@ -95,9 +95,6 @@ export default function PromotionShowsPage() {
               </div>
             ) : null}
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                Promotion
-              </p>
               <h1 className="mt-2 text-3xl font-semibold text-amber-100">
                 {promotion?.name ?? "Promotion"}
               </h1>

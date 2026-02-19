@@ -20,6 +20,7 @@ type EventRow = {
 type ShowRow = {
   id: string;
   name: string;
+  tagline?: string | null;
   image_url: string | null;
   promotion_id: string | null;
   starts_at: string | null;
@@ -132,6 +133,7 @@ export default function AdminPage() {
   const [showPromotionId, setShowPromotionId] = useState("");
   const [showImageUrl, setShowImageUrl] = useState("");
   const [showStartsAt, setShowStartsAt] = useState("");
+  const [showTagline, setShowTagline] = useState("");
   const [showModalOpen, setShowModalOpen] = useState(false);
   const [promotionModalOpen, setPromotionModalOpen] = useState(false);
   const [promotionName, setPromotionName] = useState("");
@@ -140,6 +142,7 @@ export default function AdminPage() {
   const [showEditPromotionId, setShowEditPromotionId] = useState("");
   const [showEditImageUrl, setShowEditImageUrl] = useState("");
   const [showEditStartsAt, setShowEditStartsAt] = useState("");
+  const [showEditTagline, setShowEditTagline] = useState("");
   const [showEditBusy, setShowEditBusy] = useState(false);
   const [showDeleteBusy, setShowDeleteBusy] = useState(false);
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
@@ -249,18 +252,21 @@ export default function AdminPage() {
       setShowEditPromotionId("");
       setShowEditImageUrl("");
       setShowEditStartsAt("");
+      setShowEditTagline("");
       return;
     }
     setShowEditName(activeShow.name ?? "");
     setShowEditPromotionId(activeShow.promotion_id ?? "");
     setShowEditImageUrl(activeShow.image_url ?? "");
     setShowEditStartsAt(formatLocalDateTime(activeShow.starts_at ?? null));
+    setShowEditTagline(activeShow.tagline ?? "");
   }, [
     activeShow?.id,
     activeShow?.name,
     activeShow?.image_url,
     activeShow?.promotion_id,
     activeShow?.starts_at,
+    activeShow?.tagline,
   ]);
   useEffect(() => {
     if (!selectedShowId && activeShow?.id) {
@@ -567,7 +573,7 @@ export default function AdminPage() {
       ] = await Promise.all([
         supabase
           .from("shows")
-          .select("id, name, image_url, promotion_id, status, starts_at")
+          .select("id, name, tagline, image_url, promotion_id, status, starts_at")
           .order("created_at", { ascending: false }),
         supabase
           .from("promotions")
@@ -668,7 +674,7 @@ export default function AdminPage() {
       ] = await Promise.all([
           supabase
             .from("shows")
-            .select("id, name, image_url, promotion_id, status, starts_at")
+            .select("id, name, tagline, image_url, promotion_id, status, starts_at")
             .order("created_at", { ascending: false }),
           supabase
             .from("promotions")
@@ -855,10 +861,11 @@ export default function AdminPage() {
         name: showName.trim(),
         promotion_id: showPromotionId,
         image_url: showImageUrl.trim() || null,
+        tagline: showTagline.trim() || null,
         status: "draft",
         starts_at: showStartsAt ? new Date(showStartsAt).toISOString() : null,
       })
-      .select("id, name, image_url, promotion_id")
+      .select("id, name, tagline, image_url, promotion_id")
       .single();
     if (error || !newShow) {
       setMessage(error?.message ?? "Failed to create show.");
@@ -868,6 +875,7 @@ export default function AdminPage() {
     setShowPromotionId("");
     setShowImageUrl("");
     setShowStartsAt("");
+    setShowTagline("");
     setSelectedShowId(newShow.id);
     setEventShowId(newShow.id);
     setShowModalOpen(false);
@@ -919,6 +927,7 @@ export default function AdminPage() {
       name: showEditName.trim(),
       promotion_id: showEditPromotionId,
       image_url: showEditImageUrl.trim() || null,
+      tagline: showEditTagline.trim() || null,
       starts_at: showEditStartsAt
         ? new Date(showEditStartsAt).toISOString()
         : null,
@@ -927,7 +936,7 @@ export default function AdminPage() {
       .from("shows")
       .update(payload)
       .eq("id", activeShow.id)
-      .select("id, name, image_url, promotion_id, starts_at, status")
+      .select("id, name, tagline, image_url, promotion_id, starts_at, status")
       .single();
     if (error || !updatedShow) {
       setMessage(error?.message ?? "Unable to update show.");
@@ -1891,6 +1900,8 @@ export default function AdminPage() {
             setPromotionId={setShowEditPromotionId}
             imageUrl={showEditImageUrl}
             setImageUrl={setShowEditImageUrl}
+            tagline={showEditTagline}
+            setTagline={setShowEditTagline}
             startsAt={showEditStartsAt}
             setStartsAt={setShowEditStartsAt}
             saving={showEditBusy}
@@ -3209,6 +3220,12 @@ export default function AdminPage() {
                   placeholder="Show image URL"
                   value={showImageUrl}
                   onChange={(event) => setShowImageUrl(event.target.value)}
+                />
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                  placeholder="Show tagline"
+                  value={showTagline}
+                  onChange={(event) => setShowTagline(event.target.value)}
                 />
                 <input
                   className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
