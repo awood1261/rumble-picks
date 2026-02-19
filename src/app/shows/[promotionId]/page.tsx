@@ -74,13 +74,24 @@ export default function PromotionShowsPage() {
           </div>
         )}
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-              Promotion
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold text-amber-100">
-              {promotion?.name ?? "Promotion"}
-            </h1>
+          <div className="flex items-center gap-4">
+            {promotion?.image_url ? (
+              <div className="h-14 w-14 overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+                <img
+                  src={promotion.image_url}
+                  alt={promotion?.name ?? "Promotion"}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ) : null}
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                Promotion
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold text-amber-100">
+                {promotion?.name ?? "Promotion"}
+              </h1>
+            </div>
           </div>
           <Link
             className="inline-flex rounded-full border border-zinc-700 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-white"
@@ -93,21 +104,21 @@ export default function PromotionShowsPage() {
         {shows.length === 0 ? (
           <p className="mt-8 text-sm text-zinc-400">No shows yet.</p>
         ) : (
-          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
             {shows.map((show) => (
               <Link
                 key={show.id}
                 href={`/shows/${promotionId}/${show.id}`}
-                className="group relative aspect-[3/4] overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5 transition hover:border-amber-400/60"
+                className="group relative aspect-[3/4] overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 p-4 transition hover:border-amber-400/60"
               >
                 <div className="relative z-10">
                   <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                     Show
                   </p>
-                  <h2 className="mt-2 text-xl font-semibold text-amber-100">
+                  <h2 className="mt-2 text-lg font-semibold text-amber-100">
                     {show.name}
                   </h2>
-                  <p className="mt-3 text-xs text-zinc-400">
+                  <p className="mt-2 text-xs text-zinc-400">
                     Tap to view picks & scores
                   </p>
                 </div>
