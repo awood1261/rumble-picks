@@ -131,7 +131,7 @@ export default function PicksPage() {
     if (!selectedShow?.starts_at) {
       return {
         label: "Lock time not set",
-        detail: "Picks stay editable until a start time is added.",
+        detail: "",
       };
     }
     const startTime = new Date(selectedShow.starts_at).getTime();
@@ -149,12 +149,12 @@ export default function PicksPage() {
     if (diffMs > 0) {
       return {
         label: `Locks in ${timeString}`,
-        detail: "You can edit picks until the show start time.",
+        detail: "",
       };
     }
     return {
       label: `Locked ${timeString} ago`,
-      detail: "Picks are locked once the show starts.",
+      detail: "",
     };
   }, [selectedShow?.starts_at, now]);
 

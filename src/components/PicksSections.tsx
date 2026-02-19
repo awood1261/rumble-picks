@@ -48,7 +48,9 @@ export const LockStatusBanner = ({
     {!isLocked && (
       <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
         <p className="font-semibold text-amber-200">{lockInfo.label}</p>
-        <p className="mt-1 text-xs text-zinc-400">{lockInfo.detail}</p>
+        {lockInfo.detail ? (
+          <p className="mt-1 text-xs text-zinc-400">{lockInfo.detail}</p>
+        ) : null}
       </div>
     )}
     {isLocked && rankInfo.rank ? (
