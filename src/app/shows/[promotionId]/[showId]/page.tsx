@@ -14,6 +14,8 @@ export default function ShowDetailPage() {
   const [show, setShow] = useState<ShowRow | null>(null);
   const [promotion, setPromotion] = useState<PromotionRow | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   const formattedStart = useMemo(() => {
     if (!show?.starts_at) return null;
@@ -62,6 +64,24 @@ export default function ShowDetailPage() {
       ignore = true;
     };
   }, [showId]);
+
+  useEffect(() => {
+    let ignore = false;
+    const loadUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (ignore) return;
+      if (!error && data?.user) {
+        setIsSignedIn(true);
+      } else {
+        setIsSignedIn(false);
+      }
+      setAuthChecked(true);
+    };
+    loadUser();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   if (!showId) {
     return (
@@ -128,12 +148,14 @@ export default function ShowDetailPage() {
               Lock in your picks before bell time and compare with other fans.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href={`/picks?show=${show.id}`}
-                className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
-              >
-                Make picks
-              </Link>
+              {isSignedIn ? (
+                <Link
+                  href={`/picks?show=${show.id}`}
+                  className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
+                >
+                  Make picks
+                </Link>
+              ) : null}
               <Link
                 href={`/scoreboard?show=${show.id}`}
                 className="inline-flex h-12 items-center justify-center rounded-full border border-amber-400/70 px-6 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
@@ -141,6 +163,19 @@ export default function ShowDetailPage() {
                 View scores
               </Link>
             </div>
+            {authChecked && !isSignedIn ? (
+              <div className="mt-6 space-y-3">
+                <p className="text-sm text-zinc-200">
+                  Sign in to lock your picks for this show.
+                </p>
+                <Link
+                  href="/login"
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-white/10 px-5 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:bg-white/20"
+                >
+                  Sign in to make picks
+                </Link>
+              </div>
+            ) : null}
           </div>
         )}
 
