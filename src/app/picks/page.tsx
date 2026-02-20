@@ -1049,16 +1049,6 @@ export default function PicksPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
-        {shows.length > 1 && (
-          <div className="mb-3 flex justify-start">
-            <a
-              href="/shows"
-              className="text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:text-amber-100"
-            >
-              Change show
-            </a>
-          </div>
-        )}
         <PicksHeader
           title="Make your predictions"
           subtitle="Lock in your picks here before bell time."

@@ -50,6 +50,13 @@ type ShowRow = {
   id: string;
   name: string;
   tagline?: string | null;
+  promotion_id: string | null;
+};
+
+type PromotionRow = {
+  id: string;
+  name: string;
+  image_url: string | null;
 };
 
 type EventRow = {
@@ -112,6 +119,7 @@ export default function ScoreboardPage() {
   const [scores, setScores] = useState<ScoreRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [shows, setShows] = useState<ShowRow[]>([]);
+  const [promotions, setPromotions] = useState<PromotionRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -129,6 +137,15 @@ export default function ScoreboardPage() {
   const [progressOpen, setProgressOpen] = useState(false);
   const loadScoresRef = useRef<() => void>(() => {});
   const loadRumbleEntriesRef = useRef<() => void>(() => {});
+
+  const selectedShow = useMemo(
+    () => shows.find((show) => show.id === selectedShowId) ?? null,
+    [shows, selectedShowId]
+  );
+  const selectedPromotion = useMemo(() => {
+    if (!selectedShow?.promotion_id) return null;
+    return promotions.find((promotion) => promotion.id === selectedShow.promotion_id) ?? null;
+  }, [promotions, selectedShow?.promotion_id]);
 
   const scoreboard = useMemo(() => {
     const profileMap = new Map(
@@ -591,15 +608,27 @@ export default function ScoreboardPage() {
     });
 
     const loadShows = async () => {
-      const { data: showRows, error: showError } = await supabase
-        .from("shows")
-        .select("id, name, image_url, promotion_id, status, starts_at")
-        .order("starts_at", { ascending: true });
+      const [{ data: showRows, error: showError }, { data: promotionRows, error: promotionError }] =
+        await Promise.all([
+          supabase
+            .from("shows")
+            .select("id, name, image_url, promotion_id, status, starts_at")
+            .order("starts_at", { ascending: true }),
+          supabase
+            .from("promotions")
+            .select("id, name, image_url")
+            .order("name", { ascending: true }),
+        ]);
       if (showError) {
         setMessage(showError.message);
         return;
       }
+      if (promotionError) {
+        setMessage(promotionError.message);
+        return;
+      }
       setShows(showRows ?? []);
+      setPromotions(promotionRows ?? []);
       if (showRows && showRows.length > 0) {
         const defaultId =
           queryShowId && showRows.some((show) => show.id === queryShowId)
@@ -819,28 +848,19 @@ export default function ScoreboardPage() {
           </p>
         </header>
         {shows.length > 0 && (
-          <div className="mt-6">
-            <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-              Show
-              <select
-                className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                value={selectedShowId}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setSelectedShowId(value);
-                  const url = new URL(window.location.href);
-                  url.searchParams.set("show", value);
-                  window.history.replaceState({}, "", url.toString());
-                }}
-                disabled={shows.length === 1}
-              >
-                {shows.map((show) => (
-                  <option key={show.id} value={show.id}>
-                    {show.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="mt-6 flex items-center gap-3">
+            {selectedPromotion?.image_url ? (
+              <div className="h-10 w-10 overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+                <img
+                  src={selectedPromotion.image_url}
+                  alt={selectedPromotion.name ?? "Promotion"}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ) : null}
+            <p className="text-lg font-semibold text-amber-100">
+              {selectedShow?.name ?? "Show"}
+            </p>
           </div>
         )}
 

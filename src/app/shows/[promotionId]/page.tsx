@@ -13,6 +13,16 @@ export default function PromotionShowsPage() {
   const [promotion, setPromotion] = useState<PromotionRow | null>(null);
   const [shows, setShows] = useState<ShowRow[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const formatShowDate = (value: string | null) => {
+    if (!value) return "Show date TBD";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Show date TBD";
+    return date.toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -107,33 +117,34 @@ export default function PromotionShowsPage() {
         ) : (
           <div className="mt-8 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
             {shows.map((show) => (
-              <Link
-                key={show.id}
-                href={`/shows/${promotionId}/${show.id}`}
-                className="group relative aspect-[3/4] overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 p-4 transition hover:border-amber-400/60"
-              >
-                <div className="relative z-10">
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                    Show
-                  </p>
-                  <h2 className="mt-2 text-lg font-semibold text-amber-100">
-                    {show.name}
-                  </h2>
-                  <p className="mt-2 text-xs text-zinc-400">
-                    Tap to view picks & scores
-                  </p>
-                </div>
-                {show.image_url ? (
-                  <img
-                    src={show.image_url}
-                    alt={show.name}
-                    className="absolute inset-0 h-full w-full object-cover opacity-30 transition-opacity duration-300 group-hover:opacity-45"
-                  />
-                ) : (
-                  <div className="absolute inset-0 bg-gradient-to-br from-zinc-800/60 via-zinc-950 to-black" />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/40 to-transparent" />
-              </Link>
+              <div key={show.id} className="flex flex-col gap-3">
+                <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
+                  {formatShowDate(show.starts_at)}
+                </p>
+                <Link
+                  href={`/shows/${promotionId}/${show.id}`}
+                  className="group relative aspect-[3/4] overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 p-4 transition hover:border-amber-400/60"
+                >
+                  <div className="relative z-10">
+                    <h2 className="mt-2 text-lg font-semibold text-amber-100">
+                      {show.name}
+                    </h2>
+                    <p className="mt-2 text-xs text-zinc-400">
+                      Tap to view picks & scores
+                    </p>
+                  </div>
+                  {show.image_url ? (
+                    <img
+                      src={show.image_url}
+                      alt={show.name}
+                      className="absolute inset-0 h-full w-full object-cover opacity-30 transition-opacity duration-300 group-hover:opacity-45"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-zinc-800/60 via-zinc-950 to-black" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/40 to-transparent" />
+                </Link>
+              </div>
             ))}
           </div>
         )}
