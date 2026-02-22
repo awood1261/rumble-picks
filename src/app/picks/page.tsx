@@ -1041,26 +1041,8 @@ export default function PicksPage() {
   }, [stepItems]);
   const totalSteps = stepItems.length;
   const currentStep = stepItems[Math.min(stepIndex, Math.max(totalSteps - 1, 0))];
-  const completedSteps = useMemo(() => {
-    return stepItems.filter((item) => {
-      if (item.type === "match") {
-        return Boolean(payload.match_picks[item.id]);
-      }
-      const pick = getRumblePick(item.id);
-      return (
-        pick.entrants.length > 0 ||
-        pick.final_four.length > 0 ||
-        Boolean(pick.winner) ||
-        Boolean(pick.entry_1) ||
-        Boolean(pick.entry_2) ||
-        Boolean(pick.entry_30) ||
-        Boolean(pick.iron_person) ||
-        Boolean(pick.most_eliminations)
-      );
-    }).length;
-  }, [getRumblePick, payload.match_picks, stepItems]);
   const progressPercent =
-    totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+    totalSteps > 0 ? Math.round(((stepIndex + 1) / totalSteps) * 100) : 0;
 
   useEffect(() => {
     setStepIndex(0);
@@ -1277,7 +1259,7 @@ export default function PicksPage() {
                   {currentStep?.type === "match" ? "Match picks" : "Event picks"}
                 </h2>
                 <p className="mt-1 text-sm text-zinc-400">
-                  {completedSteps} of {totalSteps} picked
+                  Step {stepIndex + 1} of {totalSteps}
                 </p>
               </div>
               <div className="w-full max-w-xs">
