@@ -1053,6 +1053,10 @@ export default function PicksPage() {
     setStepIndex((prev) => Math.min(prev + 1, totalSteps));
   };
 
+  const currentStepMatchReady =
+    currentStep?.type !== "match" ||
+    Boolean(payload.match_picks[currentStep.id]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
@@ -1380,7 +1384,7 @@ export default function PicksPage() {
                 className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
                 type="button"
                 onClick={handleStepContinue}
-                disabled={saving || isLocked}
+                disabled={saving || isLocked || !currentStepMatchReady}
               >
                 {stepIndex + 1 === totalSteps ? "Finish picks" : "Save & next"}
               </button>
