@@ -1046,6 +1046,27 @@ type SegmentedOption = {
   label: string;
 };
 
+type BonusPicksAccordionProps = {
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+};
+
+const BonusPicksAccordion = ({
+  defaultOpen = false,
+  children,
+}: BonusPicksAccordionProps) => (
+  <details
+    className="group rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3"
+    defaultOpen={defaultOpen}
+  >
+    <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+      Bonus picks
+      <span className="text-zinc-500 transition group-open:rotate-180">▾</span>
+    </summary>
+    <div className="mt-3">{children}</div>
+  </details>
+);
+
 type SegmentedPillsProps = {
   options: SegmentedOption[];
   selectedValue: string | null;
@@ -1189,6 +1210,12 @@ export const MatchPicksSection = ({
             { value: "submission", label: "Submission" },
             { value: "disqualification", label: "Disqualify" },
           ];
+          const hasBonusPick =
+            Boolean(lengthPick) ||
+            Boolean(interferencePick) ||
+            Boolean(finishPick.method) ||
+            Boolean(finishPick.winner) ||
+            Boolean(finishPick.loser);
 
           return (
             <div
@@ -1342,155 +1369,154 @@ export const MatchPicksSection = ({
                 </div>
               )}
               <div className="mt-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Finish prediction
-                </p>
-                <div className="mt-2 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
-                  <div className="mt-3">
-                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                      Match length
-                    </p>
-                    <SegmentedPills
-                      options={lengthOptions}
-                      selectedValue={lengthPick}
-                      disabled={isLocked}
-                      onSelect={(value) =>
-                        setPayload((prev) => ({
-                          ...prev,
-                          match_length_picks: {
-                            ...prev.match_length_picks,
-                            [match.id]: value,
-                          },
-                        }))
-                      }
-                      className="mt-2"
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                      Finish type
-                    </p>
-                    <SegmentedPills
-                      options={finishOptions}
-                      selectedValue={finishPick.method}
-                      disabled={isLocked || !hasWinnerPick}
-                      onSelect={(value) => {
-                        const method = value;
-                        setPayload((prev) => ({
-                          ...prev,
-                          match_finish_picks: {
-                            ...prev.match_finish_picks,
-                            [match.id]: {
-                              method,
-                              winner:
-                                !isSingles &&
-                                (method === "pinfall" || method === "submission")
-                                  ? finishPick.winner
-                                  : null,
-                              loser:
-                                !isSingles &&
-                                (method === "pinfall" || method === "submission")
-                                  ? finishPick.loser
-                                  : null,
+                <BonusPicksAccordion defaultOpen={hasBonusPick}>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        Match length
+                      </p>
+                      <SegmentedPills
+                        options={lengthOptions}
+                        selectedValue={lengthPick}
+                        disabled={isLocked}
+                        onSelect={(value) =>
+                          setPayload((prev) => ({
+                            ...prev,
+                            match_length_picks: {
+                              ...prev.match_length_picks,
+                              [match.id]: value,
                             },
-                          },
-                        }));
-                      }}
-                      className="mt-2"
-                    />
-                    <div className="mt-3 grid gap-3 md:grid-cols-3">
-                      {showFinishWinner && (
-                        <select
-                          className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                          value={finishPick.winner ?? ""}
-                          onChange={(event) =>
-                            setPayload((prev) => ({
-                              ...prev,
-                              match_finish_picks: {
-                                ...prev.match_finish_picks,
-                                [match.id]: {
-                                  ...finishPick,
-                                  winner: event.target.value || null,
-                                },
+                          }))
+                        }
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        Finish type
+                      </p>
+                      <SegmentedPills
+                        options={finishOptions}
+                        selectedValue={finishPick.method}
+                        disabled={isLocked || !hasWinnerPick}
+                        onSelect={(value) => {
+                          const method = value;
+                          setPayload((prev) => ({
+                            ...prev,
+                            match_finish_picks: {
+                              ...prev.match_finish_picks,
+                              [match.id]: {
+                                method,
+                                winner:
+                                  !isSingles &&
+                                  (method === "pinfall" || method === "submission")
+                                    ? finishPick.winner
+                                    : null,
+                                loser:
+                                  !isSingles &&
+                                  (method === "pinfall" || method === "submission")
+                                    ? finishPick.loser
+                                    : null,
                               },
-                            }))
-                          }
-                          disabled={
-                            isLocked ||
-                            !hasWinnerPick ||
-                            !finishRequiresEntrants ||
-                            (isTag && !winningSideId)
-                          }
-                        >
-                          <option value="">Winner (pin/sub)</option>
-                          {(isTag ? winningSideEntrants : sortedEntrants).map(
-                            (entrant) => (
-                              <option key={entrant.id} value={entrant.id}>
-                                {entrant.name}
-                              </option>
-                            )
-                          )}
-                        </select>
-                      )}
-                      {showFinishLoser && (
-                        <select
-                          className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                          value={finishPick.loser ?? ""}
-                          onChange={(event) =>
-                            setPayload((prev) => ({
-                              ...prev,
-                              match_finish_picks: {
-                                ...prev.match_finish_picks,
-                                [match.id]: {
-                                  ...finishPick,
-                                  loser: event.target.value || null,
+                            },
+                          }));
+                        }}
+                        className="mt-2"
+                      />
+                      <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        {showFinishWinner && (
+                          <select
+                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                            value={finishPick.winner ?? ""}
+                            onChange={(event) =>
+                              setPayload((prev) => ({
+                                ...prev,
+                                match_finish_picks: {
+                                  ...prev.match_finish_picks,
+                                  [match.id]: {
+                                    ...finishPick,
+                                    winner: event.target.value || null,
+                                  },
                                 },
-                              },
-                            }))
-                          }
-                          disabled={
-                            isLocked ||
-                            !hasWinnerPick ||
-                            !finishRequiresEntrants ||
-                            (isTag && !winningSideId)
-                          }
-                        >
-                          <option value="">Loser (pin/sub)</option>
-                          {(isTag ? losingSideEntrants : sortedEntrants).map(
-                            (entrant) => (
-                              <option key={entrant.id} value={entrant.id}>
-                                {entrant.name}
-                              </option>
-                            )
-                          )}
-                        </select>
-                      )}
+                              }))
+                            }
+                            disabled={
+                              isLocked ||
+                              !hasWinnerPick ||
+                              !finishRequiresEntrants ||
+                              (isTag && !winningSideId)
+                            }
+                          >
+                            <option value="">Winner (pin/sub)</option>
+                            {(isTag ? winningSideEntrants : sortedEntrants).map(
+                              (entrant) => (
+                                <option key={entrant.id} value={entrant.id}>
+                                  {entrant.name}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        )}
+                        {showFinishLoser && (
+                          <select
+                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                            value={finishPick.loser ?? ""}
+                            onChange={(event) =>
+                              setPayload((prev) => ({
+                                ...prev,
+                                match_finish_picks: {
+                                  ...prev.match_finish_picks,
+                                  [match.id]: {
+                                    ...finishPick,
+                                    loser: event.target.value || null,
+                                  },
+                                },
+                              }))
+                            }
+                            disabled={
+                              isLocked ||
+                              !hasWinnerPick ||
+                              !finishRequiresEntrants ||
+                              (isTag && !winningSideId)
+                            }
+                          >
+                            <option value="">Loser (pin/sub)</option>
+                            {(isTag ? losingSideEntrants : sortedEntrants).map(
+                              (entrant) => (
+                                <option key={entrant.id} value={entrant.id}>
+                                  {entrant.name}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        Interference
+                      </p>
+                      <SegmentedPills
+                        options={interferenceOptions}
+                        selectedValue={interferencePick}
+                        disabled={isLocked || !hasWinnerPick}
+                        onSelect={(value) =>
+                          setPayload((prev) => ({
+                            ...prev,
+                            match_interference_picks: {
+                              ...prev.match_interference_picks,
+                              [match.id]: value as "yes" | "no",
+                            },
+                          }))
+                        }
+                        className="mt-2"
+                      />
                     </div>
                   </div>
-                  <div className="mt-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                      Interference
-                    </p>
-                    <SegmentedPills
-                      options={interferenceOptions}
-                      selectedValue={interferencePick}
-                      disabled={isLocked || !hasWinnerPick}
-                      onSelect={(value) =>
-                        setPayload((prev) => ({
-                          ...prev,
-                          match_interference_picks: {
-                            ...prev.match_interference_picks,
-                            [match.id]: value as "yes" | "no",
-                          },
-                        }))
-                      }
-                      className="mt-2"
-                    />
-                  </div>
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Pick how the match ends (applies to singles too).
+                  <p className="mt-3 text-xs text-zinc-500">
+                    Bonus picks can earn extra points.
                   </p>
-                </div>
+                </BonusPicksAccordion>
               </div>
             </div>
           );
