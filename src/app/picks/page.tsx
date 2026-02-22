@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import { scoringRules } from "../../lib/scoringRules";
@@ -103,6 +104,7 @@ export default function PicksPage() {
   const [entrantSearch, setEntrantSearch] = useState("");
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const [customModalEventId, setCustomModalEventId] = useState<string | null>(null);
+  const [stepIndex, setStepIndex] = useState(0);
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [editSection, setEditSection] = useState<EditSection>(null);
@@ -1023,6 +1025,45 @@ export default function PicksPage() {
     setEditSection(section);
   };
 
+  const stepItems = useMemo(
+    () => [
+      ...showEvents.map((event) => ({ type: "event" as const, id: event.id })),
+      ...matches.map((match) => ({ type: "match" as const, id: match.id })),
+    ],
+    [matches, showEvents]
+  );
+  const totalSteps = stepItems.length;
+  const currentStep = stepItems[Math.min(stepIndex, Math.max(totalSteps - 1, 0))];
+  const completedSteps = useMemo(() => {
+    return stepItems.filter((item) => {
+      if (item.type === "match") {
+        return Boolean(payload.match_picks[item.id]);
+      }
+      const pick = getRumblePick(item.id);
+      return (
+        pick.entrants.length > 0 ||
+        pick.final_four.length > 0 ||
+        Boolean(pick.winner) ||
+        Boolean(pick.entry_1) ||
+        Boolean(pick.entry_2) ||
+        Boolean(pick.entry_30) ||
+        Boolean(pick.iron_person) ||
+        Boolean(pick.most_eliminations)
+      );
+    }).length;
+  }, [getRumblePick, payload.match_picks, stepItems]);
+  const progressPercent =
+    totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+
+  useEffect(() => {
+    setStepIndex(0);
+  }, [selectedShowId, totalSteps]);
+
+  const handleStepContinue = async () => {
+    await handleSave();
+    setStepIndex((prev) => Math.min(prev + 1, totalSteps));
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
@@ -1072,174 +1113,259 @@ export default function PicksPage() {
             </p>
           </section>
         )}
-
-        {hasSaved && !editSection ? (
-          <>
-            {canShowRumbles &&
-              showEvents.map((event) => {
-                const eventPick = getRumblePick(event.id);
-                const eventActuals = actualsByEvent[event.id] ?? emptyActuals;
-                const points =
-                  sectionPointsByEvent[event.id] ??
-                  ({ entrants: null, finalFour: null, keyPicks: null } as SectionPoints);
+        {totalSteps === 0 ? (
+          <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <p className="text-sm text-zinc-400">
+              No matches or events are available yet.
+            </p>
+          </section>
+        ) : stepIndex >= totalSteps ? (
+          <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <h2 className="text-xl font-semibold text-zinc-100">
+              All picks are in
+            </h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              You can edit your picks until the show starts.
+            </p>
+            <div className="mt-6 space-y-4">
+              {showEvents.map((event) => {
+                const pick = getRumblePick(event.id);
+                const entrants = pick.entrants
+                  .map((id) => entrantByIdAll.get(id)?.name)
+                  .filter(Boolean)
+                  .join(", ");
+                const finalFour = pick.final_four
+                  .map((id) => entrantByIdAll.get(id)?.name)
+                  .filter(Boolean)
+                  .join(", ");
+                const winnerEntrant = pick.winner
+                  ? entrantByIdAll.get(pick.winner)
+                  : null;
+                const winner = pick.winner
+                  ? entrantByIdAll.get(pick.winner)?.name
+                  : null;
                 return (
-                  <RumbleSummarySection
-                    key={event.id}
-                    event={event}
-                    showName={selectedShow?.name ?? null}
-                    eventPick={eventPick}
-                    actuals={eventActuals}
-                    points={points}
-                    entrantByIdAll={entrantByIdAll}
-                    userId={userId}
-                    isLocked={isLocked}
-                    onEdit={handleEditEventSection}
-                  />
+                  <div key={event.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      {event.name}
+                    </p>
+                    <p className="mt-2 text-sm text-zinc-300">
+                      Entrants: {entrants || "None selected"}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-300">
+                      Final Four: {finalFour || "None selected"}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+                      <span>Winner:</span>
+                      {winnerEntrant?.image_url ? (
+                        <img
+                          src={winnerEntrant.image_url}
+                          alt={winnerEntrant.name}
+                          className="h-7 w-7 rounded-full border border-zinc-700 object-cover"
+                        />
+                      ) : null}
+                      <span>{winner || "Not set"}</span>
+                    </div>
+                  </div>
                 );
               })}
-
-            <MatchSummarySection
-              matches={matches}
-              matchPoints={matchPoints}
-              matchWinnerMap={matchWinnerMap}
-              matchSidesByMatch={matchSidesByMatch}
-              matchEntrantsByMatch={matchEntrantsByMatch}
-              entrantByIdAll={entrantByIdAll}
-              payload={payload}
-              isLocked={isLocked}
-              onEdit={setEditSection}
-            />
-          </>
+              {matches.map((match) => {
+                const winnerSideId = payload.match_picks[match.id] ?? null;
+                const sideEntrants = matchEntrantsByMatch[match.id] ?? [];
+                const winnerEntrants = sideEntrants
+                  .filter((row) => row.side_id === winnerSideId)
+                  .map((row) => entrantByIdAll.get(row.entrant_id))
+                  .filter(Boolean) as EntrantRow[];
+                const winnerNames = winnerEntrants
+                  .map((entrant) => entrant.name)
+                  .filter(Boolean)
+                  .join(", ");
+                return (
+                  <div key={match.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      {match.name}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+                      <span>Winner:</span>
+                      {winnerEntrants.length > 0 && (
+                        <div className="flex -space-x-2">
+                          {winnerEntrants.map((entrant) =>
+                            entrant.image_url ? (
+                              <img
+                                key={entrant.id}
+                                src={entrant.image_url}
+                                alt={entrant.name}
+                                className="h-7 w-7 rounded-full border border-zinc-700 object-cover"
+                              />
+                            ) : (
+                              <div
+                                key={entrant.id}
+                                className="h-7 w-7 rounded-full border border-zinc-700 bg-zinc-800"
+                              />
+                            )
+                          )}
+                        </div>
+                      )}
+                      <span>{winnerNames || "Not set"}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                className="inline-flex h-11 items-center justify-center rounded-full border border-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                type="button"
+                onClick={() => setStepIndex(0)}
+              >
+                Edit picks
+              </button>
+              <Link
+                className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
+                href={`/scoreboard?show=${selectedShowId}`}
+              >
+                View scoreboard
+              </Link>
+            </div>
+          </section>
         ) : (
-          <>
-            {canShowRumbles && (editSection === "entrants" || !hasSaved) && (
+          <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                  Step {stepIndex + 1} of {totalSteps}
+                </p>
+                <h2 className="text-xl font-semibold text-zinc-100">
+                  {currentStep?.type === "match" ? "Match picks" : "Event picks"}
+                </h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  {completedSteps} of {totalSteps} picked
+                </p>
+              </div>
+              <div className="w-full max-w-xs">
+                <div className="h-2 rounded-full bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-amber-400 transition-all"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+            {currentStep?.type === "event" && canShowRumbles ? (
               <>
-                {visibleShowEvents.map((event) => {
-                  const eventPick = getRumblePick(event.id);
-                  const { grouped, count } = getFilteredEntrantsByPromotion(event.id);
-                  return (
-                    <RumbleEntrantsEditor
-                      key={event.id}
-                      event={event}
-                      eventPick={eventPick}
-                      grouped={grouped}
-                      count={count}
-                      confirmedEntrantIds={confirmedEntrantsByEvent[event.id] ?? new Set()}
-                      entrantSearch={entrantSearch}
-                      setEntrantSearch={setEntrantSearch}
-                      toggleEntrant={toggleEntrant}
-                      hasSaved={hasSaved}
+                {showEvents
+                  .filter((event) => event.id === currentStep.id)
+                  .map((event) => {
+                    const eventPick = getRumblePick(event.id);
+                    const { grouped, count } = getFilteredEntrantsByPromotion(event.id);
+                    const selectedEntrants = getSelectedEntrantOptions(event.id);
+                    const selectedFinalFour = getSelectedFinalFourOptions(event.id);
+                    return (
+                      <div key={event.id} className="mt-6 space-y-6">
+                        <RumbleEntrantsEditor
+                          event={event}
+                          eventPick={eventPick}
+                          grouped={grouped}
+                          count={count}
+                          confirmedEntrantIds={
+                            confirmedEntrantsByEvent[event.id] ?? new Set()
+                          }
+                          entrantSearch={entrantSearch}
+                          setEntrantSearch={setEntrantSearch}
+                          toggleEntrant={toggleEntrant}
+                          hasSaved={false}
+                          isLocked={isLocked}
+                          onCancel={() => undefined}
+                          onSave={handleSave}
+                          saving={saving}
+                          userId={userId}
+                          onOpenCustomModal={() => {
+                            setCustomModalEventId(event.id);
+                            setCustomModalOpen(true);
+                          }}
+                        />
+                        <RumbleFinalFourEditor
+                          event={event}
+                          eventPick={eventPick}
+                          selectedEntrants={selectedEntrants}
+                          toggleFinalFour={toggleFinalFour}
+                          hasSaved={false}
+                          isLocked={isLocked}
+                          onCancel={() => undefined}
+                          onSave={handleSave}
+                          saving={saving}
+                        />
+                        <KeyPicksEditor
+                          event={event}
+                          eventPick={eventPick}
+                          selectedEntrants={selectedEntrants}
+                          selectedFinalFour={selectedFinalFour}
+                          isLocked={isLocked}
+                          hasSaved={false}
+                          onCancel={() => undefined}
+                          onSave={handleSave}
+                          saving={saving}
+                          onPickChange={(fieldKey, value) =>
+                            setPayload((prev) => {
+                              const current = prev.rumbles[event.id] ?? emptyRumblePick;
+                              return {
+                                ...prev,
+                                rumbles: {
+                                  ...prev.rumbles,
+                                  [event.id]: {
+                                    ...current,
+                                    [fieldKey]: value,
+                                  },
+                                },
+                              };
+                            })
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+              </>
+            ) : (
+              <div className="mt-6">
+                {matches
+                  .filter((match) => match.id === currentStep?.id)
+                  .map((match) => (
+                    <MatchPicksSection
+                      key={match.id}
+                      matches={[match]}
+                      matchSidesByMatch={matchSidesByMatch}
+                      matchEntrantsByMatch={matchEntrantsByMatch}
+                      entrantByIdAll={entrantByIdAll}
+                      payload={payload}
+                      setPayload={setPayload}
                       isLocked={isLocked}
-                      onCancel={() => {
-                        setEditSection(null);
-                        setFocusedEventId("");
-                      }}
+                      hasSaved={false}
+                      onCancel={() => undefined}
                       onSave={handleSave}
                       saving={saving}
-                      userId={userId}
-                      onOpenCustomModal={() => {
-                        setCustomModalEventId(event.id);
-                        setCustomModalOpen(true);
-                      }}
                     />
-                  );
-                })}
-              </>
+                  ))}
+              </div>
             )}
-
-            {canShowRumbles && (editSection === "final_four" || !hasSaved) && (
-              <>
-                {visibleShowEvents.map((event) => {
-                  const eventPick = getRumblePick(event.id);
-                  const selectedEntrants = getSelectedEntrantOptions(event.id);
-                  return (
-                    <RumbleFinalFourEditor
-                      key={event.id}
-                      event={event}
-                      eventPick={eventPick}
-                      selectedEntrants={selectedEntrants}
-                      toggleFinalFour={toggleFinalFour}
-                      hasSaved={hasSaved}
-                      isLocked={isLocked}
-                      onCancel={() => {
-                        setEditSection(null);
-                        setFocusedEventId("");
-                      }}
-                      onSave={handleSave}
-                      saving={saving}
-                    />
-                  );
-                })}
-              </>
-            )}
-
-            {(editSection === "matches" || !hasSaved) && (
-              <MatchPicksSection
-                matches={matches}
-                matchSidesByMatch={matchSidesByMatch}
-                matchEntrantsByMatch={matchEntrantsByMatch}
-                entrantByIdAll={entrantByIdAll}
-                payload={payload}
-                setPayload={setPayload}
-                isLocked={isLocked}
-                hasSaved={hasSaved}
-                onCancel={() => setEditSection(null)}
-                onSave={handleSave}
-                saving={saving}
-              />
-            )}
-
-            {canShowRumbles && (editSection === "key_picks" || !hasSaved) && (
-              <>
-                {visibleShowEvents.map((event) => {
-                  const eventPick = getRumblePick(event.id);
-                  const selectedEntrants = getSelectedEntrantOptions(event.id);
-                  const selectedFinalFour = getSelectedFinalFourOptions(event.id);
-                  return (
-                    <KeyPicksEditor
-                      key={event.id}
-                      event={event}
-                      eventPick={eventPick}
-                      selectedEntrants={selectedEntrants}
-                      selectedFinalFour={selectedFinalFour}
-                      isLocked={isLocked}
-                      hasSaved={hasSaved}
-                      onCancel={() => {
-                        setEditSection(null);
-                        setFocusedEventId("");
-                      }}
-                      onSave={handleSave}
-                      saving={saving}
-                      onPickChange={(fieldKey, value) =>
-                        setPayload((prev) => {
-                          const current = prev.rumbles[event.id] ?? emptyRumblePick;
-                          return {
-                            ...prev,
-                            rumbles: {
-                              ...prev.rumbles,
-                              [event.id]: {
-                                ...current,
-                                [fieldKey]: value,
-                              },
-                            },
-                          };
-                        })
-                      }
-                      sectionRef={event.id === showEvents[0]?.id ? keyPicksRef : undefined}
-                    />
-                  );
-                })}
-              </>
-            )}
-
-            {!hasSaved && (
-              <SavePicksFooter
-                saving={saving}
-                isLocked={isLocked}
-                onSave={handleSave}
-              />
-            )}
-          </>
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+              <button
+                className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+                onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
+                disabled={stepIndex === 0}
+              >
+                Back
+              </button>
+              <button
+                className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                type="button"
+                onClick={handleStepContinue}
+                disabled={saving || isLocked}
+              >
+                {stepIndex + 1 === totalSteps ? "Finish picks" : "Save & next"}
+              </button>
+            </div>
+          </section>
         )}
         <CustomEntrantModal
           open={customModalOpen}

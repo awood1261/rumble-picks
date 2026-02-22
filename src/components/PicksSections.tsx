@@ -1,6 +1,6 @@
 "use client";
 
-import { type Dispatch, type Ref, type SetStateAction } from "react";
+import { type Dispatch, type Ref, type SetStateAction, useEffect, useState } from "react";
 import Link from "next/link";
 import { EntrantCard } from "./EntrantCard";
 import { scoringRules } from "../lib/scoringRules";
@@ -1054,18 +1054,32 @@ type BonusPicksAccordionProps = {
 const BonusPicksAccordion = ({
   defaultOpen = false,
   children,
-}: BonusPicksAccordionProps) => (
-  <details
-    className="group rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3"
-    defaultOpen={defaultOpen}
-  >
-    <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
-      Bonus picks
-      <span className="text-zinc-500 transition group-open:rotate-180">▾</span>
-    </summary>
-    <div className="mt-3">{children}</div>
-  </details>
-);
+}: BonusPicksAccordionProps) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    if (defaultOpen) {
+      setIsOpen(true);
+    }
+  }, [defaultOpen]);
+
+  return (
+    <details
+      className="group rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3"
+      open={isOpen}
+      onToggle={(event) => {
+        const target = event.currentTarget;
+        setIsOpen(target.open);
+      }}
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+        Bonus picks
+        <span className="text-zinc-500 transition group-open:rotate-180">▾</span>
+      </summary>
+      <div className="mt-3">{children}</div>
+    </details>
+  );
+};
 
 type SegmentedPillsProps = {
   options: SegmentedOption[];
