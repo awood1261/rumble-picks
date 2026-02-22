@@ -1273,13 +1273,24 @@ export const MatchPicksSection = ({
                         </div>
                       )}
                       <div className="relative h-58 overflow-hidden rounded-2xl border border-zinc-800 bg-black/40 md:h-64 lg:h-102">
-                        <div className="grid h-full w-full grid-cols-2">
-                          {[leftEntrants, rightEntrants].map((entrants, index) => (
-                            <div
-                              key={`${match.id}-matchup-${index}`}
-                              className="relative h-full w-full overflow-hidden"
-                            >
-                              <div className={`grid h-full w-full ${sideGridClass}`}>
+                      <div className="grid h-full w-full grid-cols-2">
+                        {[leftEntrants, rightEntrants].map((entrants, index) => (
+                          <div
+                            key={`${match.id}-matchup-${index}`}
+                            className={`relative h-full w-full overflow-hidden ${
+                              payload.match_picks[match.id] ===
+                              (index === 0 ? leftSide.side.id : rightSide.side.id)
+                                ? "ring-2 ring-amber-300 shadow-[0_0_22px_rgba(251,196,0,0.3)]"
+                                : ""
+                            }`}
+                          >
+                            {payload.match_picks[match.id] ===
+                              (index === 0 ? leftSide.side.id : rightSide.side.id) && (
+                              <div className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-black/80 text-amber-200">
+                                ✓
+                              </div>
+                            )}
+                            <div className={`grid h-full w-full ${sideGridClass}`}>
                                 {entrants.length > 0 ? (
                                   entrants.map((entrant) => (
                                     <div

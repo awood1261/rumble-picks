@@ -1032,6 +1032,13 @@ export default function PicksPage() {
     ],
     [matches, showEvents]
   );
+  const stepIndexById = useMemo(() => {
+    const map = new Map<string, number>();
+    stepItems.forEach((item, index) => {
+      map.set(`${item.type}:${item.id}`, index);
+    });
+    return map;
+  }, [stepItems]);
   const totalSteps = stepItems.length;
   const currentStep = stepItems[Math.min(stepIndex, Math.max(totalSteps - 1, 0))];
   const completedSteps = useMemo(() => {
@@ -1146,9 +1153,21 @@ export default function PicksPage() {
                   : null;
                 return (
                   <div key={event.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                      {event.name}
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        {event.name}
+                      </p>
+                      <button
+                        type="button"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
+                        onClick={() =>
+                          setStepIndex(stepIndexById.get(`event:${event.id}`) ?? 0)
+                        }
+                        aria-label={`Edit ${event.name}`}
+                      >
+                        ✎
+                      </button>
+                    </div>
                     <p className="mt-2 text-sm text-zinc-300">
                       Entrants: {entrants || "None selected"}
                     </p>
@@ -1186,11 +1205,24 @@ export default function PicksPage() {
                   .map((entrant) => entrant.name)
                   .filter(Boolean)
                   .join(", ");
+                const winnerDisplay = winnerLabel ?? (winnerNames || "Not set");
                 return (
                   <div key={match.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                      {match.name}
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        {match.name}
+                      </p>
+                      <button
+                        type="button"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
+                        onClick={() =>
+                          setStepIndex(stepIndexById.get(`match:${match.id}`) ?? 0)
+                        }
+                        aria-label={`Edit ${match.name}`}
+                      >
+                        ✎
+                      </button>
+                    </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-300">
                       <span>Winner:</span>
                       {winnerEntrants.length > 0 && (
@@ -1212,7 +1244,7 @@ export default function PicksPage() {
                           )}
                         </div>
                       )}
-                      <span>{winnerLabel ?? (winnerNames || "Not set")}</span>
+                      <span>{winnerDisplay}</span>
                     </div>
                   </div>
                 );
