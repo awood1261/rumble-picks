@@ -1172,10 +1172,16 @@ export default function PicksPage() {
               {matches.map((match) => {
                 const winnerSideId = payload.match_picks[match.id] ?? null;
                 const sideEntrants = matchEntrantsByMatch[match.id] ?? [];
+                const sides = matchSidesByMatch[match.id] ?? [];
+                const winnerSide = sides.find((side) => side.id === winnerSideId) ?? null;
                 const winnerEntrants = sideEntrants
                   .filter((row) => row.side_id === winnerSideId)
                   .map((row) => entrantByIdAll.get(row.entrant_id))
                   .filter(Boolean) as EntrantRow[];
+                const winnerLabel =
+                  winnerSide?.label?.trim() && winnerEntrants.length > 1
+                    ? winnerSide.label.trim()
+                    : null;
                 const winnerNames = winnerEntrants
                   .map((entrant) => entrant.name)
                   .filter(Boolean)
@@ -1206,7 +1212,7 @@ export default function PicksPage() {
                           )}
                         </div>
                       )}
-                      <span>{winnerNames || "Not set"}</span>
+                      <span>{winnerLabel ?? (winnerNames || "Not set")}</span>
                     </div>
                   </div>
                 );

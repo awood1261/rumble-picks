@@ -1040,6 +1040,11 @@ export default function ScoreboardPicksPage() {
                       .map((row) => entrantMap.get(row.entrant_id))
                       .filter(Boolean)
                   : [];
+                const pickSide = sides.find((side) => side.id === pick) ?? null;
+                const pickSideLabel =
+                  pickSide?.label?.trim() && pickEntrants.length > 1
+                    ? pickSide.label.trim()
+                    : null;
                 const pickEntrantIds = pickEntrants
                   .map((entrant) => entrant?.id)
                   .filter(Boolean) as string[];
@@ -1131,12 +1136,13 @@ export default function ScoreboardPicksPage() {
                           <div className="text-xs font-semibold text-zinc-200">
                             Winner pick:{" "}
                             <span className="font-semibold text-zinc-400">
-                              {pickEntrants.length > 0
-                                ? pickEntrants
-                                    .map((entrant) => entrant?.name)
-                                    .filter(Boolean)
-                                    .join(", ")
-                                : "Not set"}
+                              {pickSideLabel ??
+                                (pickEntrants.length > 0
+                                  ? pickEntrants
+                                      .map((entrant) => entrant?.name)
+                                      .filter(Boolean)
+                                      .join(", ")
+                                  : "Not set")}
                             </span>
                           </div>
                         </div>

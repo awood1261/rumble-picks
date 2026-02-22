@@ -1215,6 +1215,14 @@ export const MatchPicksSection = ({
           const rightSide = sideEntries[1];
           const leftEntrants = leftSide?.entrants ?? [];
           const rightEntrants = rightSide?.entrants ?? [];
+          const leftLabel =
+            leftSide?.label?.trim() && leftEntrants.length > 1
+              ? leftSide.label.trim()
+              : null;
+          const rightLabel =
+            rightSide?.label?.trim() && rightEntrants.length > 1
+              ? rightSide.label.trim()
+              : null;
           const hasMatchup =
             Boolean(leftSide && rightSide) &&
             (leftEntrants.length > 0 || rightEntrants.length > 0);
@@ -1257,44 +1265,51 @@ export const MatchPicksSection = ({
               {sideEntries.length > 0 && (
                 <div className="mt-3 space-y-3">
                   {hasMatchup && leftSide && rightSide && (
-                    <div className="relative h-58 overflow-hidden rounded-2xl border border-zinc-800 bg-black/40 md:h-64 lg:h-102">
-                      <div className="grid h-full w-full grid-cols-2">
-                        {[leftEntrants, rightEntrants].map((entrants, index) => (
-                          <div
-                            key={`${match.id}-matchup-${index}`}
-                            className="relative h-full w-full overflow-hidden"
-                          >
-                            <div className={`grid h-full w-full ${sideGridClass}`}>
-                              {entrants.length > 0 ? (
-                                entrants.map((entrant) => (
-                                  <div
-                                    key={`${match.id}-${index}-${entrant.id}`}
-                                    className="relative h-full w-full overflow-hidden"
-                                  >
-                                    {entrant.image_url ? (
-                                      <img
-                                        src={entrant.image_url}
-                                        alt={entrant.name}
-                                        className="h-full w-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
-                                    )}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                                    <div className="absolute inset-x-0 bottom-0 z-10 p-2 text-center">
-                                      <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-100 drop-shadow">
-                                        {entrant.name}
-                                      </span>
+                    <div>
+                      {(leftLabel || rightLabel) && (
+                        <div className="mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
+                          <span>{leftLabel ?? ""}</span>
+                          <span>{rightLabel ?? ""}</span>
+                        </div>
+                      )}
+                      <div className="relative h-58 overflow-hidden rounded-2xl border border-zinc-800 bg-black/40 md:h-64 lg:h-102">
+                        <div className="grid h-full w-full grid-cols-2">
+                          {[leftEntrants, rightEntrants].map((entrants, index) => (
+                            <div
+                              key={`${match.id}-matchup-${index}`}
+                              className="relative h-full w-full overflow-hidden"
+                            >
+                              <div className={`grid h-full w-full ${sideGridClass}`}>
+                                {entrants.length > 0 ? (
+                                  entrants.map((entrant) => (
+                                    <div
+                                      key={`${match.id}-${index}-${entrant.id}`}
+                                      className="relative h-full w-full overflow-hidden"
+                                    >
+                                      {entrant.image_url ? (
+                                        <img
+                                          src={entrant.image_url}
+                                          alt={entrant.name}
+                                          className="h-full w-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
+                                      )}
+                                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                                      <div className="absolute inset-x-0 bottom-0 z-10 p-2 text-center">
+                                        <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-100 drop-shadow">
+                                          {entrant.name}
+                                        </span>
+                                      </div>
                                     </div>
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
-                              )}
+                                  ))
+                                ) : (
+                                  <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
                       <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/15" />
                       <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
                         <span className="rounded-full bg-black px-3 py-1 text-ms lg:text-lg uppercase tracking-[0.4em] text-amber-200 shadow-lg">
@@ -1302,46 +1317,47 @@ export const MatchPicksSection = ({
                         </span>
                       </div>
                       <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-zinc-950/20" />
-                      {!isLocked && (
-                        <>
-                          <button
-                            type="button"
-                            className={`absolute left-0 top-0 h-full w-1/2 transition ${
-                              payload.match_picks[match.id] === leftSide.side.id
-                                ? "bg-amber-400/20 ring-2 ring-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.35)]"
-                                : "hover:bg-white/5"
-                            }`}
-                            onClick={() =>
-                              setPayload((prev) => ({
-                                ...prev,
-                                match_picks: {
-                                  ...prev.match_picks,
-                                  [match.id]: leftSide.side.id,
-                                },
-                              }))
-                            }
-                            aria-label={`Select ${leftSide.label} as winner`}
-                          />
-                          <button
-                            type="button"
-                            className={`absolute right-0 top-0 h-full w-1/2 transition ${
-                              payload.match_picks[match.id] === rightSide.side.id
-                                ? "bg-amber-400/20 ring-2 ring-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.35)]"
-                                : "hover:bg-white/5"
-                            }`}
-                            onClick={() =>
-                              setPayload((prev) => ({
-                                ...prev,
-                                match_picks: {
-                                  ...prev.match_picks,
-                                  [match.id]: rightSide.side.id,
-                                },
-                              }))
-                            }
-                            aria-label={`Select ${rightSide.label} as winner`}
-                          />
-                        </>
-                      )}
+                        {!isLocked && (
+                          <>
+                            <button
+                              type="button"
+                              className={`absolute left-0 top-0 h-full w-1/2 transition ${
+                                payload.match_picks[match.id] === leftSide.side.id
+                                  ? "bg-amber-400/20 ring-2 ring-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.35)]"
+                                  : "hover:bg-white/5"
+                              }`}
+                              onClick={() =>
+                                setPayload((prev) => ({
+                                  ...prev,
+                                  match_picks: {
+                                    ...prev.match_picks,
+                                    [match.id]: leftSide.side.id,
+                                  },
+                                }))
+                              }
+                              aria-label={`Select ${leftSide.label} as winner`}
+                            />
+                            <button
+                              type="button"
+                              className={`absolute right-0 top-0 h-full w-1/2 transition ${
+                                payload.match_picks[match.id] === rightSide.side.id
+                                  ? "bg-amber-400/20 ring-2 ring-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.35)]"
+                                  : "hover:bg-white/5"
+                              }`}
+                              onClick={() =>
+                                setPayload((prev) => ({
+                                  ...prev,
+                                  match_picks: {
+                                    ...prev.match_picks,
+                                    [match.id]: rightSide.side.id,
+                                  },
+                                }))
+                              }
+                              aria-label={`Select ${rightSide.label} as winner`}
+                            />
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
                   {sideEntries.length > 2 && (
