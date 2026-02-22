@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
@@ -112,6 +112,34 @@ type ProfileRow = {
 type ScoreboardRow = ScoreRow & { display_name: string; avatar_key: string | null };
 
 const SCOREBOARD_POLL_INTERVAL_MS = 30000;
+
+const MovementPill = ({ delta }: { delta: number | null }) => {
+  if (typeof delta !== "number" || delta === 0) return null;
+  const isUp = delta > 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] ${
+        isUp
+          ? "border-[color:var(--bp-green)]/40 text-[color:var(--bp-green)]"
+          : "border-[color:var(--bp-red)]/40 text-[color:var(--bp-red)]"
+      }`}
+    >
+      {isUp ? "▲" : "▼"} {Math.abs(delta)}
+    </span>
+  );
+};
+
+const UpdateProgress = () => (
+  <div className="mt-6 rounded-2xl border border-white/5 bg-[color:var(--bp-surface)] px-4 py-3">
+    <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-[color:var(--bp-dim)]">
+      <span>Next scoring update</span>
+      <span className="text-[color:var(--bp-gold)]">Live</span>
+    </div>
+    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
+      <div className="h-full w-full animate-[bp-score-pulse_30s_linear_infinite] bg-[color:var(--bp-gold)]" />
+    </div>
+  </div>
+);
 
 export default function ScoreboardPage() {
   const searchParams = useSearchParams();
@@ -728,13 +756,35 @@ export default function ScoreboardPage() {
   }, [selectedShowId]);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <ScoreboardCountdown
-        className="px-6 sm:pb-[calc(env(safe-area-inset-bottom,0px)+6px)]"
-        intervalMs={SCOREBOARD_POLL_INTERVAL_MS}
-        lastUpdateAt={lastUpdateAt}
-        tickerItems={eventProgressItems}
-        onTickerClick={() => setProgressOpen(true)}
+    <div
+      className="relative min-h-screen text-[color:var(--bp-text)]"
+      style={
+        {
+          "--bp-bg": "#111214",
+          "--bp-surface": "rgba(255,255,255,0.04)",
+          "--bp-surface-2": "rgba(255,255,255,0.06)",
+          "--bp-text": "#F2F2F2",
+          "--bp-muted": "#A7A7A7",
+          "--bp-dim": "#6F6F6F",
+          "--bp-gold": "#C6A24A",
+          "--bp-gold-30": "rgba(198,162,74,0.30)",
+          "--bp-gold-15": "rgba(198,162,74,0.15)",
+          "--bp-silver": "#C9CCD1",
+          "--bp-bronze": "#A9724A",
+          "--bp-green": "#2ECC71",
+          "--bp-red": "#E74C3C",
+          backgroundImage:
+            "radial-gradient(circle at top, rgba(198,162,74,0.10), transparent 55%), linear-gradient(#111214, #0D0E10)",
+        } as CSSProperties
+      }
+    >
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.05]"
+        style={{
+          backgroundImage:
+            "radial-gradient(rgba(255,255,255,0.5) 0.5px, transparent 0.5px)",
+          backgroundSize: "3px 3px",
+        }}
       />
       {progressOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 pb-6 pt-10">
@@ -840,17 +890,20 @@ export default function ScoreboardPage() {
           </div>
         </div>
       )}
-      <main className="mx-auto w-full max-w-5xl pb-10 pt-10">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold">Scoreboard</h1>
-          <p className="text-sm text-zinc-400">
-            Scores update as eliminations and results are recorded.
-          </p>
-        </header>
-        {shows.length > 0 && (
-          <div className="mt-6 flex items-center gap-3">
+      <main className="relative mx-auto w-full max-w-5xl pb-16 pt-12">
+        <header className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.35em] text-[color:var(--bp-muted)]">
+              Scoreboard
+            </p>
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-[color:var(--bp-gold)]">
+              <span className="h-2 w-2 rounded-full bg-[color:var(--bp-gold)]" />
+              Live updates
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
             {selectedPromotion?.image_url ? (
-              <div className="h-10 w-10 overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+              <div className="h-11 w-11 overflow-hidden rounded-full border border-[color:var(--bp-gold-30)] bg-black/40">
                 <img
                   src={selectedPromotion.image_url}
                   alt={selectedPromotion.name ?? "Promotion"}
@@ -858,34 +911,33 @@ export default function ScoreboardPage() {
                 />
               </div>
             ) : null}
-            <p className="text-lg font-semibold text-amber-100">
+            <h1 className="text-3xl font-semibold text-[color:var(--bp-text)] sm:text-4xl">
               {selectedShow?.name ?? "Show"}
-            </p>
+            </h1>
           </div>
-        )}
+        </header>
+
+        <UpdateProgress />
 
         {message && (
-          <div className="mt-6 rounded-2xl border border-zinc-800 bg-black/50 px-4 py-3 text-sm text-zinc-200">
+          <div className="mt-6 rounded-2xl border border-white/5 bg-[color:var(--bp-surface)] px-4 py-3 text-sm text-[color:var(--bp-text)]">
             {message}
           </div>
         )}
 
-        <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          {currentUserIndex !== null && (
-            <div className="mb-6 rounded-2xl border border-sky-400/40 bg-sky-400/5 px-4 py-3 text-sm text-sky-100">
-              You are currently <span className="font-semibold">#{currentUserIndex + 1}</span> in this show.
-            </div>
-          )}
+        <section className="mt-8 space-y-6">
           {loading ? (
-            <p className="text-sm text-zinc-400">Loading scoreboard…</p>
+            <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface)] px-6 py-10 text-sm text-[color:var(--bp-muted)]">
+              Loading scoreboard…
+            </div>
           ) : filteredScoreboard.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/60 px-4 py-6 text-sm text-zinc-300">
+            <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface)] px-6 py-8 text-sm text-[color:var(--bp-text)]">
               <p>No picks yet for this show.</p>
-              <p className="mt-2 text-zinc-400">
+              <p className="mt-2 text-[color:var(--bp-muted)]">
                 Be the first to make picks and start the leaderboard.
               </p>
               <Link
-                className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                className="mt-5 inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--bp-gold-30)] px-4 text-xs font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)] transition hover:border-[color:var(--bp-gold)]"
                 href="/picks"
               >
                 Make picks
@@ -893,168 +945,191 @@ export default function ScoreboardPage() {
             </div>
           ) : (
             <>
-              <div className="mb-6 grid gap-4 md:grid-cols-3">
-                {topThree.map((row, index) => {
-                  const delta = rankDelta[row.user_id];
-                  return (
-                  <Link
-                    key={row.id}
-                    className={`group rounded-2xl border px-4 py-4 transition hover:text-amber-200 ${
-                      index === 0
-                        ? "border-amber-400/60 bg-amber-400/10"
-                        : "border-zinc-800 bg-zinc-950/50"
-                    }`}
-                    href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-3xl font-semibold text-amber-300">
-                        #{index + 1}
-                        {typeof delta === "number" && delta !== 0 && (
-                          <span
-                            className={`text-xs font-semibold uppercase tracking-wide ${
-                              delta > 0
-                                ? "text-emerald-300"
-                                : "text-rose-300"
-                            }`}
-                          >
-                            {delta > 0
-                              ? `▲ ${Math.abs(delta)}`
-                              : `▼ ${Math.abs(delta)}`}
+              <div className="rounded-3xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] p-6 shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+                <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.35em] text-[color:var(--bp-gold)]">
+                  <span>Current leader</span>
+                  {showResultsComplete ? <span>Champion</span> : <span>Live</span>}
+                </div>
+                <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={avatarSrcForKey(topThree[0]?.avatar_key ?? null)}
+                      alt={topThree[0]?.display_name ?? "Leader"}
+                      className="h-16 w-16 rounded-3xl border border-[color:var(--bp-gold-30)] bg-black/40"
+                      loading="lazy"
+                    />
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--bp-dim)]">
+                        Leader
+                      </p>
+                      <p className="text-2xl font-semibold text-[color:var(--bp-text)] sm:text-3xl">
+                        {topThree[0]?.display_name ?? "TBD"}
+                      </p>
+                      {currentUserId && topThree[0]?.user_id !== currentUserId ? (
+                        <p className="mt-1 text-sm text-[color:var(--bp-muted)]">
+                          Gap to leader:{" "}
+                          <span className="font-semibold text-[color:var(--bp-gold)]">
+                            {Math.max(
+                              0,
+                              (topThree[0]?.points ?? 0) -
+                                (filteredScoreboard.find((row) => row.user_id === currentUserId)
+                                  ?.points ?? 0)
+                            )}{" "}
+                            pts
                           </span>
-                        )}
-                      </span>
-                      {index === 0 && showResultsComplete && (
-                        <span className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-amber-200">
-                          <svg
-                            className="h-10 w-10"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <rect x="2" y="8" width="20" height="8" rx="3" />
-                            <rect x="9" y="6" width="6" height="12" rx="2" />
-                            <circle cx="12" cy="12" r="2.5" />
-                          </svg>
-                          Champion
-                        </span>
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-sm text-[color:var(--bp-muted)]">
+                          You are in the lead.
+                        </p>
                       )}
                     </div>
-                    <div className="mt-3 flex items-center gap-3">
-                      <img
-                        src={avatarSrcForKey(row.avatar_key)}
-                        alt={row.display_name}
-                        className="h-10 w-10 rounded-2xl border border-zinc-800 bg-black/40"
-                        loading="lazy"
-                      />
-                      <p className="text-lg font-semibold">{row.display_name}</p>
-                      <span className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-400/60 bg-black text-amber-200 transition group-hover:border-amber-300 group-hover:text-amber-100">
-                        <span className="text-base leading-none">›</span>
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-zinc-400">
-                      {row.points} points
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--bp-dim)]">
+                      Points
                     </p>
-                  </Link>
-                );
+                    <p className="text-4xl font-semibold text-[color:var(--bp-gold)] sm:text-5xl">
+                      {topThree[0]?.points ?? 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                {topThree.map((row, index) => {
+                  const delta = rankDelta[row.user_id];
+                  const borderColor =
+                    index === 0
+                      ? "border-[color:var(--bp-gold-30)]"
+                      : index === 1
+                      ? "border-[color:var(--bp-silver)]/40"
+                      : "border-[color:var(--bp-bronze)]/40";
+                  const badgeColor =
+                    index === 0
+                      ? "bg-[color:var(--bp-gold)] text-black"
+                      : index === 1
+                      ? "bg-[color:var(--bp-silver)] text-black"
+                      : "bg-[color:var(--bp-bronze)] text-black";
+                  return (
+                    <Link
+                      key={row.id}
+                      className={`group relative rounded-3xl border ${borderColor} bg-[color:var(--bp-surface)] px-5 py-5 transition hover:border-[color:var(--bp-gold)] ${
+                        index === 0 ? "-translate-y-2 md:-translate-y-3" : "translate-y-0"
+                      }`}
+                      href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${badgeColor}`}>
+                          {index + 1}
+                        </span>
+                        <MovementPill delta={delta ?? null} />
+                      </div>
+                      <div className="mt-4 flex items-center gap-3">
+                        <img
+                          src={avatarSrcForKey(row.avatar_key)}
+                          alt={row.display_name}
+                          className="h-12 w-12 rounded-2xl border border-white/10 bg-black/40"
+                          loading="lazy"
+                        />
+                        <div>
+                          <p className="text-base font-semibold text-[color:var(--bp-text)]">
+                            {row.display_name}
+                          </p>
+                          <p className="text-sm text-[color:var(--bp-muted)]">
+                            {row.points} pts
+                          </p>
+                        </div>
+                      </div>
+                    </Link>
+                  );
                 })}
               </div>
 
-              <div className="divide-y divide-zinc-800">
-                {filteredScoreboard.slice(3).map((row, index) => {
-                  const delta = rankDelta[row.user_id];
-                  const content = (
-                    <>
-                      <div className="flex items-center gap-4">
-                        <span className="flex items-center gap-2 text-lg font-semibold text-amber-300">
-                          #{index + 4}
-                          {typeof delta === "number" && delta !== 0 && (
-                            <span
-                              className={`text-xs font-semibold uppercase tracking-wide ${
-                                delta > 0 ? "text-emerald-300" : "text-rose-300"
-                              }`}
-                            >
-                              {delta > 0
-                                ? `▲ ${Math.abs(delta)}`
-                                : `▼ ${Math.abs(delta)}`}
-                            </span>
-                          )}
-                        </span>
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={avatarSrcForKey(row.avatar_key)}
-                            alt={row.display_name}
-                            className="h-9 w-9 rounded-2xl border border-zinc-800 bg-black/40"
-                            loading="lazy"
-                          />
-                          <div>
-                            <p className="text-base font-semibold">
-                              {row.display_name}
-                            </p>
-                            <p className="text-xs text-zinc-400">
-                              Updated{" "}
-                              {new Date(row.updated_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
-                            <div className="mt-1 text-left">
-                              <p className="text-lg font-semibold">
-                                {row.points}
+              <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface)]">
+                <div className="flex items-center justify-between border-b border-white/5 px-6 py-4">
+                  <p className="text-xs uppercase tracking-[0.35em] text-[color:var(--bp-muted)]">
+                    Standings
+                  </p>
+                  <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--bp-dim)]">
+                    Positions 4+
+                  </p>
+                </div>
+                <div className="divide-y divide-white/5">
+                  {filteredScoreboard.slice(3).map((row, index) => {
+                    const delta = rankDelta[row.user_id];
+                    const isCurrentUser = currentUserId === row.user_id;
+                    return (
+                      <Link
+                        key={row.id}
+                        className={`group flex flex-wrap items-center justify-between gap-4 px-6 py-4 transition hover:bg-white/5 ${
+                          isCurrentUser
+                            ? "border-l-4 border-[color:var(--bp-gold)] bg-[color:var(--bp-gold-15)]"
+                            : ""
+                        }`}
+                        href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <span className="w-10 text-lg font-semibold text-[color:var(--bp-gold)]">
+                            {index + 4}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={avatarSrcForKey(row.avatar_key)}
+                              alt={row.display_name}
+                              className="h-10 w-10 rounded-2xl border border-white/10 bg-black/40"
+                              loading="lazy"
+                            />
+                            <div>
+                              <p className="text-base font-semibold text-[color:var(--bp-text)]">
+                                {row.display_name}
+                                {isCurrentUser && (
+                                  <span className="ml-2 inline-flex items-center rounded-full border border-[color:var(--bp-gold-30)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)]">
+                                    You
+                                  </span>
+                                )}
                               </p>
-                              <p className="text-[10px] text-zinc-500">points</p>
+                              <p className="text-xs text-[color:var(--bp-dim)]">
+                                Updated{" "}
+                                {new Date(row.updated_at).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
                             </div>
-                            {currentUserId === row.user_id && (
-                              <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-sky-200">
-                                You
-                              </p>
-                            )}
                           </div>
                         </div>
-                      </div>
-                    </>
-                  );
-
-                const rowClassName = `group flex flex-col gap-2 py-4 transition sm:flex-row sm:items-center sm:justify-between ${
-                  index % 2 === 0 ? "bg-zinc-950/40" : "bg-zinc-900/30"
-                } ${
-                  currentUserId === row.user_id
-                    ? "border border-sky-400/50 bg-sky-400/5"
-                    : ""
-                } hover:bg-amber-500/5`;
-
-                if (!row.show_id) {
-                  return (
-                    <div
-                      key={row.id}
-                      className={rowClassName}
-                    >
-                      {content}
-                    </div>
-                  );
-                }
-
-                return (
-                  <Link
-                    key={row.id}
-                    className={`${rowClassName} hover:text-amber-200`}
-                    href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
-                  >
-                    {content}
-                    <span className="mt-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-400/60 bg-black text-amber-200 transition group-hover:border-amber-300 group-hover:text-amber-100 sm:mt-0 sm:ml-6 sm:self-auto self-end">
-                      <span className="text-base leading-none">›</span>
-                    </span>
-                  </Link>
-                );
-              })}
+                        <div className="flex items-center gap-4">
+                          <MovementPill delta={delta ?? null} />
+                          <p className="text-lg font-semibold text-[color:var(--bp-text)]">
+                            {row.points}
+                            <span className="ml-1 text-xs text-[color:var(--bp-dim)]">
+                              pts
+                            </span>
+                          </p>
+                          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--bp-gold-30)] text-[color:var(--bp-gold)] transition group-hover:border-[color:var(--bp-gold)]">
+                            <span className="text-base leading-none">›</span>
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}
         </section>
       </main>
+      <style jsx global>{`
+        @keyframes bp-score-pulse {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(0%);
+          }
+        }
+      `}</style>
     </div>
   );
 }
