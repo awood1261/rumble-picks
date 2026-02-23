@@ -1292,23 +1292,18 @@ export const MatchPicksSection = ({
               ) : null}
               <div
                 className={`relative z-10 ${
-                  isChampionship ? "-m-4 rounded-2xl bg-zinc-950/95 p-4" : ""
+                  isChampionship
+                    ? "-m-4 rounded-2xl bg-zinc-950/95 p-4 pt-2"
+                    : ""
                 }`}
               >
                 <div className="flex flex-col gap-2">
                   <div>
-                    {isPrestige && (
-                      <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.35em] text-amber-200">
-                        {isMainEvent && (
-                          <span className="rounded-full border border-amber-300/40 px-3 py-1">
-                            Main event
-                          </span>
-                        )}
-                        {isChampionship && (
-                          <span className="rounded-full border border-amber-300/40 px-3 py-1">
-                            Championship
-                          </span>
-                        )}
+                    {isChampionship && (
+                      <div className="mb-2 text-center">
+                        <span className="rounded-full border border-amber-300/40 bg-black px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.35em] text-amber-100">
+                          {match.championship_name?.trim() || "Championship"}
+                        </span>
                       </div>
                     )}
                     <p className="mt-2 text-xs text-zinc-500">

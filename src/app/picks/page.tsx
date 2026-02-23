@@ -1205,6 +1205,16 @@ export default function PicksPage() {
               <span className="text-sm leading-none">🔒</span>
               <span>{lockStatusText}</span>
             </div>
+            {currentStep?.type === "match" &&
+              matches.some(
+                (match) => match.id === currentStep.id && match.is_main_event
+              ) && (
+                <div className="mt-3">
+                  <span className="rounded-full border border-amber-300/40 bg-black px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.35em] text-amber-100">
+                    Main event
+                  </span>
+                </div>
+              )}
           </div>
           <div className="relative z-10 mt-2">
             <MessageBanner message={message} />
