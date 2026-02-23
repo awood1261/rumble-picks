@@ -106,7 +106,9 @@ export default function PicksPage() {
   const [customEntrantName, setCustomEntrantName] = useState("");
   const [entrantSearch, setEntrantSearch] = useState("");
   const [customModalOpen, setCustomModalOpen] = useState(false);
-  const [customModalEventId, setCustomModalEventId] = useState<string | null>(null);
+  const [customModalEventId, setCustomModalEventId] = useState<string | null>(
+    null,
+  );
   const [stepIndex, setStepIndex] = useState(0);
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -115,11 +117,11 @@ export default function PicksPage() {
 
   const selectedShow = useMemo(
     () => shows.find((show) => show.id === selectedShowId) ?? null,
-    [shows, selectedShowId]
+    [shows, selectedShowId],
   );
   const showEvents = useMemo(
     () => events.filter((event) => event.show_id === selectedShowId),
-    [events, selectedShowId]
+    [events, selectedShowId],
   );
   const selectedPromotionImageUrl = useMemo(() => {
     if (!selectedShow?.promotion_id) return null;
@@ -134,7 +136,7 @@ export default function PicksPage() {
   }, [focusedEventId, showEvents]);
   const customModalEvent = useMemo(
     () => showEvents.find((event) => event.id === customModalEventId) ?? null,
-    [customModalEventId, showEvents]
+    [customModalEventId, showEvents],
   );
   const isLocked = useMemo(() => {
     if (!selectedShow?.starts_at) return false;
@@ -201,14 +203,15 @@ export default function PicksPage() {
             byName.set(nameKey, entrant);
             return;
           }
-          const currentIsWwe = (current.promotion ?? "").toLowerCase() === "wwe";
+          const currentIsWwe =
+            (current.promotion ?? "").toLowerCase() === "wwe";
           const nextIsWwe = (entrant.promotion ?? "").toLowerCase() === "wwe";
           if (!currentIsWwe && nextIsWwe) {
             byName.set(nameKey, entrant);
           }
         });
       byEvent[event.id] = Array.from(byName.values()).sort((a, b) =>
-        a.name.localeCompare(b.name)
+        a.name.localeCompare(b.name),
       );
     });
     return byEvent;
@@ -220,43 +223,50 @@ export default function PicksPage() {
 
   const getEventEntrants = useCallback(
     (eventId: string) => entrantOptionsByEvent[eventId] ?? [],
-    [entrantOptionsByEvent]
+    [entrantOptionsByEvent],
   );
 
   const getRumblePick = useCallback(
     (eventId: string) => payload.rumbles[eventId] ?? emptyRumblePick,
-    [payload.rumbles]
+    [payload.rumbles],
   );
 
   const getSelectedEntrantOptions = useCallback(
     (eventId: string) => {
       const current = getRumblePick(eventId);
       const selected = new Set(current.entrants);
-      return getEventEntrants(eventId).filter((entrant) => selected.has(entrant.id));
+      return getEventEntrants(eventId).filter((entrant) =>
+        selected.has(entrant.id),
+      );
     },
-    [getEventEntrants, getRumblePick]
+    [getEventEntrants, getRumblePick],
   );
 
   const getSelectedFinalFourOptions = useCallback(
     (eventId: string) => {
       const current = getRumblePick(eventId);
       const selected = new Set(current.final_four);
-      return getEventEntrants(eventId).filter((entrant) => selected.has(entrant.id));
+      return getEventEntrants(eventId).filter((entrant) =>
+        selected.has(entrant.id),
+      );
     },
-    [getEventEntrants, getRumblePick]
+    [getEventEntrants, getRumblePick],
   );
 
   const getFilteredEntrantsByPromotion = useCallback(
     (eventId: string) => {
       const entrantsForEvent = getEventEntrants(eventId);
-      const grouped = entrantsForEvent.reduce((groups, entrant) => {
-        const key = entrant.promotion ?? "Other";
-        if (!groups[key]) {
-          groups[key] = [];
-        }
-        groups[key].push(entrant);
-        return groups;
-      }, {} as Record<string, EntrantRow[]>);
+      const grouped = entrantsForEvent.reduce(
+        (groups, entrant) => {
+          const key = entrant.promotion ?? "Other";
+          if (!groups[key]) {
+            groups[key] = [];
+          }
+          groups[key].push(entrant);
+          return groups;
+        },
+        {} as Record<string, EntrantRow[]>,
+      );
 
       const query = entrantSearch.trim().toLowerCase();
       if (!query) {
@@ -267,7 +277,7 @@ export default function PicksPage() {
       const filtered: Record<string, EntrantRow[]> = {};
       Object.entries(grouped).forEach(([promotion, list]) => {
         const matches = list.filter((entrant) =>
-          entrant.name.toLowerCase().includes(query)
+          entrant.name.toLowerCase().includes(query),
         );
         if (matches.length > 0) {
           filtered[promotion] = matches;
@@ -275,38 +285,44 @@ export default function PicksPage() {
       });
       const count = Object.values(filtered).reduce(
         (total, list) => total + list.length,
-        0
+        0,
       );
       return { grouped: filtered, count };
     },
-    [entrantSearch, getEventEntrants]
+    [entrantSearch, getEventEntrants],
   );
 
   const hasEntrantsForShow = useMemo(
     () => showEvents.some((event) => getEventEntrants(event.id).length > 0),
-    [showEvents, getEventEntrants]
+    [showEvents, getEventEntrants],
   );
   const hasEvents = showEvents.length > 0;
   const canShowRumbles = hasEvents && hasEntrantsForShow;
 
   const matchSidesByMatch = useMemo(() => {
-    return matchSides.reduce((map, side) => {
-      if (!map[side.match_id]) {
-        map[side.match_id] = [];
-      }
-      map[side.match_id].push(side);
-      return map;
-    }, {} as Record<string, MatchSideRow[]>);
+    return matchSides.reduce(
+      (map, side) => {
+        if (!map[side.match_id]) {
+          map[side.match_id] = [];
+        }
+        map[side.match_id].push(side);
+        return map;
+      },
+      {} as Record<string, MatchSideRow[]>,
+    );
   }, [matchSides]);
 
   const matchEntrantsByMatch = useMemo(() => {
-    return matchEntrants.reduce((map, row) => {
-      if (!map[row.match_id]) {
-        map[row.match_id] = [];
-      }
-      map[row.match_id].push(row);
-      return map;
-    }, {} as Record<string, MatchEntrantRow[]>);
+    return matchEntrants.reduce(
+      (map, row) => {
+        if (!map[row.match_id]) {
+          map[row.match_id] = [];
+        }
+        map[row.match_id].push(row);
+        return map;
+      },
+      {} as Record<string, MatchEntrantRow[]>,
+    );
   }, [matchEntrants]);
 
   const matchWinnerMap = useMemo(() => {
@@ -322,15 +338,17 @@ export default function PicksPage() {
     const byEvent: Record<string, EventActuals> = {};
     showEvents.forEach((event) => {
       const eventEntries = rumbleEntries.filter(
-        (entry) => entry.event_id === event.id
+        (entry) => entry.event_id === event.id,
       );
       const confirmedSet = new Set(
-        eventEntries.filter((entry) => entry.is_confirmed).map((entry) => entry.entrant_id)
+        eventEntries
+          .filter((entry) => entry.is_confirmed)
+          .map((entry) => entry.entrant_id),
       );
       const entrantSet = new Set(
         eventEntries
           .filter((entry) => !entry.is_confirmed)
-          .map((entry) => entry.entrant_id)
+          .map((entry) => entry.entrant_id),
       );
       const finalFour = [...eventEntries]
         .sort((a, b) => getEliminationKey(b) - getEliminationKey(a))
@@ -342,10 +360,7 @@ export default function PicksPage() {
       const finalFourReady = totalEntries >= 4 && remainingCount <= 4;
       const winnerReady = totalEntries >= 30 && remainingCount === 1;
       const mostElimsReady = totalEntries >= 30 && remainingCount === 1;
-      const winner =
-        winnerReady
-          ? winners[0].entrant_id
-          : null;
+      const winner = winnerReady ? winners[0].entrant_id : null;
       const entry1 =
         eventEntries.find((entry) => entry.entry_number === 1)?.entrant_id ??
         null;
@@ -358,26 +373,26 @@ export default function PicksPage() {
       const entry1Ready = Boolean(entry1);
       const entry2Ready = Boolean(entry2);
       const entry30Ready = Boolean(entry30);
-      const ironPerson =
-        winnerReady
-          ? event.iron_person_entrant_id ??
-            [...eventEntries]
-              .filter((entry) => entry.eliminated_at)
-              .sort(
-                (a, b) =>
-                  new Date(b.eliminated_at as string).getTime() -
-                  new Date(a.eliminated_at as string).getTime()
-              )[0]?.entrant_id ?? null
-          : null;
+      const ironPerson = winnerReady
+        ? (event.iron_person_entrant_id ??
+          [...eventEntries]
+            .filter((entry) => entry.eliminated_at)
+            .sort(
+              (a, b) =>
+                new Date(b.eliminated_at as string).getTime() -
+                new Date(a.eliminated_at as string).getTime(),
+            )[0]?.entrant_id ??
+          null)
+        : null;
       const ironPersonReady = Boolean(ironPerson);
       const maxElims = eventEntries.reduce(
         (max, entry) => Math.max(max, entry.eliminations_count ?? 0),
-        0
+        0,
       );
       const topElims = new Set(
         eventEntries
           .filter((entry) => entry.eliminations_count === maxElims)
-          .map((entry) => entry.entrant_id)
+          .map((entry) => entry.entrant_id),
       );
 
       byEvent[event.id] = {
@@ -440,7 +455,12 @@ export default function PicksPage() {
       }
       return total;
     }, 0);
-  }, [matches, payload.match_finish_picks, payload.match_picks, matchEntrantsByMatch]);
+  }, [
+    matches,
+    payload.match_finish_picks,
+    payload.match_picks,
+    matchEntrantsByMatch,
+  ]);
 
   const sectionPointsByEvent = useMemo(() => {
     const byEvent: Record<string, SectionPoints> = {};
@@ -452,25 +472,19 @@ export default function PicksPage() {
         return;
       }
       const entrantsCorrect = pick.entrants.filter((id) =>
-        actuals.entrantSet.has(id)
+        actuals.entrantSet.has(id),
       ).length;
       const finalFourCorrect = actuals.finalFourReady
         ? pick.final_four.filter((id) => actuals.finalFourSet.has(id)).length
         : 0;
       const keyPicksTotal =
-        (actuals.winnerReady &&
-        pick.winner &&
-        pick.winner === actuals.winner
+        (actuals.winnerReady && pick.winner && pick.winner === actuals.winner
           ? scoringRules.winner
           : 0) +
-        (actuals.entry1Ready &&
-        pick.entry_1 &&
-        pick.entry_1 === actuals.entry1
+        (actuals.entry1Ready && pick.entry_1 && pick.entry_1 === actuals.entry1
           ? scoringRules.entry_1
           : 0) +
-        (actuals.entry2Ready &&
-        pick.entry_2 &&
-        pick.entry_2 === actuals.entry2
+        (actuals.entry2Ready && pick.entry_2 && pick.entry_2 === actuals.entry2
           ? scoringRules.entry_2
           : 0) +
         (actuals.entry30Ready &&
@@ -494,14 +508,15 @@ export default function PicksPage() {
         finalFour: actuals.finalFourReady
           ? finalFourCorrect * scoringRules.final_four
           : 0,
-        keyPicks: actuals.winnerReady ||
+        keyPicks:
+          actuals.winnerReady ||
           actuals.entry1Ready ||
           actuals.entry2Ready ||
           actuals.entry30Ready ||
           actuals.ironPersonReady ||
           actuals.mostElimsReady
-          ? keyPicksTotal
-          : 0,
+            ? keyPicksTotal
+            : 0,
       };
     });
     return byEvent;
@@ -545,7 +560,9 @@ export default function PicksPage() {
         .order("name", { ascending: true }),
       supabase
         .from("events")
-        .select("id, name, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
+        .select(
+          "id, name, status, rumble_gender, roster_year, show_id, iron_person_entrant_id",
+        )
         .order("name", { ascending: true }),
     ]).then(([showsResult, promotionsResult, eventsResult]) => {
       if (showsResult.error) {
@@ -586,7 +603,7 @@ export default function PicksPage() {
     const { data: entryRows, error } = await supabase
       .from("rumble_entries")
       .select(
-        "event_id, entrant_id, entry_number, eliminated_at, eliminations_count, is_confirmed"
+        "event_id, entrant_id, entry_number, eliminated_at, eliminations_count, is_confirmed",
       )
       .in("event_id", eventIds);
 
@@ -615,7 +632,7 @@ export default function PicksPage() {
     const { data: matchRows, error: matchError } = await supabase
       .from("matches")
       .select(
-        "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
+        "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference",
       )
       .eq("show_id", selectedShowId)
       .order("created_at", { ascending: true });
@@ -628,17 +645,19 @@ export default function PicksPage() {
 
     if (matchList.length > 0) {
       const matchIds = matchList.map((match) => match.id);
-      const [{ data: matchSideRows, error: matchSideError }, { data: matchEntrantRows, error: matchEntrantError }] =
-        await Promise.all([
-          supabase
-            .from("match_sides")
-            .select("id, match_id, label")
-            .in("match_id", matchIds),
-          supabase
-            .from("match_entrants")
-            .select("match_id, entrant_id, side_id")
-            .in("match_id", matchIds),
-        ]);
+      const [
+        { data: matchSideRows, error: matchSideError },
+        { data: matchEntrantRows, error: matchEntrantError },
+      ] = await Promise.all([
+        supabase
+          .from("match_sides")
+          .select("id, match_id, label")
+          .in("match_id", matchIds),
+        supabase
+          .from("match_entrants")
+          .select("match_id, entrant_id, side_id")
+          .in("match_id", matchIds),
+      ]);
       if (matchSideError) {
         setMessage(matchSideError.message);
         return;
@@ -665,7 +684,10 @@ export default function PicksPage() {
       setMessage(error.message);
       return;
     }
-    const nextStats: Record<string, { total: number; bySide: Record<string, number> }> = {};
+    const nextStats: Record<
+      string,
+      { total: number; bySide: Record<string, number> }
+    > = {};
     (data ?? []).forEach((row) => {
       const payloadRow = row.payload as PicksPayload | null;
       const matchPicks = payloadRow?.match_picks ?? {};
@@ -702,7 +724,7 @@ export default function PicksPage() {
           supabase
             .from("entrants")
             .select(
-              "id, name, promotion, gender, image_url, roster_year, event_id, is_custom, created_by, status"
+              "id, name, promotion, gender, image_url, roster_year, event_id, is_custom, created_by, status",
             )
             .order("name", { ascending: true }),
         ]);
@@ -733,11 +755,16 @@ export default function PicksPage() {
       if (savedPayload) {
         setPayload({
           rumbles: nextRumbles,
-          match_picks: (savedPayload.match_picks as Record<string, string | null>) ?? {},
+          match_picks:
+            (savedPayload.match_picks as Record<string, string | null>) ?? {},
           match_finish_picks:
             (savedPayload.match_finish_picks as Record<
               string,
-              { method: string | null; winner: string | null; loser: string | null }
+              {
+                method: string | null;
+                winner: string | null;
+                loser: string | null;
+              }
             >) ?? {},
           match_length_picks:
             (savedPayload.match_length_picks as Record<
@@ -819,30 +846,33 @@ export default function PicksPage() {
       const matchIdSet = new Set(matches.map((match) => match.id));
       const matchPicks = Object.fromEntries(
         Object.entries(prev.match_picks ?? {}).filter(([matchId]) =>
-          matchIdSet.has(matchId)
-        )
+          matchIdSet.has(matchId),
+        ),
       );
       const matchFinishPicks = Object.fromEntries(
         Object.entries(prev.match_finish_picks ?? {}).filter(([matchId]) =>
-          matchIdSet.has(matchId)
-        )
+          matchIdSet.has(matchId),
+        ),
       );
       const matchLengthPicks = Object.fromEntries(
         Object.entries(prev.match_length_picks ?? {}).filter(([matchId]) =>
-          matchIdSet.has(matchId)
-        )
+          matchIdSet.has(matchId),
+        ),
       );
       const matchInterferencePicks = Object.fromEntries(
-        Object.entries(prev.match_interference_picks ?? {}).filter(([matchId]) =>
-          matchIdSet.has(matchId)
-        )
+        Object.entries(prev.match_interference_picks ?? {}).filter(
+          ([matchId]) => matchIdSet.has(matchId),
+        ),
       );
 
       const nextRumbles: Record<string, RumblePick> = {};
       showEvents.forEach((event) => {
         const current = prev.rumbles[event.id] ?? emptyRumblePick;
         const confirmedSet = confirmedEntrantsByEvent[event.id] ?? new Set();
-        const selected = new Set([...current.entrants, ...Array.from(confirmedSet)]);
+        const selected = new Set([
+          ...current.entrants,
+          ...Array.from(confirmedSet),
+        ]);
         const finalFour = current.final_four.filter((id) => selected.has(id));
         const finalFourSet = new Set(finalFour);
         nextRumbles[event.id] = {
@@ -976,7 +1006,7 @@ export default function PicksPage() {
     const normalized = trimmed.toLowerCase();
     const eventEntrants = getEventEntrants(customModalEventId);
     const existing = eventEntrants.find(
-      (entrant) => entrant.name.trim().toLowerCase() === normalized
+      (entrant) => entrant.name.trim().toLowerCase() === normalized,
     );
     if (existing) {
       setMessage("That entrant is already in the list.");
@@ -1000,7 +1030,9 @@ export default function PicksPage() {
         created_by: userId,
         active: true,
       })
-      .select("id, name, promotion, gender, image_url, roster_year, event_id, is_custom")
+      .select(
+        "id, name, promotion, gender, image_url, roster_year, event_id, is_custom",
+      )
       .single();
     if (error) {
       setMessage(error.message);
@@ -1043,7 +1075,7 @@ export default function PicksPage() {
         show_id: selectedShowId,
         payload,
       },
-      { onConflict: "user_id,show_id" }
+      { onConflict: "user_id,show_id" },
     );
     if (error) {
       setMessage(error.message);
@@ -1053,13 +1085,12 @@ export default function PicksPage() {
     setHasSaved(true);
     setEditSection(null);
     setFocusedEventId("");
-    setMessage("Picks saved.");
     setSaving(false);
   };
 
   const handleEditEventSection = (
     section: Exclude<EditSection, "matches" | null>,
-    eventId: string
+    eventId: string,
   ) => {
     setFocusedEventId(eventId);
     setEditSection(section);
@@ -1070,7 +1101,7 @@ export default function PicksPage() {
       ...showEvents.map((event) => ({ type: "event" as const, id: event.id })),
       ...matches.map((match) => ({ type: "match" as const, id: match.id })),
     ],
-    [matches, showEvents]
+    [matches, showEvents],
   );
   const stepIndexById = useMemo(() => {
     const map = new Map<string, number>();
@@ -1080,7 +1111,8 @@ export default function PicksPage() {
     return map;
   }, [stepItems]);
   const totalSteps = stepItems.length;
-  const currentStep = stepItems[Math.min(stepIndex, Math.max(totalSteps - 1, 0))];
+  const currentStep =
+    stepItems[Math.min(stepIndex, Math.max(totalSteps - 1, 0))];
   const progressPercent =
     totalSteps > 0 ? Math.round(((stepIndex + 1) / totalSteps) * 100) : 0;
 
@@ -1122,38 +1154,46 @@ export default function PicksPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <main className="mx-auto w-full max-w-6xl px-6 py-10">
-        <PicksHeader
-          title="Make your predictions"
-          subtitle="Lock in your picks here before bell time."
-        />
-        <LockStatusBanner
-          isLocked={isLocked}
-          lockInfo={lockInfo}
-          rankInfo={rankInfo}
-        />
-        <MessageBanner message={message} />
-        <ShowSelector
-          shows={shows}
-          selectedShowId={selectedShowId}
-          promotionImageUrl={selectedPromotionImageUrl}
-        />
+      <main className="mx-auto w-full max-w-6xl px-6 py-6 pb-28 sm:py-10 sm:pb-32">
+        <div className="space-y-3">
+          <PicksHeader
+            title="Make your predictions"
+            subtitle="Lock in your picks here before bell time."
+          />
+          <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.3em] text-zinc-400">
+            {selectedPromotionImageUrl ? (
+              <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+                <img
+                  src={selectedPromotionImageUrl}
+                  alt={selectedShow?.name ?? "Promotion"}
+                  className="h-full w-full object-cover"
+                />
+              </span>
+            ) : null}
+            <span>{selectedShow?.name ?? "Show"}</span>
+            <span className="text-zinc-600">•</span>
+            <span>{isLocked ? "Locked" : "Open for picks"}</span>
+          </div>
+        </div>
+        <div className="mt-2">
+          <MessageBanner message={message} />
+        </div>
 
         {hasEvents && !hasEntrantsForShow && (
-          <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <section className="mt-0 p-0">
             <p className="text-sm text-zinc-400">
               No entrants are available yet.
             </p>
           </section>
         )}
         {totalSteps === 0 ? (
-          <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <p className="text-sm text-zinc-400">
               No matches or events are available yet.
             </p>
           </section>
         ) : stepIndex >= totalSteps ? (
-          <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <h2 className="text-xl font-semibold text-zinc-100">
               All picks are in
             </h2>
@@ -1178,7 +1218,10 @@ export default function PicksPage() {
                   ? entrantByIdAll.get(pick.winner)?.name
                   : null;
                 return (
-                  <div key={event.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <div
+                    key={event.id}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                         {event.name}
@@ -1187,7 +1230,9 @@ export default function PicksPage() {
                         type="button"
                         className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
                         onClick={() =>
-                          setStepIndex(stepIndexById.get(`event:${event.id}`) ?? 0)
+                          setStepIndex(
+                            stepIndexById.get(`event:${event.id}`) ?? 0,
+                          )
                         }
                         aria-label={`Edit ${event.name}`}
                       >
@@ -1218,7 +1263,8 @@ export default function PicksPage() {
                 const winnerSideId = payload.match_picks[match.id] ?? null;
                 const sideEntrants = matchEntrantsByMatch[match.id] ?? [];
                 const sides = matchSidesByMatch[match.id] ?? [];
-                const winnerSide = sides.find((side) => side.id === winnerSideId) ?? null;
+                const winnerSide =
+                  sides.find((side) => side.id === winnerSideId) ?? null;
                 const winnerEntrants = sideEntrants
                   .filter((row) => row.side_id === winnerSideId)
                   .map((row) => entrantByIdAll.get(row.entrant_id))
@@ -1233,7 +1279,10 @@ export default function PicksPage() {
                   .join(", ");
                 const winnerDisplay = winnerLabel ?? (winnerNames || "Not set");
                 return (
-                  <div key={match.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <div
+                    key={match.id}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                         {match.name}
@@ -1242,7 +1291,9 @@ export default function PicksPage() {
                         type="button"
                         className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
                         onClick={() =>
-                          setStepIndex(stepIndexById.get(`match:${match.id}`) ?? 0)
+                          setStepIndex(
+                            stepIndexById.get(`match:${match.id}`) ?? 0,
+                          )
                         }
                         aria-label={`Edit ${match.name}`}
                       >
@@ -1266,7 +1317,7 @@ export default function PicksPage() {
                                 key={entrant.id}
                                 className="h-7 w-7 rounded-full border border-zinc-700 bg-zinc-800"
                               />
-                            )
+                            ),
                           )}
                         </div>
                       )}
@@ -1293,39 +1344,24 @@ export default function PicksPage() {
             </div>
           </section>
         ) : (
-          <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                  Step {stepIndex + 1} of {totalSteps}
-                </p>
-                <h2 className="text-xl font-semibold text-zinc-100">
-                  {currentStep?.type === "match" ? "Match picks" : "Event picks"}
-                </h2>
-                <p className="mt-1 text-sm text-zinc-400">
-                  Step {stepIndex + 1} of {totalSteps}
-                </p>
-              </div>
-              <div className="w-full max-w-xs">
-                <div className="h-2 rounded-full bg-zinc-800">
-                  <div
-                    className="h-full rounded-full bg-amber-400 transition-all"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-              </div>
-            </div>
+          <>
             {currentStep?.type === "event" && canShowRumbles ? (
               <>
                 {showEvents
                   .filter((event) => event.id === currentStep.id)
                   .map((event) => {
                     const eventPick = getRumblePick(event.id);
-                    const { grouped, count } = getFilteredEntrantsByPromotion(event.id);
-                    const selectedEntrants = getSelectedEntrantOptions(event.id);
-                    const selectedFinalFour = getSelectedFinalFourOptions(event.id);
+                    const { grouped, count } = getFilteredEntrantsByPromotion(
+                      event.id,
+                    );
+                    const selectedEntrants = getSelectedEntrantOptions(
+                      event.id,
+                    );
+                    const selectedFinalFour = getSelectedFinalFourOptions(
+                      event.id,
+                    );
                     return (
-                      <div key={event.id} className="mt-6 space-y-6">
+                      <div key={event.id} className="mt-3 space-y-6">
                         <RumbleEntrantsEditor
                           event={event}
                           eventPick={eventPick}
@@ -1371,7 +1407,8 @@ export default function PicksPage() {
                           saving={saving}
                           onPickChange={(fieldKey, value) =>
                             setPayload((prev) => {
-                              const current = prev.rumbles[event.id] ?? emptyRumblePick;
+                              const current =
+                                prev.rumbles[event.id] ?? emptyRumblePick;
                               return {
                                 ...prev,
                                 rumbles: {
@@ -1390,7 +1427,7 @@ export default function PicksPage() {
                   })}
               </>
             ) : (
-              <div className="mt-6">
+              <div className="mt-3">
                 {matches
                   .filter((match) => match.id === currentStep?.id)
                   .map((match) => (
@@ -1430,7 +1467,7 @@ export default function PicksPage() {
                 {stepIndex + 1 === totalSteps ? "Finish picks" : "Save & next"}
               </button>
             </div>
-          </section>
+          </>
         )}
         <CustomEntrantModal
           open={customModalOpen}
@@ -1445,6 +1482,24 @@ export default function PicksPage() {
           onSubmit={handleAddCustomEntrant}
         />
       </main>
+      {totalSteps > 0 && stepIndex < totalSteps && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-800 bg-zinc-950/95 px-6 py-3 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-2">
+            <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-zinc-500">
+              <span>
+                Step {stepIndex + 1} of {totalSteps}
+              </span>
+              <span>{currentStep?.type === "match" ? "Match" : "Event"}</span>
+            </div>
+            <div className="h-2 rounded-full bg-zinc-800">
+              <div
+                className="h-full rounded-full bg-amber-400 transition-all"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

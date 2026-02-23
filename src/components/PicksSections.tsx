@@ -27,8 +27,8 @@ type PicksHeaderProps = {
 };
 
 export const PicksHeader = ({ title, subtitle }: PicksHeaderProps) => (
-  <header className="flex flex-col gap-2">
-    <h1 className="text-3xl font-semibold">{title}</h1>
+  <header className="flex flex-col gap-1">
+    <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
     <p className="text-sm text-zinc-400">{subtitle}</p>
   </header>
 );
@@ -46,7 +46,7 @@ export const LockStatusBanner = ({
 }: LockStatusBannerProps) => (
   <>
     {!isLocked && (
-      <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
+      <div className="mt-2 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
         <p className="font-semibold text-amber-200">{lockInfo.label}</p>
         {lockInfo.detail ? (
           <p className="mt-1 text-xs text-zinc-400">{lockInfo.detail}</p>
@@ -54,7 +54,7 @@ export const LockStatusBanner = ({
       </div>
     )}
     {isLocked && rankInfo.rank ? (
-      <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
+      <div className="mt-2 rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
         <span>
           Your current rank:{" "}
           <span className="font-semibold text-amber-200">
@@ -65,7 +65,7 @@ export const LockStatusBanner = ({
       </div>
     ) : null}
     {isLocked && (
-      <div className="mt-6 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+      <div className="mt-2 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
         Picks are locked for this show.
       </div>
     )}
@@ -1140,7 +1140,7 @@ export const MatchPicksSection = ({
   onSave,
   saving,
 }: MatchPicksSectionProps) => (
-  <section className="mt-8">
+  <section>
     <div className="flex items-center justify-between">
       {hasSaved && (
         <button
@@ -1264,9 +1264,6 @@ export const MatchPicksSection = ({
             >
               <div className="flex flex-col gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-zinc-100">
-                    {match.name}
-                  </p>
                   <p className="mt-2 text-xs text-zinc-500">
                     Tap a side to select the winner.
                   </p>
