@@ -74,6 +74,10 @@ export type MatchRow = {
   kind: string;
   match_type: string;
   status: string;
+  is_main_event?: boolean | null;
+  is_championship?: boolean | null;
+  championship_name?: string | null;
+  championship_image_url?: string | null;
   winner_entrant_id: string | null;
   winner_side_id: string | null;
   finish_method: string | null;

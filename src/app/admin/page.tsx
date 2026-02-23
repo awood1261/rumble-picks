@@ -72,6 +72,10 @@ type MatchRow = {
   kind: string;
   match_type: string;
   status: string;
+  is_main_event?: boolean | null;
+  is_championship?: boolean | null;
+  championship_name?: string | null;
+  championship_image_url?: string | null;
   winner_entrant_id: string | null;
   winner_side_id: string | null;
   finish_method: string | null;
@@ -165,10 +169,26 @@ export default function AdminPage() {
   const [matchType, setMatchType] = useState("singles");
   const [matchRosterYear, setMatchRosterYear] = useState("");
   const [matchRosterGender, setMatchRosterGender] = useState("men");
+  const [matchIsMainEvent, setMatchIsMainEvent] = useState(false);
+  const [matchIsChampionship, setMatchIsChampionship] = useState(false);
+  const [matchChampionshipName, setMatchChampionshipName] = useState("");
+  const [matchChampionshipImageUrl, setMatchChampionshipImageUrl] = useState("");
   const [matchCreateOpen, setMatchCreateOpen] = useState(false);
   const [matchEntrantSelection, setMatchEntrantSelection] = useState<Record<string, string>>({});
   const [matchSideSelection, setMatchSideSelection] = useState<Record<string, string>>({});
   const [matchNameEdits, setMatchNameEdits] = useState<Record<string, string>>({});
+  const [matchMainEventEdits, setMatchMainEventEdits] = useState<
+    Record<string, boolean>
+  >({});
+  const [matchChampionshipEdits, setMatchChampionshipEdits] = useState<
+    Record<string, boolean>
+  >({});
+  const [matchChampionshipNameEdits, setMatchChampionshipNameEdits] = useState<
+    Record<string, string>
+  >({});
+  const [matchChampionshipImageEdits, setMatchChampionshipImageEdits] = useState<
+    Record<string, string>
+  >({});
   const [matchSideLabelEdits, setMatchSideLabelEdits] = useState<Record<string, string>>({});
   const [matchFinishEdits, setMatchFinishEdits] = useState<
     Record<string, { method: string; winner: string; loser: string }>
@@ -593,7 +613,7 @@ export default function AdminPage() {
           const query = supabase
             .from("matches")
             .select(
-              "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
+              "id, name, kind, match_type, status, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
             )
             .order("created_at", { ascending: true });
           if (showIdForQuery) {
@@ -629,6 +649,78 @@ export default function AdminPage() {
         matchListAll.forEach((match) => {
           if (!next[match.id]) {
             next[match.id] = match.name;
+          }
+        });
+        return next;
+      });
+      setMatchMainEventEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = Boolean(match.is_main_event);
+          }
+        });
+        return next;
+      });
+      setMatchChampionshipEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = Boolean(match.is_championship);
+          }
+        });
+        return next;
+      });
+      setMatchChampionshipNameEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = match.championship_name ?? "";
+          }
+        });
+        return next;
+      });
+      setMatchChampionshipImageEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = match.championship_image_url ?? "";
+          }
+        });
+        return next;
+      });
+      setMatchMainEventEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = Boolean(match.is_main_event);
+          }
+        });
+        return next;
+      });
+      setMatchChampionshipEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = Boolean(match.is_championship);
+          }
+        });
+        return next;
+      });
+      setMatchChampionshipNameEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = match.championship_name ?? "";
+          }
+        });
+        return next;
+      });
+      setMatchChampionshipImageEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = match.championship_image_url ?? "";
           }
         });
         return next;
@@ -701,7 +793,7 @@ export default function AdminPage() {
             const query = supabase
               .from("matches")
               .select(
-                "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
+                "id, name, kind, match_type, status, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
               )
               .order("created_at", { ascending: true });
             if (showIdForQuery) {
@@ -1265,6 +1357,14 @@ export default function AdminPage() {
         match_type: matchType,
         roster_year: matchRosterYear ? Number(matchRosterYear) : null,
         roster_gender: matchRosterGender || null,
+        is_main_event: matchIsMainEvent,
+        is_championship: matchIsChampionship,
+        championship_name: matchIsChampionship
+          ? matchChampionshipName.trim() || null
+          : null,
+        championship_image_url: matchIsChampionship
+          ? matchChampionshipImageUrl.trim() || null
+          : null,
       })
       .select("id")
       .single();
@@ -1299,6 +1399,10 @@ export default function AdminPage() {
     setMatchType("singles");
     setMatchRosterYear("");
     setMatchRosterGender("men");
+    setMatchIsMainEvent(false);
+    setMatchIsChampionship(false);
+    setMatchChampionshipName("");
+    setMatchChampionshipImageUrl("");
     setMatchCreateOpen(false);
     refreshData();
   };
@@ -1406,6 +1510,29 @@ export default function AdminPage() {
       return;
     }
     setMessage("Match updated.");
+    refreshData();
+  };
+
+  const handleUpdateMatchDetails = async (matchId: string) => {
+    setMessage(null);
+    const isMainEvent = matchMainEventEdits[matchId] ?? false;
+    const isChampionship = matchChampionshipEdits[matchId] ?? false;
+    const beltName = matchChampionshipNameEdits[matchId] ?? "";
+    const beltImageUrl = matchChampionshipImageEdits[matchId] ?? "";
+    const { error } = await supabase
+      .from("matches")
+      .update({
+        is_main_event: isMainEvent,
+        is_championship: isChampionship,
+        championship_name: isChampionship ? beltName.trim() || null : null,
+        championship_image_url: isChampionship ? beltImageUrl.trim() || null : null,
+      })
+      .eq("id", matchId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage("Match details updated.");
     refreshData();
   };
 
@@ -2421,6 +2548,44 @@ export default function AdminPage() {
                 Add match
               </button>
             </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm text-zinc-300">
+                <input
+                  className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-400"
+                  type="checkbox"
+                  checked={matchIsMainEvent}
+                  onChange={(event) => setMatchIsMainEvent(event.target.checked)}
+                />
+                Main event
+              </label>
+              <label className="flex items-center gap-2 text-sm text-zinc-300">
+                <input
+                  className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-400"
+                  type="checkbox"
+                  checked={matchIsChampionship}
+                  onChange={(event) => setMatchIsChampionship(event.target.checked)}
+                />
+                Championship match
+              </label>
+            </div>
+            {matchIsChampionship && (
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  placeholder="Championship name"
+                  value={matchChampionshipName}
+                  onChange={(event) => setMatchChampionshipName(event.target.value)}
+                />
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  placeholder="Championship image URL"
+                  value={matchChampionshipImageUrl}
+                  onChange={(event) =>
+                    setMatchChampionshipImageUrl(event.target.value)
+                  }
+                />
+              </div>
+            )}
           </details>
 
           {matches.length === 0 ? (
@@ -2483,6 +2648,18 @@ export default function AdminPage() {
                   matchType === "triple_threat" || matchType === "fatal_4_way";
                 const isTag = matchType === "tag" || matchType === "tag_3";
                 const winnerSideId = match.winner_side_id ?? "";
+                const isMainEventEdit =
+                  matchMainEventEdits[match.id] ?? Boolean(match.is_main_event);
+                const isChampionshipEdit =
+                  matchChampionshipEdits[match.id] ?? Boolean(match.is_championship);
+                const beltNameEdit =
+                  matchChampionshipNameEdits[match.id] ??
+                  match.championship_name ??
+                  "";
+                const beltImageEdit =
+                  matchChampionshipImageEdits[match.id] ??
+                  match.championship_image_url ??
+                  "";
                 const winningSideEntrants =
                   sideEntries.find((side) => side.side.id === winnerSideId)?.entrants ??
                   [];
@@ -2569,6 +2746,75 @@ export default function AdminPage() {
                           Delete match
                         </button>
                       </div>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-3">
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        Match details
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-4">
+                        <label className="flex items-center gap-2 text-sm text-zinc-300">
+                          <input
+                            className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-400"
+                            type="checkbox"
+                            checked={isMainEventEdit}
+                            onChange={(event) =>
+                              setMatchMainEventEdits((prev) => ({
+                                ...prev,
+                                [match.id]: event.target.checked,
+                              }))
+                            }
+                          />
+                          Main event
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-zinc-300">
+                          <input
+                            className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-400"
+                            type="checkbox"
+                            checked={isChampionshipEdit}
+                            onChange={(event) =>
+                              setMatchChampionshipEdits((prev) => ({
+                                ...prev,
+                                [match.id]: event.target.checked,
+                              }))
+                            }
+                          />
+                          Championship match
+                        </label>
+                        <button
+                          className="ml-auto inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-3 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                          type="button"
+                          onClick={() => handleUpdateMatchDetails(match.id)}
+                        >
+                          Save details
+                        </button>
+                      </div>
+                      {isChampionshipEdit && (
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <input
+                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            placeholder="Championship name"
+                            value={beltNameEdit}
+                            onChange={(event) =>
+                              setMatchChampionshipNameEdits((prev) => ({
+                                ...prev,
+                                [match.id]: event.target.value,
+                              }))
+                            }
+                          />
+                          <input
+                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            placeholder="Championship image URL"
+                            value={beltImageEdit}
+                            onChange={(event) =>
+                              setMatchChampionshipImageEdits((prev) => ({
+                                ...prev,
+                                [match.id]: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-3">

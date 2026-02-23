@@ -137,6 +137,18 @@ alter table public.matches
 alter table public.matches
   add column if not exists roster_gender text;
 
+alter table public.matches
+  add column if not exists is_main_event boolean default false;
+
+alter table public.matches
+  add column if not exists is_championship boolean default false;
+
+alter table public.matches
+  add column if not exists championship_name text;
+
+alter table public.matches
+  add column if not exists championship_image_url text;
+
 create table if not exists public.rumble_entries (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null references public.events(id) on delete cascade,

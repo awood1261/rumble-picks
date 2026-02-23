@@ -130,6 +130,12 @@ export default function PicksPage() {
         ?.image_url ?? null
     );
   }, [promotions, selectedShow?.promotion_id]);
+  const championshipBeltImageUrl = useMemo(() => {
+    const matchWithBelt = matches.find(
+      (row) => row.is_championship && row.championship_image_url
+    );
+    return matchWithBelt?.championship_image_url ?? null;
+  }, [matches]);
   const visibleShowEvents = useMemo(() => {
     if (!focusedEventId) return showEvents;
     return showEvents.filter((event) => event.id === focusedEventId);
@@ -656,7 +662,7 @@ export default function PicksPage() {
     const { data: matchRows, error: matchError } = await supabase
       .from("matches")
       .select(
-        "id, name, kind, match_type, status, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference",
+        "id, name, kind, match_type, status, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference",
       )
       .eq("show_id", selectedShowId)
       .order("created_at", { ascending: true });
@@ -1179,28 +1185,30 @@ export default function PicksPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <main className="mx-auto w-full max-w-6xl px-6 py-6 pb-28 sm:py-10 sm:pb-32">
-        <div className="flex flex-col items-center gap-1 text-center">
-          <div className="flex items-center justify-center gap-3">
-            {selectedPromotionImageUrl ? (
-              <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
-                <img
-                  src={selectedPromotionImageUrl}
-                  alt={selectedShow?.name ?? "Promotion"}
-                  className="h-full w-full object-cover"
-                />
+        <div className="relative pb-2 sm:pb-3">
+          <div className="relative z-10 flex flex-col items-center gap-1 text-center">
+            <div className="flex items-center justify-center gap-3">
+              {selectedPromotionImageUrl ? (
+                <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+                  <img
+                    src={selectedPromotionImageUrl}
+                    alt={selectedShow?.name ?? "Promotion"}
+                    className="h-full w-full object-cover"
+                  />
+                </span>
+              ) : null}
+              <span className="bg-gradient-to-b from-white via-amber-100 to-amber-200 bg-clip-text text-2xl font-semibold text-transparent drop-shadow-[0_0_12px_rgba(251,196,0,0.35)] sm:text-3xl">
+                {selectedShow?.name ?? "Show"}
               </span>
-            ) : null}
-            <span className="bg-gradient-to-b from-white via-amber-100 to-amber-200 bg-clip-text text-2xl font-semibold text-transparent drop-shadow-[0_0_12px_rgba(251,196,0,0.35)] sm:text-3xl">
-              {selectedShow?.name ?? "Show"}
-            </span>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+              <span className="text-sm leading-none">🔒</span>
+              <span>{lockStatusText}</span>
+            </div>
           </div>
-          <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
-            <span className="text-sm leading-none">🔒</span>
-            <span>{lockStatusText}</span>
+          <div className="relative z-10 mt-2">
+            <MessageBanner message={message} />
           </div>
-        </div>
-        <div className="mt-2">
-          <MessageBanner message={message} />
         </div>
 
         {hasEvents && !hasEntrantsForShow && (
@@ -1451,27 +1459,31 @@ export default function PicksPage() {
                   })}
               </>
             ) : (
-              <div className="mt-3">
+              <>
                 {matches
                   .filter((match) => match.id === currentStep?.id)
                   .map((match) => (
-                    <MatchPicksSection
+                    <div
                       key={match.id}
-                      matches={[match]}
-                      matchSidesByMatch={matchSidesByMatch}
-                      matchEntrantsByMatch={matchEntrantsByMatch}
-                      entrantByIdAll={entrantByIdAll}
-                      matchPickStats={matchPickStats}
-                      payload={payload}
-                      setPayload={setPayload}
-                      isLocked={isLocked}
-                      hasSaved={false}
-                      onCancel={() => undefined}
-                      onSave={handleSave}
-                      saving={saving}
-                    />
+                      className={match.is_championship ? "mt-[50px]" : "mt-3"}
+                    >
+                      <MatchPicksSection
+                        matches={[match]}
+                        matchSidesByMatch={matchSidesByMatch}
+                        matchEntrantsByMatch={matchEntrantsByMatch}
+                        entrantByIdAll={entrantByIdAll}
+                        matchPickStats={matchPickStats}
+                        payload={payload}
+                        setPayload={setPayload}
+                        isLocked={isLocked}
+                        hasSaved={false}
+                        onCancel={() => undefined}
+                        onSave={handleSave}
+                        saving={saving}
+                      />
+                    </div>
                   ))}
-              </div>
+              </>
             )}
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
               <button

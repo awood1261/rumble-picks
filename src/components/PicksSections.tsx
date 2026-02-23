@@ -1226,18 +1226,6 @@ export const MatchPicksSection = ({
           const showFinishWinner = !isSingles && !isTripleOrFatal;
           const showFinishLoser = !isSingles;
           const hasWinnerPick = Boolean(payload.match_picks[match.id]);
-          const leftSide = sideEntries[0];
-          const rightSide = sideEntries[1];
-          const leftEntrants = leftSide?.entrants ?? [];
-          const rightEntrants = rightSide?.entrants ?? [];
-          const leftLabel =
-            leftSide?.label?.trim() && leftEntrants.length > 1
-              ? leftSide.label.trim()
-              : null;
-          const rightLabel =
-            rightSide?.label?.trim() && rightEntrants.length > 1
-              ? rightSide.label.trim()
-              : null;
           const matchStats = matchPickStats[match.id];
           const matchTotal = matchStats?.total ?? 0;
           const getPercent = (sideId?: string | null) => {
@@ -1245,21 +1233,26 @@ export const MatchPicksSection = ({
             const count = matchStats?.bySide?.[sideId] ?? 0;
             return Math.round((count / matchTotal) * 100);
           };
-          const leftPercent = getPercent(leftSide?.side.id ?? null);
-          const rightPercent = getPercent(rightSide?.side.id ?? null);
-          const leftTitle =
-            leftLabel ||
-            (leftEntrants.length > 0
-              ? leftEntrants.map((entrant) => entrant.name).join(" • ")
-              : "Side 1");
-          const rightTitle =
-            rightLabel ||
-            (rightEntrants.length > 0
-              ? rightEntrants.map((entrant) => entrant.name).join(" • ")
-              : "Side 2");
+          const matchupSides =
+            matchType === "triple_threat"
+              ? sideEntries.slice(0, 3)
+              : sideEntries.slice(0, 2);
+          const matchupSideTitles = matchupSides.map(({ label, entrants }, index) => {
+            const trimmedLabel = label?.trim();
+            if (trimmedLabel && entrants.length > 1) {
+              return trimmedLabel;
+            }
+            if (entrants.length > 0) {
+              return entrants.map((entrant) => entrant.name).join(" • ");
+            }
+            return `Side ${index + 1}`;
+          });
+          const isMainEvent = Boolean(match.is_main_event);
+          const isChampionship = Boolean(match.is_championship);
+          const isPrestige = isMainEvent || isChampionship;
           const hasMatchup =
-            Boolean(leftSide && rightSide) &&
-            (leftEntrants.length > 0 || rightEntrants.length > 0);
+            matchupSides.length >= 2 &&
+            matchupSides.some((side) => side.entrants.length > 0);
           const sideGridClass = isTag ? "grid-cols-2 auto-rows-fr" : "grid-cols-1";
           const finishOptions = [
             { value: "pinfall", label: "Pinfall" },
@@ -1282,198 +1275,285 @@ export const MatchPicksSection = ({
           return (
             <div
               key={match.id}
-              className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+              className={`relative overflow-visible rounded-2xl border bg-zinc-950/60 p-4 ${
+                isPrestige
+                  ? "border-amber-400/40 bg-black/60 shadow-[0_18px_50px_rgba(0,0,0,0.5)]"
+                  : "border-zinc-800"
+              }`}
             >
-              <div className="flex flex-col gap-2">
-                <div>
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Tap a side to select the winner.
-                  </p>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-100">
-                    +{scoringRules.match_winner} pts for correct winner
-                  </p>
+              {isChampionship && match.championship_image_url ? (
+                <div className="pointer-events-none absolute left-1/2 top-0 z-0 w-xs -translate-x-1/2 -translate-y-1/2 sm:left-0 sm:translate-x-0">
+                  <img
+                    src={match.championship_image_url}
+                    alt={`${match.championship_name ?? "Championship"} belt`}
+                    className="h-36 w-xs max-w-none object-cover object-center opacity-80 sm:h-44"
+                  />
                 </div>
-              </div>
-              {sideEntries.length === 0 && (
-                <p className="mt-2 text-xs text-zinc-500">
-                  Add match participants in admin to enable picks.
-                </p>
-              )}
-              {sideEntries.length > 0 && (
-                <div className="mt-3 space-y-3">
-                  {hasMatchup && leftSide && rightSide && (
-                    <div>
-                      {(leftTitle || rightTitle) && (
-                        <div className="mb-2 flex items-start justify-between gap-3">
-                          <div className="flex flex-col">
-                            <span className="text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200">
-                              {leftTitle}
-                            </span>
-                          </div>
-                          <div className="flex flex-col text-right">
-                            <span className="text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200">
-                              {rightTitle}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      <div className="relative h-96 overflow-hidden rounded-2xl border border-zinc-800 bg-black/40 md:h-[28rem] lg:h-[34rem]">
-                        <div className="grid h-full w-full grid-cols-2">
-                          {[leftEntrants, rightEntrants].map((entrants, index) => (
-                            <div
-                              key={`${match.id}-matchup-${index}`}
-                              className={`relative h-full w-full overflow-hidden ${
-                                payload.match_picks[match.id] ===
-                                (index === 0 ? leftSide.side.id : rightSide.side.id)
-                                  ? "ring-2 ring-amber-300 shadow-[0_0_22px_rgba(251,196,0,0.3)]"
-                                  : ""
-                              }`}
-                            >
-                              <div className="absolute left-2 top-2 z-20 flex items-center gap-2 rounded-full border border-amber-400/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200 shadow-[0_0_18px_rgba(198,162,74,0.35)]">
-                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/20 text-[11px]">
-                                  ★
-                                </span>
-                                {index === 0
-                                  ? leftPercent === null
-                                    ? "—"
-                                    : `${leftPercent}% fans`
-                                  : rightPercent === null
-                                    ? "—"
-                                    : `${rightPercent}% fans`}
-                              </div>
-                              {payload.match_picks[match.id] ===
-                                (index === 0 ? leftSide.side.id : rightSide.side.id) && (
-                                <div className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-black/80 text-amber-200">
-                                  ✓
-                                </div>
-                              )}
-                            <div className={`grid h-full w-full ${sideGridClass}`}>
-                                {entrants.length > 0 ? (
-                                  entrants.map((entrant) => (
-                                    <div
-                                      key={`${match.id}-${index}-${entrant.id}`}
-                                      className="relative h-full w-full overflow-hidden"
-                                    >
-                                      {entrant.image_url ? (
-                                        <img
-                                          src={entrant.image_url}
-                                          alt={entrant.name}
-                                          className="h-full w-full object-cover"
-                                        />
-                                      ) : (
-                                        <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
-                                      )}
-                                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                                      <div className="absolute inset-x-0 bottom-0 z-10 p-2 text-center">
-                                <span className="mx-auto block max-w-[9rem] text-[13px] font-semibold uppercase leading-[0.95] tracking-[0.18em] text-zinc-100 drop-shadow">
-                                  {entrant.name}
-                                </span>
-                                      </div>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/15" />
-                      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-                        <span className="rounded-full bg-black px-3 py-1 text-ms lg:text-lg uppercase tracking-[0.4em] text-amber-200 shadow-lg">
-                          VS
-                        </span>
-                      </div>
-                      <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-zinc-950/20" />
-                        {!isLocked && (
-                          <>
-                            <button
-                              type="button"
-                              className={`absolute left-0 top-0 h-full w-1/2 transition ${
-                                payload.match_picks[match.id] === leftSide.side.id
-                                  ? "bg-amber-400/20 ring-2 ring-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.35)]"
-                                  : "hover:bg-white/5"
-                              }`}
-                              onClick={() =>
-                                setPayload((prev) => ({
-                                  ...prev,
-                                  match_picks: {
-                                    ...prev.match_picks,
-                                    [match.id]: leftSide.side.id,
-                                  },
-                                }))
-                              }
-                              aria-label={`Select ${leftSide.label} as winner`}
-                            />
-                            <button
-                              type="button"
-                              className={`absolute right-0 top-0 h-full w-1/2 transition ${
-                                payload.match_picks[match.id] === rightSide.side.id
-                                  ? "bg-amber-400/20 ring-2 ring-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.35)]"
-                                  : "hover:bg-white/5"
-                              }`}
-                              onClick={() =>
-                                setPayload((prev) => ({
-                                  ...prev,
-                                  match_picks: {
-                                    ...prev.match_picks,
-                                    [match.id]: rightSide.side.id,
-                                  },
-                                }))
-                              }
-                              aria-label={`Select ${rightSide.label} as winner`}
-                            />
-                          </>
+              ) : null}
+              <div
+                className={`relative z-10 ${
+                  isChampionship ? "-m-4 rounded-2xl bg-zinc-950/95 p-4" : ""
+                }`}
+              >
+                <div className="flex flex-col gap-2">
+                  <div>
+                    {isPrestige && (
+                      <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.35em] text-amber-200">
+                        {isMainEvent && (
+                          <span className="rounded-full border border-amber-300/40 px-3 py-1">
+                            Main event
+                          </span>
+                        )}
+                        {isChampionship && (
+                          <span className="rounded-full border border-amber-300/40 px-3 py-1">
+                            Championship
+                          </span>
                         )}
                       </div>
-                    </div>
-                  )}
-                  {sideEntries.length > 2 && (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {sideEntries.map(({ side, label, entrants }) => {
-                        const isSelected = payload.match_picks[match.id] === side.id;
-                        const percent = getPercent(side.id);
-                        const displayLabel =
-                          label?.trim() && entrants.length > 1
-                            ? label.trim()
-                            : entrants.map((entrant) => entrant.name).join(" • ");
-                        return (
-                          <button
-                            key={side.id}
-                            type="button"
-                            onClick={() =>
-                              setPayload((prev) => ({
-                                ...prev,
-                                match_picks: {
-                                  ...prev.match_picks,
-                                  [match.id]: side.id,
-                                },
-                              }))
-                            }
-                            disabled={isLocked}
-                            className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
-                              isSelected
-                                ? "border-amber-400/60 bg-amber-400/10 text-amber-100"
-                                : "border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:border-amber-400/60"
-                            } ${isLocked ? "cursor-not-allowed opacity-70" : ""}`}
-                            aria-pressed={isSelected}
-                          >
-                            <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                              {displayLabel}
-                            </div>
-                            <p className="mt-1 text-xs font-semibold text-zinc-300">
-                              {percent === null ? "—" : `${percent}% of fans' pick`}
-                            </p>
-                            <p className="mt-1 text-sm font-semibold">
-                              {entrants.map((entrant) => entrant.name).join(" • ")}
-                            </p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                    )}
+                    <p className="mt-2 text-xs text-zinc-500">
+                      Tap a side to select the winner.
+                    </p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-100">
+                      +{scoringRules.match_winner} pts for correct winner
+                    </p>
+                  </div>
                 </div>
-              )}
+                {sideEntries.length === 0 && (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Add match participants in admin to enable picks.
+                  </p>
+                )}
+                {sideEntries.length > 0 && (
+                  <div className="mt-3 space-y-3">
+                    {hasMatchup && (
+                      <div>
+                        <div
+                          className={`mb-2 grid gap-3 ${
+                            matchupSides.length === 3
+                              ? "grid-cols-3"
+                              : "grid-cols-2"
+                          }`}
+                        >
+                          {matchupSideTitles.map((title, index) => (
+                            <span
+                              key={`${match.id}-title-${index}`}
+                              className={`text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200 ${
+                                matchupSides.length === 3
+                                  ? "text-center"
+                                  : index === 1
+                                    ? "text-right"
+                                    : "text-left"
+                              }`}
+                            >
+                              {title}
+                            </span>
+                          ))}
+                        </div>
+                        <div
+                          className={`relative z-10 h-96 overflow-hidden md:h-[28rem] lg:h-[34rem] ${
+                            isPrestige
+                              ? "border-y border-amber-400/50 bg-black/60"
+                              : "rounded-2xl border border-zinc-800 bg-black/40"
+                          }`}
+                        >
+                          {isPrestige && (
+                            <>
+                              <span className="pointer-events-none absolute left-6 top-4 z-20 text-amber-200/70">
+                                ❧
+                              </span>
+                              <span className="pointer-events-none absolute right-6 top-4 z-20 text-amber-200/70">
+                                ❧
+                              </span>
+                              <span className="pointer-events-none absolute bottom-4 left-6 z-20 text-amber-200/60">
+                                ❦
+                              </span>
+                              <span className="pointer-events-none absolute bottom-4 right-6 z-20 text-amber-200/60">
+                                ❦
+                              </span>
+                            </>
+                          )}
+                          <div
+                            className={`grid h-full w-full ${
+                              matchupSides.length === 3
+                                ? "grid-cols-3"
+                                : "grid-cols-2"
+                            }`}
+                          >
+                            {matchupSides.map((sideEntry, index) => {
+                              const entrants = sideEntry.entrants ?? [];
+                              const percent = getPercent(sideEntry.side.id ?? null);
+                              const isSelected =
+                                payload.match_picks[match.id] ===
+                                sideEntry.side.id;
+                              return (
+                                <div
+                                  key={`${match.id}-matchup-${index}`}
+                                  className={`relative h-full w-full overflow-hidden ${
+                                    isSelected
+                                      ? "ring-2 ring-amber-300 shadow-[0_0_22px_rgba(251,196,0,0.3)]"
+                                      : ""
+                                  }`}
+                                >
+                                  <div className="absolute left-2 top-2 z-20 flex items-center gap-2 rounded-full border border-amber-400/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200 shadow-[0_0_18px_rgba(198,162,74,0.35)]">
+                                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/20 text-[11px]">
+                                      ★
+                                    </span>
+                                    {percent === null ? "—" : `${percent}% fans`}
+                                  </div>
+                                  {isSelected && (
+                                    <div className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-black/80 text-amber-200">
+                                      ✓
+                                    </div>
+                                  )}
+                                  <div className={`grid h-full w-full ${sideGridClass}`}>
+                                    {entrants.length > 0 ? (
+                                      entrants.map((entrant) => (
+                                        <div
+                                          key={`${match.id}-${index}-${entrant.id}`}
+                                          className="relative h-full w-full overflow-hidden"
+                                        >
+                                          {entrant.image_url ? (
+                                            <img
+                                              src={entrant.image_url}
+                                              alt={entrant.name}
+                                              className="h-full w-full object-cover"
+                                            />
+                                          ) : (
+                                            <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
+                                          )}
+                                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                                          <div className="absolute inset-x-0 bottom-0 z-10 p-2 text-center">
+                                            <span className="mx-auto block max-w-[9rem] text-[13px] font-semibold uppercase leading-[0.95] tracking-[0.18em] text-zinc-100 drop-shadow">
+                                              {entrant.name}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {matchupSides.length === 3 ? (
+                            <>
+                              <div className="pointer-events-none absolute inset-y-0 left-1/3 w-px -translate-x-1/2 bg-white/15" />
+                              <div className="pointer-events-none absolute inset-y-0 left-2/3 w-px -translate-x-1/2 bg-white/15" />
+                            </>
+                          ) : (
+                            <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/15" />
+                          )}
+                          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+                            {isPrestige ? (
+                              <div className="relative flex items-center justify-center">
+                                <span className="absolute -top-2 h-1 w-12 rounded-full bg-amber-300/60" />
+                                <span className="absolute -bottom-2 h-1 w-12 rounded-full bg-amber-300/60" />
+                                <span className="rounded-full border border-amber-300/80 bg-black/70 px-4 py-2 text-xs uppercase tracking-[0.45em] text-amber-100 shadow-[0_0_30px_rgba(198,162,74,0.45)]">
+                                  VS
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="rounded-full bg-black px-3 py-1 text-ms lg:text-lg uppercase tracking-[0.4em] text-amber-200 shadow-lg">
+                                VS
+                              </span>
+                            )}
+                          </div>
+                          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-zinc-950/20" />
+                          {!isLocked &&
+                            matchupSides.map((sideEntry, index) => {
+                              const isSelected =
+                                payload.match_picks[match.id] ===
+                                sideEntry.side.id;
+                              const widthClass =
+                                matchupSides.length === 3 ? "w-1/3" : "w-1/2";
+                              const leftClass =
+                                matchupSides.length === 3
+                                  ? index === 0
+                                    ? "left-0"
+                                    : index === 1
+                                      ? "left-1/3"
+                                      : "left-2/3"
+                                  : index === 0
+                                    ? "left-0"
+                                    : "right-0";
+                              return (
+                                <button
+                                  key={`${match.id}-pick-${sideEntry.side.id}`}
+                                  type="button"
+                                  className={`absolute top-0 h-full ${widthClass} ${leftClass} transition ${
+                                    isSelected
+                                      ? "bg-amber-400/20 ring-2 ring-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.35)]"
+                                      : "hover:bg-white/5"
+                                  }`}
+                                  onClick={() =>
+                                    setPayload((prev) => ({
+                                      ...prev,
+                                      match_picks: {
+                                        ...prev.match_picks,
+                                        [match.id]: sideEntry.side.id,
+                                      },
+                                    }))
+                                  }
+                                  aria-label={`Select ${sideEntry.label ?? `Side ${index + 1}`} as winner`}
+                                />
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                    {sideEntries.length > 2 && (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {sideEntries.map(({ side, label, entrants }) => {
+                          const isSelected =
+                            payload.match_picks[match.id] === side.id;
+                          const percent = getPercent(side.id);
+                          const displayLabel =
+                            label?.trim() && entrants.length > 1
+                              ? label.trim()
+                              : entrants.map((entrant) => entrant.name).join(" • ");
+                          return (
+                            <button
+                              key={side.id}
+                              type="button"
+                              onClick={() =>
+                                setPayload((prev) => ({
+                                  ...prev,
+                                  match_picks: {
+                                    ...prev.match_picks,
+                                    [match.id]: side.id,
+                                  },
+                                }))
+                              }
+                              disabled={isLocked}
+                              className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
+                                isSelected
+                                  ? "border-amber-400/60 bg-amber-400/10 text-amber-100"
+                                  : "border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:border-amber-400/60"
+                              } ${isLocked ? "cursor-not-allowed opacity-70" : ""}`}
+                              aria-pressed={isSelected}
+                            >
+                              <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                                {displayLabel}
+                              </div>
+                              <p className="mt-1 text-xs font-semibold text-zinc-300">
+                                {percent === null
+                                  ? "—"
+                                  : `${percent}% of fans' pick`}
+                              </p>
+                              <p className="mt-1 text-sm font-semibold">
+                                {entrants.map((entrant) => entrant.name).join(" • ")}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="mt-4">
                 <BonusPicksAccordion
                   defaultOpen={hasBonusPick}
