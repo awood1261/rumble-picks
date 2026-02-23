@@ -1051,11 +1051,13 @@ type SegmentedOption = {
 
 type BonusPicksAccordionProps = {
   defaultOpen?: boolean;
+  summaryText?: string;
   children: React.ReactNode;
 };
 
 const BonusPicksAccordion = ({
   defaultOpen = false,
+  summaryText,
   children,
 }: BonusPicksAccordionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -1076,8 +1078,20 @@ const BonusPicksAccordion = ({
       }}
     >
       <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
-        Bonus picks
-        <span className="text-zinc-500 transition group-open:rotate-180">▾</span>
+        <span className="flex items-center gap-2">
+          <span className="inline-flex h-5 w-5 items-center justify-center text-[11px]">
+            ＋
+          </span>
+          Bonus picks
+        </span>
+        <span className="flex items-center gap-2">
+          {summaryText ? (
+            <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200/80">
+              {summaryText}
+            </span>
+          ) : null}
+          <span className="text-zinc-500 transition group-open:rotate-180">▾</span>
+        </span>
       </summary>
       <div className="mt-3">{children}</div>
     </details>
@@ -1258,6 +1272,12 @@ export const MatchPicksSection = ({
             Boolean(finishPick.method) ||
             Boolean(finishPick.winner) ||
             Boolean(finishPick.loser);
+          const bonusPointsTotal =
+            scoringRules.match_length +
+            scoringRules.match_finish_method +
+            scoringRules.match_interference +
+            (showFinishWinner ? scoringRules.match_finish_winner : 0) +
+            (showFinishLoser ? scoringRules.match_finish_loser : 0);
 
           return (
             <div
@@ -1268,6 +1288,9 @@ export const MatchPicksSection = ({
                 <div>
                   <p className="mt-2 text-xs text-zinc-500">
                     Tap a side to select the winner.
+                  </p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-100">
+                    +{scoringRules.match_winner} pts for correct winner
                   </p>
                 </div>
               </div>
@@ -1452,12 +1475,20 @@ export const MatchPicksSection = ({
                 </div>
               )}
               <div className="mt-4">
-                <BonusPicksAccordion defaultOpen={hasBonusPick}>
+                <BonusPicksAccordion
+                  defaultOpen={hasBonusPick}
+                  summaryText={`+${bonusPointsTotal} pts`}
+                >
                   <div className="space-y-4">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                        Match length
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Match length
+                        </p>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200/80">
+                          +{scoringRules.match_length} pts
+                        </span>
+                      </div>
                       <SegmentedPills
                         options={lengthOptions}
                         selectedValue={lengthPick}
@@ -1475,9 +1506,14 @@ export const MatchPicksSection = ({
                       />
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                        Finish type
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Finish type
+                        </p>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200/80">
+                          +{scoringRules.match_finish_method} pts
+                        </span>
+                      </div>
                       <SegmentedPills
                         options={finishOptions}
                         selectedValue={finishPick.method}
@@ -1574,11 +1610,26 @@ export const MatchPicksSection = ({
                           </select>
                         )}
                       </div>
+                      {finishRequiresEntrants && (showFinishWinner || showFinishLoser) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200/80">
+                          {showFinishWinner && (
+                            <span>Winner +{scoringRules.match_finish_winner} pts</span>
+                          )}
+                          {showFinishLoser && (
+                            <span>Loser +{scoringRules.match_finish_loser} pts</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                        Interference
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Interference
+                        </p>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200/80">
+                          +{scoringRules.match_interference} pts
+                        </span>
+                      </div>
                       <SegmentedPills
                         options={interferenceOptions}
                         selectedValue={interferencePick}
