@@ -1302,7 +1302,7 @@ export const MatchPicksSection = ({
                           </div>
                         </div>
                       )}
-                      <div className="relative h-58 overflow-hidden rounded-2xl border border-zinc-800 bg-black/40 md:h-64 lg:h-102">
+                      <div className="relative h-72 overflow-hidden rounded-2xl border border-zinc-800 bg-black/40 md:h-80 lg:h-112">
                       <div className="grid h-full w-full grid-cols-2">
                         {[leftEntrants, rightEntrants].map((entrants, index) => (
                           <div
