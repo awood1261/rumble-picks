@@ -1509,11 +1509,10 @@ export default function PicksPage() {
       {totalSteps > 0 && stepIndex < totalSteps && (
         <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-800 bg-zinc-950/95 px-6 py-3 backdrop-blur">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-2">
-            <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-zinc-500">
+            <div className="flex items-center justify-center text-[11px] uppercase tracking-[0.3em] text-zinc-500">
               <span>
                 Step {stepIndex + 1} of {totalSteps}
               </span>
-              <span>{currentStep?.type === "match" ? "Match" : "Event"}</span>
             </div>
             <div className="h-2 rounded-full bg-zinc-800">
               <div
