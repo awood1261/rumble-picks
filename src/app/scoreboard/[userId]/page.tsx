@@ -146,6 +146,9 @@ export default function ScoreboardPicksPage() {
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
+  const [matchPickStats, setMatchPickStats] = useState<
+    Record<string, { total: number; bySide: Record<string, number> }>
+  >({});
   const [show, setShow] = useState<ShowRow | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -508,6 +511,7 @@ export default function ScoreboardPicksPage() {
       { data: eventRows },
       { data: profileRow },
       { data: matchRows, error: matchError },
+      { data: allPickRows, error: allPickError },
       { data: scoreRows, error: scoreError },
     ] = await Promise.all([
       supabase
@@ -538,6 +542,10 @@ export default function ScoreboardPicksPage() {
         .eq("show_id", validShowId)
         .order("created_at", { ascending: true }),
       supabase
+        .from("picks")
+        .select("payload")
+        .eq("show_id", validShowId),
+      supabase
         .from("scores")
         .select("user_id, points")
         .eq("show_id", validShowId),
@@ -553,12 +561,32 @@ export default function ScoreboardPicksPage() {
       setLoading(false);
       return;
     }
+    if (allPickError) {
+      setMessage(allPickError.message);
+      setLoading(false);
+      return;
+    }
 
     const eventList = (eventRows ?? []) as EventRow[];
     setPayload((pickRow?.payload as PicksPayload) ?? null);
     setShow(showRow ?? null);
     setEvents(eventList);
     setProfile(profileRow ?? null);
+    const nextStats: Record<string, { total: number; bySide: Record<string, number> }> = {};
+    (allPickRows ?? []).forEach((row) => {
+      const payloadRow = row.payload as PicksPayload | null;
+      const matchPicks = payloadRow?.match_picks ?? {};
+      Object.entries(matchPicks).forEach(([matchId, sideId]) => {
+        if (!sideId) return;
+        if (!nextStats[matchId]) {
+          nextStats[matchId] = { total: 0, bySide: {} };
+        }
+        nextStats[matchId].total += 1;
+        nextStats[matchId].bySide[sideId] =
+          (nextStats[matchId].bySide[sideId] ?? 0) + 1;
+      });
+    });
+    setMatchPickStats(nextStats);
 
     const scoreList = (scoreRows ?? []) as { user_id: string; points: number }[];
     if (scoreList.length > 0) {
@@ -1040,6 +1068,31 @@ export default function ScoreboardPicksPage() {
                       .map((row) => entrantMap.get(row.entrant_id))
                       .filter(Boolean)
                   : [];
+                const matchStats = matchPickStats[match.id];
+                const matchTotal = matchStats?.total ?? 0;
+                const percentForSide = (sideId?: string | null) => {
+                  if (!sideId || matchTotal === 0) return null;
+                  const count = matchStats?.bySide?.[sideId] ?? 0;
+                  return Math.round((count / matchTotal) * 100);
+                };
+                const sideEntries = sides.map((side, index) => {
+                  const entrantsForSide = (matchEntrantsByMatch[match.id] ?? [])
+                    .filter((row) => row.side_id === side.id)
+                    .map((row) => entrantMap.get(row.entrant_id))
+                    .filter(Boolean);
+                  const label =
+                    side.label?.trim() && entrantsForSide.length > 1
+                      ? side.label.trim()
+                      : entrantsForSide
+                          .map((entrant) => entrant?.name)
+                          .filter(Boolean)
+                          .join(" • ") || `Side ${index + 1}`;
+                  return {
+                    id: side.id,
+                    label,
+                    percent: percentForSide(side.id),
+                  };
+                });
                 const pickSide = sides.find((side) => side.id === pick) ?? null;
                 const pickSideLabel =
                   pickSide?.label?.trim() && pickEntrants.length > 1
@@ -1122,6 +1175,19 @@ export default function ScoreboardPicksPage() {
                                   {matchTotalPoints} pts
                                 </span>
                               </div>
+                              {sideEntries.length > 0 && (
+                                <p className="mt-2 text-[11px] font-semibold text-amber-200">
+                                  {sideEntries
+                                    .map((side) =>
+                                      `${side.label}: ${
+                                        side.percent === null
+                                          ? "—"
+                                          : `${side.percent}% of fans' pick`
+                                      }`
+                                    )
+                                    .join(" • ")}
+                                </p>
+                              )}
                             </div>
                             {winner && (
                               <span

@@ -1032,6 +1032,7 @@ type MatchPicksSectionProps = {
   matchSidesByMatch: Record<string, MatchSideRow[]>;
   matchEntrantsByMatch: Record<string, MatchEntrantRow[]>;
   entrantByIdAll: Map<string, EntrantRow>;
+  matchPickStats: Record<string, { total: number; bySide: Record<string, number> }>;
   payload: PicksPayload;
   setPayload: Dispatch<SetStateAction<PicksPayload>>;
   isLocked: boolean;
@@ -1130,6 +1131,7 @@ export const MatchPicksSection = ({
   matchSidesByMatch,
   matchEntrantsByMatch,
   entrantByIdAll,
+  matchPickStats,
   payload,
   setPayload,
   isLocked,
@@ -1140,9 +1142,6 @@ export const MatchPicksSection = ({
 }: MatchPicksSectionProps) => (
   <section className="mt-8">
     <div className="flex items-center justify-between">
-      <div>
-        <h2 className="text-lg font-semibold">Match Picks</h2>
-      </div>
       {hasSaved && (
         <button
           className="text-xs font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200"
@@ -1223,6 +1222,25 @@ export const MatchPicksSection = ({
             rightSide?.label?.trim() && rightEntrants.length > 1
               ? rightSide.label.trim()
               : null;
+          const matchStats = matchPickStats[match.id];
+          const matchTotal = matchStats?.total ?? 0;
+          const getPercent = (sideId?: string | null) => {
+            if (!sideId || matchTotal === 0) return null;
+            const count = matchStats?.bySide?.[sideId] ?? 0;
+            return Math.round((count / matchTotal) * 100);
+          };
+          const leftPercent = getPercent(leftSide?.side.id ?? null);
+          const rightPercent = getPercent(rightSide?.side.id ?? null);
+          const leftTitle =
+            leftLabel ||
+            (leftEntrants.length > 0
+              ? leftEntrants.map((entrant) => entrant.name).join(" • ")
+              : "Side 1");
+          const rightTitle =
+            rightLabel ||
+            (rightEntrants.length > 0
+              ? rightEntrants.map((entrant) => entrant.name).join(" • ")
+              : "Side 2");
           const hasMatchup =
             Boolean(leftSide && rightSide) &&
             (leftEntrants.length > 0 || rightEntrants.length > 0);
@@ -1246,9 +1264,6 @@ export const MatchPicksSection = ({
             >
               <div className="flex flex-col gap-2">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                    {match.kind}
-                  </p>
                   <p className="text-sm font-semibold text-zinc-100">
                     {match.name}
                   </p>
@@ -1266,10 +1281,28 @@ export const MatchPicksSection = ({
                 <div className="mt-3 space-y-3">
                   {hasMatchup && leftSide && rightSide && (
                     <div>
-                      {(leftLabel || rightLabel) && (
-                        <div className="mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
-                          <span>{leftLabel ?? ""}</span>
-                          <span>{rightLabel ?? ""}</span>
+                      {(leftTitle || rightTitle) && (
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
+                              {leftTitle}
+                            </span>
+                            <span className="mt-1 text-xs font-semibold text-zinc-300">
+                              {leftPercent === null
+                                ? "—"
+                                : `${leftPercent}% of fans' pick`}
+                            </span>
+                          </div>
+                          <div className="flex flex-col text-right">
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
+                              {rightTitle}
+                            </span>
+                            <span className="mt-1 text-xs font-semibold text-zinc-300">
+                              {rightPercent === null
+                                ? "—"
+                                : `${rightPercent}% of fans' pick`}
+                            </span>
+                          </div>
                         </div>
                       )}
                       <div className="relative h-58 overflow-hidden rounded-2xl border border-zinc-800 bg-black/40 md:h-64 lg:h-102">
@@ -1308,7 +1341,7 @@ export const MatchPicksSection = ({
                                       )}
                                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                                       <div className="absolute inset-x-0 bottom-0 z-10 p-2 text-center">
-                                        <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-100 drop-shadow">
+                                        <span className="mx-auto block max-w-[7rem] text-[9px] font-semibold uppercase leading[0.95] tracking-[0.25em] text-zinc-100 drop-shadow">
                                           {entrant.name}
                                         </span>
                                       </div>
@@ -1375,6 +1408,11 @@ export const MatchPicksSection = ({
                     <div className="grid gap-2 sm:grid-cols-2">
                       {sideEntries.map(({ side, label, entrants }) => {
                         const isSelected = payload.match_picks[match.id] === side.id;
+                        const percent = getPercent(side.id);
+                        const displayLabel =
+                          label?.trim() && entrants.length > 1
+                            ? label.trim()
+                            : entrants.map((entrant) => entrant.name).join(" • ");
                         return (
                           <button
                             key={side.id}
@@ -1396,8 +1434,11 @@ export const MatchPicksSection = ({
                             } ${isLocked ? "cursor-not-allowed opacity-70" : ""}`}
                             aria-pressed={isSelected}
                           >
-                            <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                              {label}
+                            <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                              {displayLabel}
+                            </div>
+                            <p className="mt-1 text-xs font-semibold text-zinc-300">
+                              {percent === null ? "—" : `${percent}% of fans' pick`}
                             </p>
                             <p className="mt-1 text-sm font-semibold">
                               {entrants.map((entrant) => entrant.name).join(" • ")}

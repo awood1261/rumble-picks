@@ -96,6 +96,9 @@ export default function PicksPage() {
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
+  const [matchPickStats, setMatchPickStats] = useState<
+    Record<string, { total: number; bySide: Record<string, number> }>
+  >({});
   const [payload, setPayload] = useState<PicksPayload>(emptyPayload);
   const [saving, setSaving] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
@@ -652,6 +655,33 @@ export default function PicksPage() {
     }
   }, [selectedShowId]);
 
+  const loadMatchPickStats = useCallback(async () => {
+    if (!selectedShowId) return;
+    const { data, error } = await supabase
+      .from("picks")
+      .select("payload")
+      .eq("show_id", selectedShowId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    const nextStats: Record<string, { total: number; bySide: Record<string, number> }> = {};
+    (data ?? []).forEach((row) => {
+      const payloadRow = row.payload as PicksPayload | null;
+      const matchPicks = payloadRow?.match_picks ?? {};
+      Object.entries(matchPicks).forEach(([matchId, sideId]) => {
+        if (!sideId) return;
+        if (!nextStats[matchId]) {
+          nextStats[matchId] = { total: 0, bySide: {} };
+        }
+        nextStats[matchId].total += 1;
+        nextStats[matchId].bySide[sideId] =
+          (nextStats[matchId].bySide[sideId] ?? 0) + 1;
+      });
+    });
+    setMatchPickStats(nextStats);
+  }, [selectedShowId]);
+
   useEffect(() => {
     if (!selectedShowId || !userId) return;
     setMessage(null);
@@ -685,6 +715,7 @@ export default function PicksPage() {
       setEntrants(entrantRows ?? []);
       await loadRumbleEntries();
       await loadMatches();
+      await loadMatchPickStats();
 
       const savedPayload = pickRows?.payload as Partial<PicksPayload> | null;
       const nextRumbles: Record<string, RumblePick> = {};
@@ -737,6 +768,7 @@ export default function PicksPage() {
     userId,
     loadMatches,
     loadRumbleEntries,
+    loadMatchPickStats,
     showEvents,
   ]);
 
@@ -769,10 +801,18 @@ export default function PicksPage() {
       loadRank();
       loadRumbleEntries();
       loadMatches();
+      loadMatchPickStats();
     }, SCORING_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [loadRank, loadRumbleEntries, loadMatches, selectedShowId, userId]);
+  }, [
+    loadRank,
+    loadRumbleEntries,
+    loadMatches,
+    loadMatchPickStats,
+    selectedShowId,
+    userId,
+  ]);
 
   useEffect(() => {
     setPayload((prev) => {
@@ -1360,6 +1400,7 @@ export default function PicksPage() {
                       matchSidesByMatch={matchSidesByMatch}
                       matchEntrantsByMatch={matchEntrantsByMatch}
                       entrantByIdAll={entrantByIdAll}
+                      matchPickStats={matchPickStats}
                       payload={payload}
                       setPayload={setPayload}
                       isLocked={isLocked}
