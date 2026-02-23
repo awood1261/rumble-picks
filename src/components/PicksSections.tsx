@@ -1446,7 +1446,11 @@ export const MatchPicksSection = ({
                           ) : (
                             <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/15" />
                           )}
-                          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+                          <div
+                            className={`pointer-events-none absolute inset-0 z-10 flex justify-center ${
+                              matchupSides.length === 3 ? "items-end pb-10" : "items-center"
+                            }`}
+                          >
                             {isPrestige ? (
                               <div className="relative flex items-center justify-center">
                                 <span className="absolute -top-2 h-1 w-12 rounded-full bg-amber-300/60" />
@@ -1502,53 +1506,6 @@ export const MatchPicksSection = ({
                               );
                             })}
                         </div>
-                      </div>
-                    )}
-                    {sideEntries.length > 2 && (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {sideEntries.map(({ side, label, entrants }) => {
-                          const isSelected =
-                            payload.match_picks[match.id] === side.id;
-                          const percent = getPercent(side.id);
-                          const displayLabel =
-                            label?.trim() && entrants.length > 1
-                              ? label.trim()
-                              : entrants.map((entrant) => entrant.name).join(" • ");
-                          return (
-                            <button
-                              key={side.id}
-                              type="button"
-                              onClick={() =>
-                                setPayload((prev) => ({
-                                  ...prev,
-                                  match_picks: {
-                                    ...prev.match_picks,
-                                    [match.id]: side.id,
-                                  },
-                                }))
-                              }
-                              disabled={isLocked}
-                              className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
-                                isSelected
-                                  ? "border-amber-400/60 bg-amber-400/10 text-amber-100"
-                                  : "border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:border-amber-400/60"
-                              } ${isLocked ? "cursor-not-allowed opacity-70" : ""}`}
-                              aria-pressed={isSelected}
-                            >
-                              <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                                {displayLabel}
-                              </div>
-                              <p className="mt-1 text-xs font-semibold text-zinc-300">
-                                {percent === null
-                                  ? "—"
-                                  : `${percent}% of fans' pick`}
-                              </p>
-                              <p className="mt-1 text-sm font-semibold">
-                                {entrants.map((entrant) => entrant.name).join(" • ")}
-                              </p>
-                            </button>
-                          );
-                        })}
                       </div>
                     )}
                   </div>
