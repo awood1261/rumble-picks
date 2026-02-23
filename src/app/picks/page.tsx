@@ -143,6 +143,30 @@ export default function PicksPage() {
     return new Date() >= new Date(selectedShow.starts_at);
   }, [selectedShow?.starts_at]);
 
+  const lockStatusText = useMemo(() => {
+    if (!selectedShow?.starts_at) {
+      return "Lock time not set";
+    }
+    const startTime = new Date(selectedShow.starts_at).getTime();
+    const diffMs = startTime - now;
+    if (diffMs <= 0) {
+      return "Show is locked";
+    }
+    const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const parts = [
+      days ? `${days}d` : null,
+      hours ? `${pad(hours)}h` : null,
+      minutes ? `${pad(minutes)}m` : null,
+      `${pad(seconds)}s`,
+    ].filter(Boolean);
+    return `Picks lock in ${parts.join(" ")}`;
+  }, [selectedShow?.starts_at, now]);
+
   const lockInfo = useMemo(() => {
     if (!selectedShow?.starts_at) {
       return {
@@ -589,7 +613,7 @@ export default function PicksPage() {
 
   useEffect(() => {
     if (!selectedShow?.starts_at) return;
-    const interval = setInterval(() => setNow(Date.now()), 60000);
+    const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [selectedShow?.starts_at]);
 
@@ -1155,14 +1179,10 @@ export default function PicksPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <main className="mx-auto w-full max-w-6xl px-6 py-6 pb-28 sm:py-10 sm:pb-32">
-        <div className="space-y-3">
-          <PicksHeader
-            title="Make your predictions"
-            subtitle="Lock in your picks here before bell time."
-          />
-          <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.3em] text-zinc-400">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
             {selectedPromotionImageUrl ? (
-              <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+              <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
                 <img
                   src={selectedPromotionImageUrl}
                   alt={selectedShow?.name ?? "Promotion"}
@@ -1170,9 +1190,13 @@ export default function PicksPage() {
                 />
               </span>
             ) : null}
-            <span>{selectedShow?.name ?? "Show"}</span>
-            <span className="text-zinc-600">•</span>
-            <span>{isLocked ? "Locked" : "Open for picks"}</span>
+            <span className="text-2xl font-semibold text-zinc-100 sm:text-3xl">
+              {selectedShow?.name ?? "Show"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+            <span className="text-sm leading-none">🔒</span>
+            <span>{lockStatusText}</span>
           </div>
         </div>
         <div className="mt-2">

@@ -28,7 +28,9 @@ type PicksHeaderProps = {
 
 export const PicksHeader = ({ title, subtitle }: PicksHeaderProps) => (
   <header className="flex flex-col gap-1">
-    <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
+    <h1 className="text-lg font-semibold uppercase tracking-[0.2em] text-zinc-200 sm:text-xl">
+      {title}
+    </h1>
     <p className="text-sm text-zinc-400">{subtitle}</p>
   </header>
 );
