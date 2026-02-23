@@ -1162,7 +1162,7 @@ export default function PicksPage() {
           />
           <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.3em] text-zinc-400">
             {selectedPromotionImageUrl ? (
-              <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+              <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
                 <img
                   src={selectedPromotionImageUrl}
                   alt={selectedShow?.name ?? "Promotion"}

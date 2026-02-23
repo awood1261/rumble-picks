@@ -1284,42 +1284,44 @@ export const MatchPicksSection = ({
                             <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
                               {leftTitle}
                             </span>
-                            <span className="mt-1 text-xs font-semibold text-zinc-300">
-                              {leftPercent === null
-                                ? "—"
-                                : `${leftPercent}% of fans' pick`}
-                            </span>
                           </div>
                           <div className="flex flex-col text-right">
                             <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
                               {rightTitle}
                             </span>
-                            <span className="mt-1 text-xs font-semibold text-zinc-300">
-                              {rightPercent === null
-                                ? "—"
-                                : `${rightPercent}% of fans' pick`}
-                            </span>
                           </div>
                         </div>
                       )}
-                      <div className="relative h-72 overflow-hidden rounded-2xl border border-zinc-800 bg-black/40 md:h-80 lg:h-112">
-                      <div className="grid h-full w-full grid-cols-2">
-                        {[leftEntrants, rightEntrants].map((entrants, index) => (
-                          <div
-                            key={`${match.id}-matchup-${index}`}
-                            className={`relative h-full w-full overflow-hidden ${
-                              payload.match_picks[match.id] ===
-                              (index === 0 ? leftSide.side.id : rightSide.side.id)
-                                ? "ring-2 ring-amber-300 shadow-[0_0_22px_rgba(251,196,0,0.3)]"
-                                : ""
-                            }`}
-                          >
-                            {payload.match_picks[match.id] ===
-                              (index === 0 ? leftSide.side.id : rightSide.side.id) && (
-                              <div className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-black/80 text-amber-200">
-                                ✓
+                      <div className="relative h-96 overflow-hidden rounded-2xl border border-zinc-800 bg-black/40 md:h-[28rem] lg:h-[34rem]">
+                        <div className="grid h-full w-full grid-cols-2">
+                          {[leftEntrants, rightEntrants].map((entrants, index) => (
+                            <div
+                              key={`${match.id}-matchup-${index}`}
+                              className={`relative h-full w-full overflow-hidden ${
+                                payload.match_picks[match.id] ===
+                                (index === 0 ? leftSide.side.id : rightSide.side.id)
+                                  ? "ring-2 ring-amber-300 shadow-[0_0_22px_rgba(251,196,0,0.3)]"
+                                  : ""
+                              }`}
+                            >
+                              <div className="absolute left-2 top-2 z-20 flex items-center gap-2 rounded-full border border-amber-400/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200 shadow-[0_0_18px_rgba(198,162,74,0.35)]">
+                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/20 text-[11px]">
+                                  ★
+                                </span>
+                                {index === 0
+                                  ? leftPercent === null
+                                    ? "—"
+                                    : `${leftPercent}% fans`
+                                  : rightPercent === null
+                                    ? "—"
+                                    : `${rightPercent}% fans`}
                               </div>
-                            )}
+                              {payload.match_picks[match.id] ===
+                                (index === 0 ? leftSide.side.id : rightSide.side.id) && (
+                                <div className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-black/80 text-amber-200">
+                                  ✓
+                                </div>
+                              )}
                             <div className={`grid h-full w-full ${sideGridClass}`}>
                                 {entrants.length > 0 ? (
                                   entrants.map((entrant) => (
