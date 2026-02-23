@@ -1283,12 +1283,12 @@ export const MatchPicksSection = ({
                       {(leftTitle || rightTitle) && (
                         <div className="mb-2 flex items-start justify-between gap-3">
                           <div className="flex flex-col">
-                            <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
+                            <span className="text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200">
                               {leftTitle}
                             </span>
                           </div>
                           <div className="flex flex-col text-right">
-                            <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
+                            <span className="text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200">
                               {rightTitle}
                             </span>
                           </div>
@@ -1342,9 +1342,9 @@ export const MatchPicksSection = ({
                                       )}
                                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                                       <div className="absolute inset-x-0 bottom-0 z-10 p-2 text-center">
-                                        <span className="mx-auto block max-w-[7rem] text-[9px] font-semibold uppercase leading[0.95] tracking-[0.25em] text-zinc-100 drop-shadow">
-                                          {entrant.name}
-                                        </span>
+                                <span className="mx-auto block max-w-[9rem] text-[13px] font-semibold uppercase leading-[0.95] tracking-[0.18em] text-zinc-100 drop-shadow">
+                                  {entrant.name}
+                                </span>
                                       </div>
                                     </div>
                                   ))

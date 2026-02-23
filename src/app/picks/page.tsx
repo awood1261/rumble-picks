@@ -1179,8 +1179,8 @@ export default function PicksPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <main className="mx-auto w-full max-w-6xl px-6 py-6 pb-28 sm:py-10 sm:pb-32">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col items-center gap-1 text-center">
+          <div className="flex items-center justify-center gap-3">
             {selectedPromotionImageUrl ? (
               <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
                 <img
@@ -1190,11 +1190,11 @@ export default function PicksPage() {
                 />
               </span>
             ) : null}
-            <span className="text-2xl font-semibold text-zinc-100 sm:text-3xl">
+            <span className="bg-gradient-to-b from-white via-amber-100 to-amber-200 bg-clip-text text-2xl font-semibold text-transparent drop-shadow-[0_0_12px_rgba(251,196,0,0.35)] sm:text-3xl">
               {selectedShow?.name ?? "Show"}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+          <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
             <span className="text-sm leading-none">🔒</span>
             <span>{lockStatusText}</span>
           </div>
