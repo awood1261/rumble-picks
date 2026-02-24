@@ -1171,9 +1171,6 @@ export const EliminatorPicksSection = ({
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
       <div className="flex flex-col gap-1">
-        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-          Eliminator
-        </p>
         <h3 className="text-lg font-semibold text-zinc-100">
           {eliminator.name}
         </h3>
@@ -1186,7 +1183,12 @@ export const EliminatorPicksSection = ({
         ) : (
           <>
             <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-              Winner pick
+              <span className="flex items-center justify-between gap-2">
+                <span>Winner pick</span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-400">
+                  +0 pts
+                </span>
+              </span>
               <select
                 className="mt-2 h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                 value={pick.winner_id ?? ""}
@@ -1226,7 +1228,8 @@ export const EliminatorPicksSection = ({
                 ))}
               </select>
             </label>
-            {orderedEntries.map((entry) => {
+            <div className="mt-4 space-y-3">
+              {orderedEntries.map((entry) => {
               const entrant = entrantByIdAll.get(entry.entrant_id);
               const isOpen = openEntrantId === entry.entrant_id;
               const isWinner = pick.winner_id === entry.entrant_id;
@@ -1297,19 +1300,36 @@ export const EliminatorPicksSection = ({
                           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-100">
                             {entrant?.name ?? "Entrant"}
                           </p>
-                          <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+                          <p
+                            className={`mt-1 text-[11px] uppercase tracking-[0.2em] ${
+                              statusText === "Picks saved"
+                                ? "text-amber-200"
+                                : "text-zinc-500"
+                            }`}
+                          >
                             {statusText}
                           </p>
                         </div>
                       </div>
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700 bg-black/60 text-xs text-zinc-200">
-                        {isOpen ? "–" : "+"}
-                      </span>
+                    <span
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-full border bg-black/60 text-xs ${
+                        statusText === "Picks saved"
+                          ? "border-amber-300/70 text-amber-200"
+                          : "border-zinc-700 text-zinc-200"
+                      }`}
+                    >
+                      {isOpen ? "–" : "+"}
+                    </span>
                     </button>
                     {isOpen && (
                       <div className="mt-3 grid gap-2 sm:grid-cols-3 max-w-[50%]">
-                        <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-                          Entry order
+                        <label className="text-xs font-medium text-zinc-400">
+                          <span className="flex items-center justify-between gap-2">
+                            <span>Entry order</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-400">
+                              +{scoringRules.eliminator_entry_order} pts
+                            </span>
+                          </span>
                           <select
                             className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
                             value={pick.entry_order?.[entry.entrant_id] ?? ""}
@@ -1357,11 +1377,16 @@ export const EliminatorPicksSection = ({
                           </select>
                         </label>
                         {!isWinner && (
-                          <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-                            Elimination order
-                            <select
-                              className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
-                              value={
+                        <label className="text-xs font-medium text-zinc-400">
+                          <span className="flex items-center justify-between gap-2">
+                            <span>Elimination order</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-400">
+                              +{scoringRules.eliminator_elimination_order} pts
+                            </span>
+                          </span>
+                          <select
+                            className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
+                            value={
                                 pick.elimination_order?.[entry.entrant_id] ?? ""
                               }
                               onChange={(event) =>
@@ -1409,11 +1434,16 @@ export const EliminatorPicksSection = ({
                           </label>
                         )}
                         {!isWinner && (
-                          <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-                            Elimination type
-                            <select
-                              className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
-                              value={
+                        <label className="text-xs font-medium text-zinc-400">
+                          <span className="flex items-center justify-between gap-2">
+                            <span>Elimination type</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-400">
+                              +{scoringRules.eliminator_elimination_type} pts
+                            </span>
+                          </span>
+                          <select
+                            className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
+                            value={
                                 pick.elimination_type?.[entry.entrant_id] ?? ""
                               }
                               onChange={(event) =>
@@ -1452,12 +1482,18 @@ export const EliminatorPicksSection = ({
                 </div>
               );
             })}
+            </div>
           </>
         )}
       </div>
       <div className="mt-4">
         <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-          Most eliminations
+          <span className="flex items-center justify-between gap-2">
+            <span>Most eliminations</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-400">
+              +{scoringRules.eliminator_most_eliminations} pts
+            </span>
+          </span>
           <select
             className="mt-2 h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
             value={pick.most_eliminations ?? ""}
