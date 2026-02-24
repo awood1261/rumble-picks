@@ -15,6 +15,7 @@ export type PicksPayload = {
       entry_order?: Record<string, number | null>;
       elimination_order?: Record<string, number | null>;
       elimination_type?: Record<string, "pinfall" | "submission" | null>;
+      winner_id?: string | null;
       most_eliminations?: string | null;
     }
   >;

@@ -66,6 +66,7 @@ const emptyEliminatorPick = {
   entry_order: {},
   elimination_order: {},
   elimination_type: {},
+  winner_id: null,
   most_eliminations: null,
 };
 
@@ -1421,6 +1422,7 @@ export default function PicksPage() {
                     return order ? `${order}. ${entrant?.name ?? "Entrant"}` : null;
                   })
                   .filter(Boolean)
+                  .sort((a, b) => Number(a.split(".")[0]) - Number(b.split(".")[0]))
                   .join(", ");
                 const eliminationOrder = entriesForEliminator
                   .map((entry) => {
@@ -1429,6 +1431,7 @@ export default function PicksPage() {
                     return order ? `${order}. ${entrant?.name ?? "Entrant"}` : null;
                   })
                   .filter(Boolean)
+                  .sort((a, b) => Number(a.split(".")[0]) - Number(b.split(".")[0]))
                   .join(", ");
                 const mostElims = pick.most_eliminations
                   ? entrantByIdAll.get(pick.most_eliminations)?.name
@@ -1456,13 +1459,22 @@ export default function PicksPage() {
                       </button>
                     </div>
                     <p className="mt-2 text-sm text-zinc-300">
-                      Entry order: {entryOrder || "Not set"}
+                      <span className="font-semibold text-zinc-100">
+                        Entry order:
+                      </span>{" "}
+                      {entryOrder || "Not set"}
                     </p>
                     <p className="mt-1 text-sm text-zinc-300">
-                      Elimination order: {eliminationOrder || "Not set"}
+                      <span className="font-semibold text-zinc-100">
+                        Elimination order:
+                      </span>{" "}
+                      {eliminationOrder || "Not set"}
                     </p>
                     <p className="mt-1 text-sm text-zinc-300">
-                      Most eliminations: {mostElims || "Not set"}
+                      <span className="font-semibold text-zinc-100">
+                        Most eliminations:
+                      </span>{" "}
+                      {mostElims || "Not set"}
                     </p>
                   </div>
                 );

@@ -1,6 +1,13 @@
 "use client";
 
-import { type Dispatch, type Ref, type SetStateAction, useEffect, useState } from "react";
+import {
+  type Dispatch,
+  type Ref,
+  type SetStateAction,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Link from "next/link";
 import { EntrantCard } from "./EntrantCard";
 import { scoringRules } from "../lib/scoringRules";
@@ -1067,11 +1074,91 @@ export const EliminatorPicksSection = ({
     entry_order: {},
     elimination_order: {},
     elimination_type: {},
+    winner_id: null,
     most_eliminations: null,
   };
   const entrants = entries
     .map((entry) => entrantByIdAll.get(entry.entrant_id))
     .filter(Boolean) as EntrantRow[];
+  const orderedEntries = useMemo(() => {
+    const byName = (entry: EliminatorEntryRow) =>
+      entrantByIdAll.get(entry.entrant_id)?.name ?? "";
+    const sortedUnassigned = [...entries]
+      .filter((entry) => !pick.entry_order?.[entry.entrant_id])
+      .sort((a, b) => byName(a).localeCompare(byName(b)));
+    const assigned = new Map<number, EliminatorEntryRow>();
+    entries.forEach((entry) => {
+      const order = pick.entry_order?.[entry.entrant_id];
+      if (order) {
+        assigned.set(order, entry);
+      }
+    });
+    const slots = Math.max(eliminator.entrant_limit ?? 0, entries.length);
+    const result: EliminatorEntryRow[] = [];
+    for (let slot = 1; slot <= slots; slot += 1) {
+      const assignedEntry = assigned.get(slot);
+      if (assignedEntry) {
+        result.push(assignedEntry);
+        continue;
+      }
+      const nextUnassigned = sortedUnassigned.shift();
+      if (nextUnassigned) {
+        result.push(nextUnassigned);
+      }
+    }
+    if (sortedUnassigned.length > 0) {
+      result.push(...sortedUnassigned);
+    }
+    return result;
+  }, [entries, entrantByIdAll, pick.entry_order, eliminator.entrant_limit]);
+  const selectedEntryOrders = useMemo(() => {
+    const chosen = new Map<number, string>();
+    Object.entries(pick.entry_order ?? {}).forEach(([entrantId, order]) => {
+      if (order) {
+        chosen.set(order, entrantId);
+      }
+    });
+    return chosen;
+  }, [pick.entry_order]);
+  const selectedElimOrders = useMemo(() => {
+    const chosen = new Map<number, string>();
+    Object.entries(pick.elimination_order ?? {}).forEach(([entrantId, order]) => {
+      if (order) {
+        chosen.set(order, entrantId);
+      }
+    });
+    return chosen;
+  }, [pick.elimination_order]);
+  const firstIncomplete = useMemo(() => {
+    for (const entry of orderedEntries) {
+      const id = entry.entrant_id;
+      const isWinner = pick.winner_id === id;
+      if (!pick.entry_order?.[id]) return id;
+      if (!isWinner) {
+        if (!pick.elimination_order?.[id] || !pick.elimination_type?.[id]) {
+          return id;
+        }
+      }
+    }
+    return orderedEntries[0]?.entrant_id ?? null;
+  }, [
+    orderedEntries,
+    pick.entry_order,
+    pick.elimination_order,
+    pick.elimination_type,
+    pick.winner_id,
+  ]);
+  const [openEntrantId, setOpenEntrantId] = useState<string | null>(
+    firstIncomplete
+  );
+  useEffect(() => {
+    if (
+      !openEntrantId ||
+      !orderedEntries.some((entry) => entry.entrant_id === openEntrantId)
+    ) {
+      setOpenEntrantId(firstIncomplete);
+    }
+  }, [firstIncomplete, orderedEntries, openEntrantId]);
   const entryOptions = Array.from(
     { length: eliminator.entrant_limit },
     (_, index) => index + 1
@@ -1092,125 +1179,281 @@ export const EliminatorPicksSection = ({
         </h3>
       </div>
       <div className="mt-4 space-y-3">
-        {entries.map((entry) => {
-          const entrant = entrantByIdAll.get(entry.entrant_id);
-          return (
-            <div
-              key={entry.entrant_id}
-              className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3"
-            >
-              <p className="text-sm font-semibold text-zinc-100">
-                {entrant?.name ?? "Entrant"}
-              </p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-                  Entry order
-                  <select
-                    className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
-                    value={pick.entry_order?.[entry.entrant_id] ?? ""}
-                    onChange={(event) =>
-                      setPayload((prev) => {
-                        const current = prev.eliminators?.[eliminator.id] ?? pick;
-                        return {
-                          ...prev,
-                          eliminators: {
-                            ...(prev.eliminators ?? {}),
-                            [eliminator.id]: {
-                              ...current,
-                              entry_order: {
-                                ...(current.entry_order ?? {}),
-                                [entry.entrant_id]:
-                                  event.target.value === ""
-                                    ? null
-                                    : Number(event.target.value),
-                              },
-                            },
-                          },
-                        };
-                      })
+        {entries.length === 0 ? (
+          <p className="text-sm text-zinc-400">
+            Entrants will appear once the admin preloads them.
+          </p>
+        ) : (
+          <>
+            <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+              Winner pick
+              <select
+                className="mt-2 h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                value={pick.winner_id ?? ""}
+                onChange={(event) => {
+                  const nextWinner = event.target.value || null;
+                  setPayload((prev) => {
+                    const current = prev.eliminators?.[eliminator.id] ?? pick;
+                    const nextEntryOrder = { ...(current.entry_order ?? {}) };
+                    const nextElimOrder = { ...(current.elimination_order ?? {}) };
+                    const nextElimType = { ...(current.elimination_type ?? {}) };
+                    if (nextWinner) {
+                      nextElimOrder[nextWinner] = null;
+                      nextElimType[nextWinner] = null;
                     }
-                    disabled={isLocked}
-                  >
-                    <option value="">Select</option>
-                    {entryOptions.map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-                  Elimination order
-                  <select
-                    className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
-                    value={pick.elimination_order?.[entry.entrant_id] ?? ""}
-                    onChange={(event) =>
-                      setPayload((prev) => {
-                        const current = prev.eliminators?.[eliminator.id] ?? pick;
-                        return {
-                          ...prev,
-                          eliminators: {
-                            ...(prev.eliminators ?? {}),
-                            [eliminator.id]: {
-                              ...current,
-                              elimination_order: {
-                                ...(current.elimination_order ?? {}),
-                                [entry.entrant_id]:
-                                  event.target.value === ""
-                                    ? null
-                                    : Number(event.target.value),
-                              },
-                            },
-                          },
-                        };
-                      })
-                    }
-                    disabled={isLocked}
-                  >
-                    <option value="">Select</option>
-                    {eliminationOptions.map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-                  Elimination type
-                  <select
-                    className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
-                    value={pick.elimination_type?.[entry.entrant_id] ?? ""}
-                    onChange={(event) =>
-                      setPayload((prev) => {
-                        const current = prev.eliminators?.[eliminator.id] ?? pick;
-                        return {
-                          ...prev,
-                          eliminators: {
-                            ...(prev.eliminators ?? {}),
-                            [eliminator.id]: {
-                              ...current,
-                              elimination_type: {
-                                ...(current.elimination_type ?? {}),
-                                [entry.entrant_id]:
-                                  (event.target.value as "pinfall" | "submission") ||
-                                  null,
-                              },
-                            },
-                          },
-                        };
-                      })
-                    }
-                    disabled={isLocked}
-                  >
-                    <option value="">Select</option>
-                    <option value="pinfall">Pinfall</option>
-                    <option value="submission">Submission</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-          );
-        })}
+                    return {
+                      ...prev,
+                      eliminators: {
+                        ...(prev.eliminators ?? {}),
+                        [eliminator.id]: {
+                          ...current,
+                          entry_order: nextEntryOrder,
+                          elimination_order: nextElimOrder,
+                          elimination_type: nextElimType,
+                          winner_id: nextWinner,
+                        },
+                      },
+                    };
+                  });
+                }}
+                disabled={isLocked}
+              >
+                <option value="">Select winner</option>
+                {entrants.map((entrant) => (
+                  <option key={entrant.id} value={entrant.id}>
+                    {entrant.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {orderedEntries.map((entry) => {
+              const entrant = entrantByIdAll.get(entry.entrant_id);
+              const isOpen = openEntrantId === entry.entrant_id;
+              const isWinner = pick.winner_id === entry.entrant_id;
+              const hasEntryOrder = Boolean(pick.entry_order?.[entry.entrant_id]);
+              const hasElimOrder = Boolean(
+                pick.elimination_order?.[entry.entrant_id]
+              );
+              const hasElimType = Boolean(
+                pick.elimination_type?.[entry.entrant_id]
+              );
+              const hasAnyPick =
+                hasEntryOrder || hasElimOrder || hasElimType || isWinner;
+              const isComplete = isWinner
+                ? hasEntryOrder && Boolean(pick.winner_id)
+                : hasEntryOrder && hasElimOrder && hasElimType;
+              const statusText = !hasAnyPick
+                ? "No picks yet"
+                : isComplete
+                  ? "Picks saved"
+                  : "In progress";
+              return (
+                <div
+                  key={entry.entrant_id}
+                  className="relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 p-3"
+                >
+                  {isOpen && (
+                    <div className="pointer-events-none absolute inset-0">
+                      {entrant?.image_url ? (
+                        <div className="absolute inset-y-0 right-0 w-2/5">
+                          <img
+                            src={entrant.image_url}
+                            alt=""
+                            className="h-full w-full object-cover object-top opacity-70"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-black/40 to-black/90" />
+                        </div>
+                      ) : null}
+                      <div className="absolute inset-0 bg-[linear-gradient(90deg,_rgba(255,255,255,0.03)_0%,_rgba(255,255,255,0.06)_20%,_rgba(255,255,255,0.02)_45%,_rgba(255,255,255,0.08)_60%,_rgba(255,255,255,0.03)_80%)] opacity-60" />
+                    </div>
+                  )}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 text-left"
+                      onClick={() =>
+                        setOpenEntrantId((prev) =>
+                          prev === entry.entrant_id ? null : entry.entrant_id
+                        )
+                      }
+                      aria-expanded={isOpen}
+                    >
+                      <div className="flex items-center gap-3">
+                        {!isOpen && pick.entry_order?.[entry.entrant_id] ? (
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-200/80">
+                            #{pick.entry_order?.[entry.entrant_id]}
+                          </span>
+                        ) : null}
+                        {!isOpen && entrant?.image_url ? (
+                          <span className="inline-flex h-12 w-12 overflow-hidden rounded-full border border-amber-400/50 bg-black/40">
+                            <img
+                              src={entrant.image_url}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          </span>
+                        ) : null}
+                        <div>
+                          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-100">
+                            {entrant?.name ?? "Entrant"}
+                          </p>
+                          <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+                            {statusText}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700 bg-black/60 text-xs text-zinc-200">
+                        {isOpen ? "–" : "+"}
+                      </span>
+                    </button>
+                    {isOpen && (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3 max-w-[50%]">
+                        <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                          Entry order
+                          <select
+                            className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
+                            value={pick.entry_order?.[entry.entrant_id] ?? ""}
+                            onChange={(event) =>
+                              setPayload((prev) => {
+                                const current =
+                                  prev.eliminators?.[eliminator.id] ?? pick;
+                                return {
+                                  ...prev,
+                                  eliminators: {
+                                    ...(prev.eliminators ?? {}),
+                                    [eliminator.id]: {
+                                      ...current,
+                                      entry_order: {
+                                        ...(current.entry_order ?? {}),
+                                        [entry.entrant_id]:
+                                          event.target.value === ""
+                                            ? null
+                                            : Number(event.target.value),
+                                      },
+                                    },
+                                  },
+                                };
+                              })
+                            }
+                            disabled={isLocked}
+                          >
+                            <option value="">Select</option>
+                            {entryOptions.map((value) => {
+                              const chosenBy = selectedEntryOrders.get(value);
+                              const isTaken =
+                                Boolean(chosenBy) &&
+                                chosenBy !== entry.entrant_id;
+                              return (
+                                <option
+                                  key={value}
+                                  value={value}
+                                  disabled={isTaken}
+                                >
+                                  {value}
+                                  {isTaken ? " (taken)" : ""}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </label>
+                        {!isWinner && (
+                          <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                            Elimination order
+                            <select
+                              className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
+                              value={
+                                pick.elimination_order?.[entry.entrant_id] ?? ""
+                              }
+                              onChange={(event) =>
+                                setPayload((prev) => {
+                                  const current =
+                                    prev.eliminators?.[eliminator.id] ?? pick;
+                                  return {
+                                    ...prev,
+                                    eliminators: {
+                                      ...(prev.eliminators ?? {}),
+                                      [eliminator.id]: {
+                                        ...current,
+                                        elimination_order: {
+                                          ...(current.elimination_order ?? {}),
+                                          [entry.entrant_id]:
+                                            event.target.value === ""
+                                              ? null
+                                              : Number(event.target.value),
+                                        },
+                                      },
+                                    },
+                                  };
+                                })
+                              }
+                              disabled={isLocked}
+                            >
+                              <option value="">Select</option>
+                              {eliminationOptions.map((value) => {
+                                const chosenBy = selectedElimOrders.get(value);
+                                const isTaken =
+                                  Boolean(chosenBy) &&
+                                  chosenBy !== entry.entrant_id;
+                                return (
+                                  <option
+                                    key={value}
+                                    value={value}
+                                    disabled={isTaken}
+                                  >
+                                    {value}
+                                    {isTaken ? " (taken)" : ""}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </label>
+                        )}
+                        {!isWinner && (
+                          <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                            Elimination type
+                            <select
+                              className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
+                              value={
+                                pick.elimination_type?.[entry.entrant_id] ?? ""
+                              }
+                              onChange={(event) =>
+                                setPayload((prev) => {
+                                  const current =
+                                    prev.eliminators?.[eliminator.id] ?? pick;
+                                  return {
+                                    ...prev,
+                                    eliminators: {
+                                      ...(prev.eliminators ?? {}),
+                                      [eliminator.id]: {
+                                        ...current,
+                                        elimination_type: {
+                                          ...(current.elimination_type ?? {}),
+                                          [entry.entrant_id]:
+                                            (event.target.value as
+                                              | "pinfall"
+                                              | "submission") || null,
+                                        },
+                                      },
+                                    },
+                                  };
+                                })
+                              }
+                              disabled={isLocked}
+                            >
+                              <option value="">Select</option>
+                              <option value="pinfall">Pinfall</option>
+                              <option value="submission">Submission</option>
+                            </select>
+                          </label>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
       <div className="mt-4">
         <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">

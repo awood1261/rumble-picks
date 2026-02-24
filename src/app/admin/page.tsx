@@ -172,7 +172,6 @@ export default function AdminPage() {
   const [eliminatorEntrantLimit, setEliminatorEntrantLimit] = useState("6");
   const [eliminatorCreateOpen, setEliminatorCreateOpen] = useState(false);
   const [eliminatorEntrantId, setEliminatorEntrantId] = useState("");
-  const [eliminatorEntryOrder, setEliminatorEntryOrder] = useState("");
   const [eliminatorEliminatedId, setEliminatorEliminatedId] = useState("");
   const [eliminatorEliminatedById, setEliminatorEliminatedById] = useState("");
   const [eliminatorEliminationType, setEliminatorEliminationType] =
@@ -1532,27 +1531,37 @@ export default function AdminPage() {
   const handleAddEliminatorEntry = async (eliminatorId: string) => {
     if (!eliminatorId || !eliminatorEntrantId) return;
     setMessage(null);
-    const order =
-      eliminatorEntryOrder.trim() === ""
-        ? null
-        : Number(eliminatorEntryOrder);
-    if (order !== null && Number.isNaN(order)) {
-      setMessage("Entry order must be a number.");
-      return;
-    }
     const { error } = await supabase.from("eliminator_entries").insert({
       eliminator_id: eliminatorId,
       entrant_id: eliminatorEntrantId,
-      entry_order: order,
+      entry_order: null,
     });
     if (error) {
       setMessage(error.message);
       return;
     }
     setEliminatorEntrantId("");
-    setEliminatorEntryOrder("");
     refreshData();
   };
+
+  const handleUpdateEliminatorEntryOrder = async (
+    eliminatorId: string,
+    entrantId: string,
+    entryOrder: number | null
+  ) => {
+    setMessage(null);
+    const { error } = await supabase
+      .from("eliminator_entries")
+      .update({ entry_order: entryOrder })
+      .eq("eliminator_id", eliminatorId)
+      .eq("entrant_id", entrantId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    refreshData();
+  };
+
 
   const handleRemoveEliminatorEntry = async (
     eliminatorId: string,
@@ -2630,7 +2639,7 @@ export default function AdminPage() {
                               </p>
                             </div>
                           </div>
-                          <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,auto]">
+                          <div className="mt-4 grid gap-3 md:grid-cols-[2fr,auto]">
                             <select
                               className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                               value={eliminatorEntrantId}
@@ -2645,14 +2654,6 @@ export default function AdminPage() {
                                 </option>
                               ))}
                             </select>
-                            <input
-                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                              placeholder="Entry order"
-                              value={eliminatorEntryOrder}
-                              onChange={(event) =>
-                                setEliminatorEntryOrder(event.target.value)
-                              }
-                            />
                             <button
                               className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[11px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
                               type="button"
@@ -2669,11 +2670,44 @@ export default function AdminPage() {
                                   className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2"
                                 >
                                   <span>
-                                    {entry.entry_order ?? "?"}.{" "}
                                     {entrantOptions.find(
                                       (entrant) => entrant.id === entry.entrant_id
                                     )?.name ?? "Entrant"}
                                   </span>
+                                  <label className="text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+                                    Entry order
+                                    <select
+                                      className="ml-2 h-8 rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
+                                      value={entry.entry_order ?? ""}
+                                      onChange={(event) => {
+                                        const nextValue =
+                                          event.target.value === ""
+                                            ? null
+                                            : Number(event.target.value);
+                                        if (
+                                          event.target.value !== "" &&
+                                          Number.isNaN(nextValue)
+                                        ) {
+                                          return;
+                                        }
+                                        handleUpdateEliminatorEntryOrder(
+                                          eliminator.id,
+                                          entry.entrant_id,
+                                          nextValue
+                                        );
+                                      }}
+                                    >
+                                      <option value="">—</option>
+                                      {Array.from(
+                                        { length: eliminator.entrant_limit ?? 0 },
+                                        (_, index) => index + 1
+                                      ).map((value) => (
+                                        <option key={value} value={value}>
+                                          {value}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
                                   <button
                                     className="text-xs font-semibold uppercase tracking-wide text-red-200 hover:text-red-100"
                                     type="button"
