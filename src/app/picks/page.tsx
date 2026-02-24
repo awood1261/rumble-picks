@@ -130,6 +130,13 @@ export default function PicksPage() {
         ?.image_url ?? null
     );
   }, [promotions, selectedShow?.promotion_id]);
+  const selectedPromotionName = useMemo(() => {
+    if (!selectedShow?.promotion_id) return null;
+    return (
+      promotions.find((promotion) => promotion.id === selectedShow.promotion_id)
+        ?.name ?? null
+    );
+  }, [promotions, selectedShow?.promotion_id]);
   const championshipBeltImageUrl = useMemo(() => {
     const matchWithBelt = matches.find(
       (row) => row.is_championship && row.championship_image_url
@@ -1187,6 +1194,11 @@ export default function PicksPage() {
       <main className="mx-auto w-full max-w-6xl px-6 py-6 pb-28 sm:py-10 sm:pb-32">
         <div className="relative pb-2 sm:pb-3">
           <div className="relative z-10 flex flex-col items-center gap-1 text-center">
+            {selectedPromotionName ? (
+              <span className="text-[11px] font-semibold uppercase tracking-[0.35em] text-zinc-500">
+                {selectedPromotionName}
+              </span>
+            ) : null}
             <div className="flex items-center justify-center gap-3">
               {selectedPromotionImageUrl ? (
                 <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
