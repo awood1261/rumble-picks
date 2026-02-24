@@ -1277,7 +1277,7 @@ export const MatchPicksSection = ({
               key={match.id}
               className={`relative overflow-visible rounded-2xl border bg-zinc-950/60 p-4 ${
                 isPrestige
-                  ? "border-amber-400/40 bg-black/60 shadow-[0_18px_50px_rgba(0,0,0,0.5)]"
+                  ? "border-amber-400/40 bg-black/60 shadow-[0_18px_50px_rgba(0,0,0,0.5),0_0_26px_rgba(198,162,74,0.32)]"
                   : "border-zinc-800"
               }`}
             >
@@ -1286,7 +1286,7 @@ export const MatchPicksSection = ({
                   <img
                     src={match.championship_image_url}
                     alt={`${match.championship_name ?? "Championship"} belt`}
-                    className="h-36 w-xs max-w-none object-cover object-center opacity-80 sm:h-44"
+                    className="h-36 w-xs max-w-none object-cover object-center opacity-80 drop-shadow-[0_0_38px_rgba(198,162,74,0.5)] sm:h-44"
                   />
                 </div>
               ) : null}
@@ -1508,8 +1508,12 @@ export const MatchPicksSection = ({
               </div>
               <div className="mt-4">
                 <BonusPicksAccordion
-                  defaultOpen={hasBonusPick}
-                  summaryText={`+${bonusPointsTotal} pts`}
+                  defaultOpen={false}
+                  summaryText={
+                    hasBonusPick
+                      ? `Saved · +${bonusPointsTotal} pts`
+                      : `+${bonusPointsTotal} pts`
+                  }
                 >
                   <div className="space-y-4">
                     <div>
