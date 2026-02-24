@@ -36,12 +36,22 @@ type PickRow = {
         most_eliminations: string | null;
       }
     >;
+    eliminators?: Record<
+      string,
+      {
+        entry_order?: Record<string, number | null>;
+        elimination_order?: Record<string, number | null>;
+        elimination_type?: Record<string, "pinfall" | "submission" | null>;
+        most_eliminations?: string | null;
+      }
+    >;
     match_picks?: Record<string, string | null>;
     match_finish_picks?: Record<
       string,
       { method: string | null; winner: string | null; loser: string | null }
     >;
     match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
+    match_interference_picks?: Record<string, "yes" | "no" | null>;
   };
   updated_at: string;
 };
@@ -103,6 +113,20 @@ type MatchEntrantRow = {
   side_id: string | null;
 };
 
+type EliminatorEntryRow = {
+  eliminator_id: string;
+  entrant_id: string;
+  entry_order: number | null;
+};
+
+type EliminatorEliminationRow = {
+  eliminator_id: string;
+  eliminated_entrant_id: string;
+  eliminated_by_entrant_id: string | null;
+  elimination_type: "pinfall" | "submission";
+  elimination_order: number;
+};
+
 type ProfileRow = {
   id: string;
   display_name: string | null;
@@ -156,6 +180,12 @@ export default function ScoreboardPage() {
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
+  const [eliminatorEntries, setEliminatorEntries] = useState<
+    EliminatorEntryRow[]
+  >([]);
+  const [eliminatorEliminations, setEliminatorEliminations] = useState<
+    EliminatorEliminationRow[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [rankDelta, setRankDelta] = useState<Record<string, number | null>>({});
@@ -482,6 +512,7 @@ export default function ScoreboardPage() {
         entry_30: null,
         iron_person: null,
         most_eliminations: null,
+        eliminators: pick.payload?.eliminators ?? {},
         match_picks: pick.payload?.match_picks ?? {},
         match_finish_picks: pick.payload?.match_finish_picks ?? {},
         match_length_picks: pick.payload?.match_length_picks ?? {},
@@ -493,7 +524,10 @@ export default function ScoreboardPage() {
         scoringRules,
         matches,
         matchEntrants,
-        matchSides
+        matchSides,
+        undefined,
+        eliminatorEntries,
+        eliminatorEliminations
       );
       points += matchScore.points;
       breakdown.matches = matchScore.breakdown.matches ?? 0;
@@ -695,16 +729,18 @@ export default function ScoreboardPage() {
 
     loadRumbleEntriesRef.current();
     loadScoresRef.current();
+    loadEliminators();
     setLastUpdateAt(Date.now());
 
     const interval = setInterval(() => {
       setLastUpdateAt(Date.now());
       loadScoresRef.current();
       loadRumbleEntriesRef.current();
+      loadEliminators();
     }, SCOREBOARD_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [selectedShowId, showEvents]);
+  }, [selectedShowId, showEvents, loadEliminators]);
 
   useEffect(() => {
     const loadMatches = async () => {
@@ -754,6 +790,57 @@ export default function ScoreboardPage() {
 
     loadMatches();
   }, [selectedShowId]);
+
+  const loadEliminators = useCallback(async () => {
+    if (!selectedShowId) {
+      setEliminatorEntries([]);
+      setEliminatorEliminations([]);
+      return;
+    }
+    const { data: eliminatorRows, error } = await supabase
+      .from("eliminators")
+      .select("id")
+      .eq("show_id", selectedShowId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    const eliminatorIds = (eliminatorRows ?? []).map((row) => row.id);
+    if (eliminatorIds.length === 0) {
+      setEliminatorEntries([]);
+      setEliminatorEliminations([]);
+      return;
+    }
+    const [
+      { data: entryRows, error: entryError },
+      { data: elimRows, error: elimError },
+    ] = await Promise.all([
+      supabase
+        .from("eliminator_entries")
+        .select("eliminator_id, entrant_id, entry_order")
+        .in("eliminator_id", eliminatorIds),
+      supabase
+        .from("eliminator_eliminations")
+        .select(
+          "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
+        )
+        .in("eliminator_id", eliminatorIds),
+    ]);
+    if (entryError) {
+      setMessage(entryError.message);
+      return;
+    }
+    if (elimError) {
+      setMessage(elimError.message);
+      return;
+    }
+    setEliminatorEntries((entryRows ?? []) as EliminatorEntryRow[]);
+    setEliminatorEliminations((elimRows ?? []) as EliminatorEliminationRow[]);
+  }, [selectedShowId]);
+
+  useEffect(() => {
+    loadEliminators();
+  }, [loadEliminators]);
 
   return (
     <div

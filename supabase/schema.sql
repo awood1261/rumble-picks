@@ -76,6 +76,41 @@ create table if not exists public.events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.eliminators (
+  id uuid primary key default gen_random_uuid(),
+  show_id uuid references public.shows(id) on delete set null,
+  name text not null,
+  status text not null default 'draft',
+  roster_year integer,
+  roster_gender text,
+  entrant_limit integer not null default 6,
+  created_at timestamptz not null default now(),
+  constraint eliminators_entrant_limit_chk check (entrant_limit between 6 and 10)
+);
+
+create table if not exists public.eliminator_entries (
+  id uuid primary key default gen_random_uuid(),
+  eliminator_id uuid not null references public.eliminators(id) on delete cascade,
+  entrant_id uuid not null references public.entrants(id) on delete cascade,
+  entry_order integer,
+  created_at timestamptz not null default now(),
+  unique (eliminator_id, entrant_id),
+  unique (eliminator_id, entry_order)
+);
+
+create table if not exists public.eliminator_eliminations (
+  id uuid primary key default gen_random_uuid(),
+  eliminator_id uuid not null references public.eliminators(id) on delete cascade,
+  eliminated_entrant_id uuid not null references public.entrants(id) on delete cascade,
+  eliminated_by_entrant_id uuid references public.entrants(id) on delete set null,
+  elimination_type text not null,
+  elimination_order integer not null,
+  created_at timestamptz not null default now(),
+  constraint eliminator_eliminations_type_chk check (elimination_type in ('pinfall','submission')),
+  unique (eliminator_id, eliminated_entrant_id),
+  unique (eliminator_id, elimination_order)
+);
+
 create table if not exists public.entrants (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -231,6 +266,9 @@ alter table public.profiles enable row level security;
 alter table public.promotions enable row level security;
 alter table public.shows enable row level security;
 alter table public.events enable row level security;
+alter table public.eliminators enable row level security;
+alter table public.eliminator_entries enable row level security;
+alter table public.eliminator_eliminations enable row level security;
 alter table public.entrants enable row level security;
 alter table public.matches enable row level security;
 alter table public.match_entrants enable row level security;
@@ -289,6 +327,39 @@ create policy "Events are viewable by everyone"
 
 create policy "Events are modifiable by admins"
   on public.events
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+create policy "Eliminators are viewable by everyone"
+  on public.eliminators
+  for select
+  using (true);
+
+create policy "Eliminators are modifiable by admins"
+  on public.eliminators
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+create policy "Eliminator entries are viewable by everyone"
+  on public.eliminator_entries
+  for select
+  using (true);
+
+create policy "Eliminator entries are modifiable by admins"
+  on public.eliminator_entries
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+create policy "Eliminator eliminations are viewable by everyone"
+  on public.eliminator_eliminations
+  for select
+  using (true);
+
+create policy "Eliminator eliminations are modifiable by admins"
+  on public.eliminator_eliminations
   for all
   using (public.is_admin(auth.uid()))
   with check (public.is_admin(auth.uid()));

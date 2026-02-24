@@ -9,6 +9,15 @@ export type PicksPayload = {
   entry_30?: string;
   iron_person?: string;
   most_eliminations?: string;
+  eliminators?: Record<
+    string,
+    {
+      entry_order?: Record<string, number | null>;
+      elimination_order?: Record<string, number | null>;
+      elimination_type?: Record<string, "pinfall" | "submission" | null>;
+      most_eliminations?: string | null;
+    }
+  >;
   match_picks?: Record<string, string | null>;
   match_finish_picks?: Record<
     string,
@@ -49,6 +58,20 @@ export type MatchSideRow = {
   label: string | null;
 };
 
+export type EliminatorEntryRow = {
+  eliminator_id: string;
+  entrant_id: string;
+  entry_order: number | null;
+};
+
+export type EliminatorEliminationRow = {
+  eliminator_id: string;
+  eliminated_entrant_id: string;
+  eliminated_by_entrant_id: string | null;
+  elimination_type: "pinfall" | "submission";
+  elimination_order: number;
+};
+
 const getEliminationKey = (entry: RumbleEntryRow) =>
   entry.eliminated_at ? new Date(entry.eliminated_at).getTime() : Number.MAX_SAFE_INTEGER;
 
@@ -59,7 +82,9 @@ export const calculateScore = (
   matches: MatchRow[] = [],
   matchEntrants: MatchEntrantRow[] = [],
   matchSides: MatchSideRow[] = [],
-  options?: { ironPersonId?: string | null }
+  options?: { ironPersonId?: string | null },
+  eliminatorEntries: EliminatorEntryRow[] = [],
+  eliminatorEliminations: EliminatorEliminationRow[] = []
 ) => {
   const breakdown: Record<string, number> = {};
   let points = 0;
@@ -223,6 +248,90 @@ export const calculateScore = (
   points += matchFinishPoints;
   points += matchLengthPoints;
   points += matchInterferencePoints;
+
+  const eliminatorEntriesById = eliminatorEntries.reduce((map, entry) => {
+    if (!map[entry.eliminator_id]) {
+      map[entry.eliminator_id] = [];
+    }
+    map[entry.eliminator_id].push(entry);
+    return map;
+  }, {} as Record<string, EliminatorEntryRow[]>);
+  const eliminatorElimsById = eliminatorEliminations.reduce((map, entry) => {
+    if (!map[entry.eliminator_id]) {
+      map[entry.eliminator_id] = [];
+    }
+    map[entry.eliminator_id].push(entry);
+    return map;
+  }, {} as Record<string, EliminatorEliminationRow[]>);
+  const eliminatorPicks = payload.eliminators ?? {};
+  const eliminatorIds = new Set([
+    ...Object.keys(eliminatorPicks),
+    ...Object.keys(eliminatorEntriesById),
+  ]);
+
+  let eliminatorEntryPoints = 0;
+  let eliminatorElimOrderPoints = 0;
+  let eliminatorElimTypePoints = 0;
+  let eliminatorMostElimsPoints = 0;
+
+  eliminatorIds.forEach((eliminatorId) => {
+    const entries = eliminatorEntriesById[eliminatorId] ?? [];
+    if (entries.length === 0) return;
+    const entryReady = entries.every((entry) => entry.entry_order);
+    const pick = eliminatorPicks[eliminatorId];
+    if (pick && entryReady) {
+      const entryOrder = pick.entry_order ?? {};
+      entries.forEach((entry) => {
+        if (
+          entry.entry_order &&
+          entryOrder[entry.entrant_id] === entry.entry_order
+        ) {
+          eliminatorEntryPoints += rules.eliminator_entry_order;
+        }
+      });
+    }
+    const eliminations = eliminatorElimsById[eliminatorId] ?? [];
+    const eliminationReady =
+      eliminations.length === Math.max(entries.length - 1, 0);
+    if (pick && eliminationReady) {
+      const elimOrder = pick.elimination_order ?? {};
+      const elimType = pick.elimination_type ?? {};
+      eliminations.forEach((elim) => {
+        if (
+          elimOrder[elim.eliminated_entrant_id] === elim.elimination_order
+        ) {
+          eliminatorElimOrderPoints += rules.eliminator_elimination_order;
+        }
+        if (elimType[elim.eliminated_entrant_id] === elim.elimination_type) {
+          eliminatorElimTypePoints += rules.eliminator_elimination_type;
+        }
+      });
+      if (pick.most_eliminations) {
+        const eliminationsByEntrant = eliminations.reduce((map, row) => {
+          if (!row.eliminated_by_entrant_id) return map;
+          map[row.eliminated_by_entrant_id] =
+            (map[row.eliminated_by_entrant_id] ?? 0) + 1;
+          return map;
+        }, {} as Record<string, number>);
+        const maxElims = Math.max(0, ...Object.values(eliminationsByEntrant));
+        const topElims = Object.keys(eliminationsByEntrant).filter(
+          (id) => eliminationsByEntrant[id] === maxElims
+        );
+        if (topElims.includes(pick.most_eliminations)) {
+          eliminatorMostElimsPoints += rules.eliminator_most_eliminations;
+        }
+      }
+    }
+  });
+
+  breakdown.eliminator_entry_order = eliminatorEntryPoints;
+  breakdown.eliminator_elimination_order = eliminatorElimOrderPoints;
+  breakdown.eliminator_elimination_type = eliminatorElimTypePoints;
+  breakdown.eliminator_most_eliminations = eliminatorMostElimsPoints;
+  points += eliminatorEntryPoints;
+  points += eliminatorElimOrderPoints;
+  points += eliminatorElimTypePoints;
+  points += eliminatorMostElimsPoints;
 
   return { points, breakdown };
 };

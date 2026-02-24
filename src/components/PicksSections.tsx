@@ -10,6 +10,8 @@ import type {
   EntrantRow,
   EventActuals,
   EventRow,
+  EliminatorEntryRow,
+  EliminatorRow,
   LockInfo,
   MatchEntrantRow,
   MatchRow,
@@ -1044,6 +1046,208 @@ type MatchPicksSectionProps = {
   saving: boolean;
 };
 
+type EliminatorPicksSectionProps = {
+  eliminator: EliminatorRow;
+  entries: EliminatorEntryRow[];
+  entrantByIdAll: Map<string, EntrantRow>;
+  payload: PicksPayload;
+  setPayload: Dispatch<SetStateAction<PicksPayload>>;
+  isLocked: boolean;
+};
+
+export const EliminatorPicksSection = ({
+  eliminator,
+  entries,
+  entrantByIdAll,
+  payload,
+  setPayload,
+  isLocked,
+}: EliminatorPicksSectionProps) => {
+  const pick = payload.eliminators?.[eliminator.id] ?? {
+    entry_order: {},
+    elimination_order: {},
+    elimination_type: {},
+    most_eliminations: null,
+  };
+  const entrants = entries
+    .map((entry) => entrantByIdAll.get(entry.entrant_id))
+    .filter(Boolean) as EntrantRow[];
+  const entryOptions = Array.from(
+    { length: eliminator.entrant_limit },
+    (_, index) => index + 1
+  );
+  const eliminationOptions = Array.from(
+    { length: Math.max(eliminator.entrant_limit - 1, 1) },
+    (_, index) => index + 1
+  );
+
+  return (
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+          Eliminator
+        </p>
+        <h3 className="text-lg font-semibold text-zinc-100">
+          {eliminator.name}
+        </h3>
+      </div>
+      <div className="mt-4 space-y-3">
+        {entries.map((entry) => {
+          const entrant = entrantByIdAll.get(entry.entrant_id);
+          return (
+            <div
+              key={entry.entrant_id}
+              className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3"
+            >
+              <p className="text-sm font-semibold text-zinc-100">
+                {entrant?.name ?? "Entrant"}
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                  Entry order
+                  <select
+                    className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
+                    value={pick.entry_order?.[entry.entrant_id] ?? ""}
+                    onChange={(event) =>
+                      setPayload((prev) => {
+                        const current = prev.eliminators?.[eliminator.id] ?? pick;
+                        return {
+                          ...prev,
+                          eliminators: {
+                            ...(prev.eliminators ?? {}),
+                            [eliminator.id]: {
+                              ...current,
+                              entry_order: {
+                                ...(current.entry_order ?? {}),
+                                [entry.entrant_id]:
+                                  event.target.value === ""
+                                    ? null
+                                    : Number(event.target.value),
+                              },
+                            },
+                          },
+                        };
+                      })
+                    }
+                    disabled={isLocked}
+                  >
+                    <option value="">Select</option>
+                    {entryOptions.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                  Elimination order
+                  <select
+                    className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
+                    value={pick.elimination_order?.[entry.entrant_id] ?? ""}
+                    onChange={(event) =>
+                      setPayload((prev) => {
+                        const current = prev.eliminators?.[eliminator.id] ?? pick;
+                        return {
+                          ...prev,
+                          eliminators: {
+                            ...(prev.eliminators ?? {}),
+                            [eliminator.id]: {
+                              ...current,
+                              elimination_order: {
+                                ...(current.elimination_order ?? {}),
+                                [entry.entrant_id]:
+                                  event.target.value === ""
+                                    ? null
+                                    : Number(event.target.value),
+                              },
+                            },
+                          },
+                        };
+                      })
+                    }
+                    disabled={isLocked}
+                  >
+                    <option value="">Select</option>
+                    {eliminationOptions.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                  Elimination type
+                  <select
+                    className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
+                    value={pick.elimination_type?.[entry.entrant_id] ?? ""}
+                    onChange={(event) =>
+                      setPayload((prev) => {
+                        const current = prev.eliminators?.[eliminator.id] ?? pick;
+                        return {
+                          ...prev,
+                          eliminators: {
+                            ...(prev.eliminators ?? {}),
+                            [eliminator.id]: {
+                              ...current,
+                              elimination_type: {
+                                ...(current.elimination_type ?? {}),
+                                [entry.entrant_id]:
+                                  (event.target.value as "pinfall" | "submission") ||
+                                  null,
+                              },
+                            },
+                          },
+                        };
+                      })
+                    }
+                    disabled={isLocked}
+                  >
+                    <option value="">Select</option>
+                    <option value="pinfall">Pinfall</option>
+                    <option value="submission">Submission</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-4">
+        <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+          Most eliminations
+          <select
+            className="mt-2 h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+            value={pick.most_eliminations ?? ""}
+            onChange={(event) =>
+              setPayload((prev) => {
+                const current = prev.eliminators?.[eliminator.id] ?? pick;
+                return {
+                  ...prev,
+                  eliminators: {
+                    ...(prev.eliminators ?? {}),
+                    [eliminator.id]: {
+                      ...current,
+                      most_eliminations: event.target.value || null,
+                    },
+                  },
+                };
+              })
+            }
+            disabled={isLocked}
+          >
+            <option value="">Select</option>
+            {entrants.map((entrant) => (
+              <option key={entrant.id} value={entrant.id}>
+                {entrant.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </section>
+  );
+};
+
 type SegmentedOption = {
   value: string;
   label: string;
@@ -1282,7 +1486,7 @@ export const MatchPicksSection = ({
               }`}
             >
               {isChampionship && match.championship_image_url ? (
-                <div className="pointer-events-none absolute left-1/2 top-0 z-0 w-xs -translate-x-1/2 -translate-y-1/2 sm:left-0 sm:translate-x-0">
+                <div className="pointer-events-none absolute left-1/2 top-0 z-0 w-xs -translate-x-1/2 -translate-y-1/2">
                   <img
                     src={match.championship_image_url}
                     alt={`${match.championship_name ?? "Championship"} belt`}
@@ -1352,22 +1556,6 @@ export const MatchPicksSection = ({
                               : "rounded-2xl border border-zinc-800 bg-black/40"
                           }`}
                         >
-                          {isPrestige && (
-                            <>
-                              <span className="pointer-events-none absolute left-6 top-4 z-20 text-amber-200/70">
-                                ❧
-                              </span>
-                              <span className="pointer-events-none absolute right-6 top-4 z-20 text-amber-200/70">
-                                ❧
-                              </span>
-                              <span className="pointer-events-none absolute bottom-4 left-6 z-20 text-amber-200/60">
-                                ❦
-                              </span>
-                              <span className="pointer-events-none absolute bottom-4 right-6 z-20 text-amber-200/60">
-                                ❦
-                              </span>
-                            </>
-                          )}
                           <div
                             className={`grid h-full w-full ${
                               matchupSides.length === 3

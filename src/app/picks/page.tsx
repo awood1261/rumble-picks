@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { scoringRules } from "../../lib/scoringRules";
 import {
   CustomEntrantModal,
+  EliminatorPicksSection,
   KeyPicksEditor,
   LockStatusBanner,
   MatchPicksSection,
@@ -27,6 +28,9 @@ import type {
   MatchEntrantRow,
   MatchRow,
   MatchSideRow,
+  EliminatorEliminationRow,
+  EliminatorEntryRow,
+  EliminatorRow,
   PicksPayload,
   PromotionRow,
   RankInfo,
@@ -51,10 +55,18 @@ const emptyRumblePick: RumblePick = {
 
 const emptyPayload: PicksPayload = {
   rumbles: {},
+  eliminators: {},
   match_picks: {},
   match_finish_picks: {},
   match_length_picks: {},
   match_interference_picks: {},
+};
+
+const emptyEliminatorPick = {
+  entry_order: {},
+  elimination_order: {},
+  elimination_type: {},
+  most_eliminations: null,
 };
 
 const emptyActuals: EventActuals = {
@@ -90,9 +102,16 @@ export default function PicksPage() {
   const [shows, setShows] = useState<ShowRow[]>([]);
   const [promotions, setPromotions] = useState<PromotionRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [eliminators, setEliminators] = useState<EliminatorRow[]>([]);
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [rumbleEntries, setRumbleEntries] = useState<RumbleEntryRow[]>([]);
+  const [eliminatorEntries, setEliminatorEntries] = useState<
+    EliminatorEntryRow[]
+  >([]);
+  const [eliminatorEliminations, setEliminatorEliminations] = useState<
+    EliminatorEliminationRow[]
+  >([]);
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
@@ -711,6 +730,54 @@ export default function PicksPage() {
     }
   }, [selectedShowId]);
 
+  const loadEliminators = useCallback(async () => {
+    if (!selectedShowId) return;
+    const { data: eliminatorRows, error: eliminatorError } = await supabase
+      .from("eliminators")
+      .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id")
+      .eq("show_id", selectedShowId)
+      .order("created_at", { ascending: true });
+    if (eliminatorError) {
+      setMessage(eliminatorError.message);
+      return;
+    }
+    const eliminatorList = (eliminatorRows ?? []) as EliminatorRow[];
+    setEliminators(eliminatorList);
+
+    if (eliminatorList.length > 0) {
+      const eliminatorIds = eliminatorList.map((row) => row.id);
+      const [
+        { data: entryRows, error: entryError },
+        { data: elimRows, error: elimError },
+      ] = await Promise.all([
+        supabase
+          .from("eliminator_entries")
+          .select("eliminator_id, entrant_id, entry_order")
+          .in("eliminator_id", eliminatorIds),
+        supabase
+          .from("eliminator_eliminations")
+          .select(
+            "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order",
+          )
+          .in("eliminator_id", eliminatorIds),
+      ]);
+      if (entryError) {
+        setMessage(entryError.message);
+        return;
+      }
+      if (elimError) {
+        setMessage(elimError.message);
+        return;
+      }
+      setEliminatorEntries((entryRows ?? []) as EliminatorEntryRow[]);
+      setEliminatorEliminations((elimRows ?? []) as EliminatorEliminationRow[]);
+    } else {
+      setEliminatorEntries([]);
+      setEliminatorEliminations([]);
+    }
+    return eliminatorList;
+  }, [selectedShowId]);
+
   const loadMatchPickStats = useCallback(async () => {
     if (!selectedShowId) return;
     const { data, error } = await supabase
@@ -773,6 +840,7 @@ export default function PicksPage() {
 
       setEntrants(entrantRows ?? []);
       await loadRumbleEntries();
+      const eliminatorList = (await loadEliminators()) ?? [];
       await loadMatches();
       await loadMatchPickStats();
 
@@ -788,10 +856,22 @@ export default function PicksPage() {
           ...base,
         };
       });
+      const nextEliminators: Record<string, typeof emptyEliminatorPick> = {};
+      const existingEliminators = savedPayload?.eliminators ?? {};
+      eliminatorList.forEach((eliminator) => {
+        const base = {
+          ...emptyEliminatorPick,
+          ...(existingEliminators[eliminator.id] ?? {}),
+        };
+        nextEliminators[eliminator.id] = {
+          ...base,
+        };
+      });
 
       if (savedPayload) {
         setPayload({
           rumbles: nextRumbles,
+          eliminators: nextEliminators,
           match_picks:
             (savedPayload.match_picks as Record<string, string | null>) ?? {},
           match_finish_picks:
@@ -818,6 +898,7 @@ export default function PicksPage() {
       } else {
         setPayload({
           rumbles: nextRumbles,
+          eliminators: nextEliminators,
           match_picks: {},
           match_finish_picks: {},
           match_length_picks: {},
@@ -832,6 +913,7 @@ export default function PicksPage() {
     userId,
     loadMatches,
     loadRumbleEntries,
+    loadEliminators,
     loadMatchPickStats,
     showEvents,
   ]);
@@ -864,6 +946,7 @@ export default function PicksPage() {
     const interval = setInterval(() => {
       loadRank();
       loadRumbleEntries();
+      loadEliminators();
       loadMatches();
       loadMatchPickStats();
     }, SCORING_POLL_INTERVAL_MS);
@@ -872,6 +955,7 @@ export default function PicksPage() {
   }, [
     loadRank,
     loadRumbleEntries,
+    loadEliminators,
     loadMatches,
     loadMatchPickStats,
     selectedShowId,
@@ -881,6 +965,7 @@ export default function PicksPage() {
   useEffect(() => {
     setPayload((prev) => {
       const matchIdSet = new Set(matches.map((match) => match.id));
+      const eliminatorIdSet = new Set(eliminators.map((item) => item.id));
       const matchPicks = Object.fromEntries(
         Object.entries(prev.match_picks ?? {}).filter(([matchId]) =>
           matchIdSet.has(matchId),
@@ -899,6 +984,11 @@ export default function PicksPage() {
       const matchInterferencePicks = Object.fromEntries(
         Object.entries(prev.match_interference_picks ?? {}).filter(
           ([matchId]) => matchIdSet.has(matchId),
+        ),
+      );
+      const eliminatorPicks = Object.fromEntries(
+        Object.entries(prev.eliminators ?? {}).filter(([eliminatorId]) =>
+          eliminatorIdSet.has(eliminatorId),
         ),
       );
 
@@ -946,13 +1036,14 @@ export default function PicksPage() {
       return {
         ...prev,
         rumbles: nextRumbles,
+        eliminators: eliminatorPicks,
         match_picks: matchPicks,
         match_finish_picks: matchFinishPicks,
         match_length_picks: matchLengthPicks,
         match_interference_picks: matchInterferencePicks,
       };
     });
-  }, [matches, showEvents, confirmedEntrantsByEvent]);
+  }, [matches, showEvents, confirmedEntrantsByEvent, eliminators]);
 
   useEffect(() => {
     if (editSection !== "key_picks") return;
@@ -1136,9 +1227,13 @@ export default function PicksPage() {
   const stepItems = useMemo(
     () => [
       ...showEvents.map((event) => ({ type: "event" as const, id: event.id })),
+      ...eliminators.map((eliminator) => ({
+        type: "eliminator" as const,
+        id: eliminator.id,
+      })),
       ...matches.map((match) => ({ type: "match" as const, id: match.id })),
     ],
-    [matches, showEvents],
+    [matches, showEvents, eliminators],
   );
   const stepIndexById = useMemo(() => {
     const map = new Map<string, number>();
@@ -1313,6 +1408,65 @@ export default function PicksPage() {
                   </div>
                 );
               })}
+              {eliminators.map((eliminator) => {
+                const pick =
+                  payload.eliminators?.[eliminator.id] ?? emptyEliminatorPick;
+                const entriesForEliminator = eliminatorEntries.filter(
+                  (entry) => entry.eliminator_id === eliminator.id,
+                );
+                const entryOrder = entriesForEliminator
+                  .map((entry) => {
+                    const entrant = entrantByIdAll.get(entry.entrant_id);
+                    const order = pick.entry_order?.[entry.entrant_id];
+                    return order ? `${order}. ${entrant?.name ?? "Entrant"}` : null;
+                  })
+                  .filter(Boolean)
+                  .join(", ");
+                const eliminationOrder = entriesForEliminator
+                  .map((entry) => {
+                    const entrant = entrantByIdAll.get(entry.entrant_id);
+                    const order = pick.elimination_order?.[entry.entrant_id];
+                    return order ? `${order}. ${entrant?.name ?? "Entrant"}` : null;
+                  })
+                  .filter(Boolean)
+                  .join(", ");
+                const mostElims = pick.most_eliminations
+                  ? entrantByIdAll.get(pick.most_eliminations)?.name
+                  : null;
+                return (
+                  <div
+                    key={eliminator.id}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                        {eliminator.name}
+                      </p>
+                      <button
+                        type="button"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
+                        onClick={() =>
+                          setStepIndex(
+                            stepIndexById.get(`eliminator:${eliminator.id}`) ?? 0,
+                          )
+                        }
+                        aria-label={`Edit ${eliminator.name}`}
+                      >
+                        ✎
+                      </button>
+                    </div>
+                    <p className="mt-2 text-sm text-zinc-300">
+                      Entry order: {entryOrder || "Not set"}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-300">
+                      Elimination order: {eliminationOrder || "Not set"}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-300">
+                      Most eliminations: {mostElims || "Not set"}
+                    </p>
+                  </div>
+                );
+              })}
               {matches.map((match) => {
                 const winnerSideId = payload.match_picks[match.id] ?? null;
                 const sideEntrants = matchEntrantsByMatch[match.id] ?? [];
@@ -1480,6 +1634,24 @@ export default function PicksPage() {
                     );
                   })}
               </>
+            ) : currentStep?.type === "eliminator" ? (
+              <div className="mt-3">
+                {eliminators
+                  .filter((eliminator) => eliminator.id === currentStep.id)
+                  .map((eliminator) => (
+                    <EliminatorPicksSection
+                      key={eliminator.id}
+                      eliminator={eliminator}
+                      entries={eliminatorEntries.filter(
+                        (entry) => entry.eliminator_id === eliminator.id,
+                      )}
+                      entrantByIdAll={entrantByIdAll}
+                      payload={payload}
+                      setPayload={setPayload}
+                      isLocked={isLocked}
+                    />
+                  ))}
+              </div>
             ) : (
               <>
                 {matches

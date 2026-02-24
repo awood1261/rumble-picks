@@ -17,6 +17,16 @@ type EventRow = {
   iron_person_entrant_id?: string | null;
 };
 
+type EliminatorRow = {
+  id: string;
+  name: string;
+  status: string;
+  roster_year: number | null;
+  roster_gender: string | null;
+  entrant_limit: number;
+  show_id: string | null;
+};
+
 type ShowRow = {
   id: string;
   name: string;
@@ -102,6 +112,22 @@ type MatchEntrantRow = {
   side_id: string | null;
 };
 
+type EliminatorEntryRow = {
+  id: string;
+  eliminator_id: string;
+  entrant_id: string;
+  entry_order: number | null;
+};
+
+type EliminatorEliminationRow = {
+  id: string;
+  eliminator_id: string;
+  eliminated_entrant_id: string;
+  eliminated_by_entrant_id: string | null;
+  elimination_type: "pinfall" | "submission";
+  elimination_order: number;
+};
+
 type PickRow = {
   id: string;
   user_id: string;
@@ -115,6 +141,7 @@ export default function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [eliminators, setEliminators] = useState<EliminatorRow[]>([]);
   const [shows, setShows] = useState<ShowRow[]>([]);
   const [promotions, setPromotions] = useState<PromotionRow[]>([]);
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
@@ -124,6 +151,12 @@ export default function AdminPage() {
   const [showMatches, setShowMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
+  const [eliminatorEntries, setEliminatorEntries] = useState<
+    EliminatorEntryRow[]
+  >([]);
+  const [eliminatorEliminations, setEliminatorEliminations] = useState<
+    EliminatorEliminationRow[]
+  >([]);
   const [eventLogs, setEventLogs] = useState<EventActionLogRow[]>([]);
   const [eventLogOpen, setEventLogOpen] = useState(false);
   const [eventLogBusy, setEventLogBusy] = useState(false);
@@ -133,6 +166,19 @@ export default function AdminPage() {
   const [eventRosterYear, setEventRosterYear] = useState("");
   const [eventShowId, setEventShowId] = useState("");
   const [eventIronPersonId, setEventIronPersonId] = useState("");
+  const [eliminatorName, setEliminatorName] = useState("");
+  const [eliminatorRosterYear, setEliminatorRosterYear] = useState("");
+  const [eliminatorRosterGender, setEliminatorRosterGender] = useState("men");
+  const [eliminatorEntrantLimit, setEliminatorEntrantLimit] = useState("6");
+  const [eliminatorCreateOpen, setEliminatorCreateOpen] = useState(false);
+  const [eliminatorEntrantId, setEliminatorEntrantId] = useState("");
+  const [eliminatorEntryOrder, setEliminatorEntryOrder] = useState("");
+  const [eliminatorEliminatedId, setEliminatorEliminatedId] = useState("");
+  const [eliminatorEliminatedById, setEliminatorEliminatedById] = useState("");
+  const [eliminatorEliminationType, setEliminatorEliminationType] =
+    useState<"pinfall" | "submission">("pinfall");
+  const [eliminatorEliminationOrder, setEliminatorEliminationOrder] =
+    useState("");
   const [showName, setShowName] = useState("");
   const [showPromotionId, setShowPromotionId] = useState("");
   const [showImageUrl, setShowImageUrl] = useState("");
@@ -152,7 +198,9 @@ export default function AdminPage() {
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [selectedShowId, setSelectedShowId] = useState<string>("");
-  const [adminTab, setAdminTab] = useState<"events" | "matches">("events");
+  const [adminTab, setAdminTab] = useState<
+    "events" | "matches" | "eliminators"
+  >("events");
   const [focusedEventId, setFocusedEventId] = useState<string>("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
@@ -586,10 +634,13 @@ export default function AdminPage() {
         { data: showRows },
         { data: promotionRows },
         { data: eventRows },
+        { data: eliminatorRows },
         { data: entrantRows },
         { data: matchRows },
         { data: matchSideRows },
         { data: matchEntrantRows },
+        { data: eliminatorEntryRows },
+        { data: eliminatorEliminationRows },
       ] = await Promise.all([
         supabase
           .from("shows")
@@ -602,6 +653,10 @@ export default function AdminPage() {
         supabase
           .from("events")
           .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("eliminators")
+          .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id")
           .order("created_at", { ascending: false }),
         supabase
           .from("entrants")
@@ -627,10 +682,19 @@ export default function AdminPage() {
         supabase
           .from("match_entrants")
           .select("id, match_id, entrant_id, side_id"),
+        supabase
+          .from("eliminator_entries")
+          .select("id, eliminator_id, entrant_id, entry_order"),
+        supabase
+          .from("eliminator_eliminations")
+          .select(
+            "id, eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
+          ),
       ]);
       setShows(showRows ?? []);
       setPromotions(promotionRows ?? []);
       setEvents(eventRows ?? []);
+      setEliminators((eliminatorRows ?? []) as EliminatorRow[]);
       setEntrants(entrantRows ?? []);
       const matchListAll = (matchRows ?? []) as MatchRow[];
       const matchIdSet = new Set(matchListAll.map((match) => match.id));
@@ -644,6 +708,10 @@ export default function AdminPage() {
       setMatches(matchListAll);
       setMatchSides(matchSideList);
       setMatchEntrants(matchEntrantList);
+      setEliminatorEntries((eliminatorEntryRows ?? []) as EliminatorEntryRow[]);
+      setEliminatorEliminations(
+        (eliminatorEliminationRows ?? []) as EliminatorEliminationRow[]
+      );
       setMatchNameEdits((prev) => {
         const next = { ...prev };
         matchListAll.forEach((match) => {
@@ -758,11 +826,14 @@ export default function AdminPage() {
           { data: showRows },
           { data: promotionRows },
           { data: eventRows },
+          { data: eliminatorRows },
           { data: entrantRows },
           { data: entryRows },
         { data: matchRows },
         { data: matchSideRows },
         { data: matchEntrantRows },
+        { data: eliminatorEntryRows },
+        { data: eliminatorEliminationRows },
       ] = await Promise.all([
           supabase
             .from("shows")
@@ -775,6 +846,10 @@ export default function AdminPage() {
           supabase
             .from("events")
             .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("eliminators")
+            .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id")
             .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
@@ -807,10 +882,19 @@ export default function AdminPage() {
           supabase
             .from("match_entrants")
             .select("id, match_id, entrant_id, side_id"),
+          supabase
+            .from("eliminator_entries")
+            .select("id, eliminator_id, entrant_id, entry_order"),
+          supabase
+            .from("eliminator_eliminations")
+            .select(
+              "id, eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
+            ),
         ]);
       setShows(showRows ?? []);
       setPromotions(promotionRows ?? []);
       setEvents(eventRows ?? []);
+      setEliminators((eliminatorRows ?? []) as EliminatorRow[]);
       if (!selectedShowId && showRows && showRows.length > 0) {
         setSelectedShowId(showRows[0].id);
       }
@@ -829,6 +913,10 @@ export default function AdminPage() {
       setMatches(matchListAll);
       setMatchSides(matchSideList);
       setMatchEntrants(matchEntrantList);
+      setEliminatorEntries((eliminatorEntryRows ?? []) as EliminatorEntryRow[]);
+      setEliminatorEliminations(
+        (eliminatorEliminationRows ?? []) as EliminatorEliminationRow[]
+      );
       setMatchNameEdits((prev) => {
         const next = { ...prev };
         matchListAll.forEach((match) => {
@@ -1407,6 +1495,127 @@ export default function AdminPage() {
     refreshData();
   };
 
+  const handleCreateEliminator = async () => {
+    setMessage(null);
+    if (!selectedShowId) {
+      setMessage("Select a show before adding eliminators.");
+      return;
+    }
+    if (!eliminatorName.trim()) {
+      setMessage("Enter an eliminator name.");
+      return;
+    }
+    const limit = Number(eliminatorEntrantLimit);
+    if (Number.isNaN(limit) || limit < 6 || limit > 10) {
+      setMessage("Eliminator size must be between 6 and 10.");
+      return;
+    }
+    const { error } = await supabase.from("eliminators").insert({
+      show_id: selectedShowId,
+      name: eliminatorName.trim(),
+      roster_year: eliminatorRosterYear ? Number(eliminatorRosterYear) : null,
+      roster_gender: eliminatorRosterGender || null,
+      entrant_limit: limit,
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setEliminatorName("");
+    setEliminatorRosterYear("");
+    setEliminatorRosterGender("men");
+    setEliminatorEntrantLimit("6");
+    setEliminatorCreateOpen(false);
+    refreshData();
+  };
+
+  const handleAddEliminatorEntry = async (eliminatorId: string) => {
+    if (!eliminatorId || !eliminatorEntrantId) return;
+    setMessage(null);
+    const order =
+      eliminatorEntryOrder.trim() === ""
+        ? null
+        : Number(eliminatorEntryOrder);
+    if (order !== null && Number.isNaN(order)) {
+      setMessage("Entry order must be a number.");
+      return;
+    }
+    const { error } = await supabase.from("eliminator_entries").insert({
+      eliminator_id: eliminatorId,
+      entrant_id: eliminatorEntrantId,
+      entry_order: order,
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setEliminatorEntrantId("");
+    setEliminatorEntryOrder("");
+    refreshData();
+  };
+
+  const handleRemoveEliminatorEntry = async (
+    eliminatorId: string,
+    entrantId: string
+  ) => {
+    const shouldRemove = window.confirm(
+      "Remove this entrant from the eliminator?"
+    );
+    if (!shouldRemove) return;
+    setMessage(null);
+    const { error } = await supabase
+      .from("eliminator_entries")
+      .delete()
+      .eq("eliminator_id", eliminatorId)
+      .eq("entrant_id", entrantId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    refreshData();
+  };
+
+  const handleAddEliminatorElimination = async (eliminatorId: string) => {
+    if (!eliminatorId || !eliminatorEliminatedId) return;
+    setMessage(null);
+    const order = Number(eliminatorEliminationOrder);
+    if (Number.isNaN(order) || order <= 0) {
+      setMessage("Elimination order must be a number.");
+      return;
+    }
+    const { error } = await supabase.from("eliminator_eliminations").insert({
+      eliminator_id: eliminatorId,
+      eliminated_entrant_id: eliminatorEliminatedId,
+      eliminated_by_entrant_id: eliminatorEliminatedById || null,
+      elimination_type: eliminatorEliminationType,
+      elimination_order: order,
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setEliminatorEliminatedId("");
+    setEliminatorEliminatedById("");
+    setEliminatorEliminationType("pinfall");
+    setEliminatorEliminationOrder("");
+    refreshData();
+  };
+
+  const handleRemoveEliminatorElimination = async (id: string) => {
+    const shouldRemove = window.confirm("Remove this elimination entry?");
+    if (!shouldRemove) return;
+    setMessage(null);
+    const { error } = await supabase
+      .from("eliminator_eliminations")
+      .delete()
+      .eq("id", id);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    refreshData();
+  };
+
   const handleAddMatchEntrant = async (
     matchId: string,
     entrantId: string,
@@ -1877,6 +2086,39 @@ export default function AdminPage() {
       match_id: string;
       label: string | null;
     }[];
+
+    const eliminatorEntries: EliminatorEntryRow[] = [];
+    const eliminatorEliminations: EliminatorEliminationRow[] = [];
+    if (activeEvent.show_id) {
+      const { data: eliminatorRows } = await supabase
+        .from("eliminators")
+        .select("id")
+        .eq("show_id", activeEvent.show_id);
+      const eliminatorIds = (eliminatorRows ?? []).map((row) => row.id);
+      if (eliminatorIds.length > 0) {
+        const [
+          { data: eliminatorEntryRows },
+          { data: eliminatorEliminationRows },
+        ] = await Promise.all([
+          supabase
+            .from("eliminator_entries")
+            .select("eliminator_id, entrant_id, entry_order")
+            .in("eliminator_id", eliminatorIds),
+          supabase
+            .from("eliminator_eliminations")
+            .select(
+              "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
+            )
+            .in("eliminator_id", eliminatorIds),
+        ]);
+        eliminatorEntries.push(
+          ...((eliminatorEntryRows ?? []) as EliminatorEntryRow[])
+        );
+        eliminatorEliminations.push(
+          ...((eliminatorEliminationRows ?? []) as EliminatorEliminationRow[])
+        );
+      }
+    }
     const scoreRows = picks.map((pick) => {
       const payload = (pick.payload ?? {}) as PicksPayload;
       const { points, breakdown } = calculateScore(
@@ -1886,7 +2128,9 @@ export default function AdminPage() {
         matchList,
         matchEntrantList,
         matchSideList,
-        { ironPersonId: activeEvent.iron_person_entrant_id ?? null }
+        { ironPersonId: activeEvent.iron_person_entrant_id ?? null },
+        eliminatorEntries,
+        eliminatorEliminations
       );
       return {
         user_id: pick.user_id,
@@ -2190,6 +2434,17 @@ export default function AdminPage() {
             >
               Matches
             </button>
+            <button
+              className={`h-11 flex-1 rounded-2xl px-4 text-xs font-semibold uppercase tracking-[0.2em] transition sm:flex-none ${
+                adminTab === "eliminators"
+                  ? "bg-amber-400 text-zinc-900"
+                  : "border border-zinc-800 text-zinc-300 hover:border-amber-300 hover:text-amber-200"
+              }`}
+              type="button"
+              onClick={() => setAdminTab("eliminators")}
+            >
+              Eliminators
+            </button>
           </div>
         </div>
 
@@ -2248,6 +2503,291 @@ export default function AdminPage() {
               </button>
             </div>
           </div>
+          )}
+
+          {adminTab === "eliminators" && (
+            <>
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                <h2 className="text-lg font-semibold">Create eliminator</h2>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Add an eliminator match with 6–10 participants.
+                </p>
+                <details
+                  className="group mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                  open={eliminatorCreateOpen}
+                  onToggle={(event) =>
+                    setEliminatorCreateOpen(
+                      (event.target as HTMLDetailsElement).open
+                    )
+                  }
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-zinc-100">
+                    New eliminator
+                    <span className="text-xs uppercase tracking-[0.3em] text-zinc-500 group-open:hidden">
+                      Expand
+                    </span>
+                    <span className="hidden text-xs uppercase tracking-[0.3em] text-zinc-500 group-open:inline">
+                      Collapse
+                    </span>
+                  </summary>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <input
+                      className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                      placeholder="Eliminator name"
+                      value={eliminatorName}
+                      onChange={(event) => setEliminatorName(event.target.value)}
+                    />
+                    <input
+                      className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                      type="number"
+                      min="6"
+                      max="10"
+                      placeholder="Entrant count (6-10)"
+                      value={eliminatorEntrantLimit}
+                      onChange={(event) =>
+                        setEliminatorEntrantLimit(event.target.value)
+                      }
+                    />
+                    <input
+                      className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                      type="number"
+                      min="1900"
+                      max="2100"
+                      placeholder="Roster year"
+                      value={eliminatorRosterYear}
+                      onChange={(event) =>
+                        setEliminatorRosterYear(event.target.value)
+                      }
+                    />
+                    <select
+                      className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                      value={eliminatorRosterGender}
+                      onChange={(event) =>
+                        setEliminatorRosterGender(event.target.value)
+                      }
+                    >
+                      <option value="men">Men</option>
+                      <option value="women">Women</option>
+                      <option value="intergender">Intergender</option>
+                    </select>
+                  </div>
+                  <button
+                    className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[11px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                    type="button"
+                    onClick={handleCreateEliminator}
+                  >
+                    Add eliminator
+                  </button>
+                </details>
+              </div>
+
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                <h2 className="text-lg font-semibold">Eliminators</h2>
+                {eliminators.length === 0 ? (
+                  <p className="mt-2 text-sm text-zinc-400">
+                    No eliminators added yet.
+                  </p>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    {eliminators.map((eliminator) => {
+                      const eliminatorEntriesList = eliminatorEntries.filter(
+                        (entry) => entry.eliminator_id === eliminator.id
+                      );
+                      const eliminatorElimsList = eliminatorEliminations.filter(
+                        (entry) => entry.eliminator_id === eliminator.id
+                      );
+                      const eligibleEntrants = entrantOptions.filter((entrant) => {
+                        if (!entrant.active) return false;
+                        if (
+                          eliminator.roster_year &&
+                          entrant.roster_year !== eliminator.roster_year
+                        ) {
+                          return false;
+                        }
+                        if (
+                          eliminator.roster_gender &&
+                          eliminator.roster_gender !== "intergender" &&
+                          entrant.gender !== eliminator.roster_gender
+                        ) {
+                          return false;
+                        }
+                        return true;
+                      });
+                      return (
+                        <div
+                          key={eliminator.id}
+                          className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-zinc-100">
+                                {eliminator.name}
+                              </p>
+                              <p className="text-xs text-zinc-500">
+                                {eliminator.roster_gender ?? "all"} •{" "}
+                                {eliminator.roster_year ?? "any"} •{" "}
+                                {eliminator.entrant_limit} entrants
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,auto]">
+                            <select
+                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                              value={eliminatorEntrantId}
+                              onChange={(event) =>
+                                setEliminatorEntrantId(event.target.value)
+                              }
+                            >
+                              <option value="">Select entrant</option>
+                              {eligibleEntrants.map((entrant) => (
+                                <option key={entrant.id} value={entrant.id}>
+                                  {entrant.name}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                              placeholder="Entry order"
+                              value={eliminatorEntryOrder}
+                              onChange={(event) =>
+                                setEliminatorEntryOrder(event.target.value)
+                              }
+                            />
+                            <button
+                              className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[11px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                              type="button"
+                              onClick={() => handleAddEliminatorEntry(eliminator.id)}
+                            >
+                              Add entrant
+                            </button>
+                          </div>
+                          {eliminatorEntriesList.length > 0 && (
+                            <div className="mt-4 space-y-2 text-sm text-zinc-200">
+                              {eliminatorEntriesList.map((entry) => (
+                                <div
+                                  key={entry.id}
+                                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2"
+                                >
+                                  <span>
+                                    {entry.entry_order ?? "?"}.{" "}
+                                    {entrantOptions.find(
+                                      (entrant) => entrant.id === entry.entrant_id
+                                    )?.name ?? "Entrant"}
+                                  </span>
+                                  <button
+                                    className="text-xs font-semibold uppercase tracking-wide text-red-200 hover:text-red-100"
+                                    type="button"
+                                    onClick={() =>
+                                      handleRemoveEliminatorEntry(
+                                        eliminator.id,
+                                        entry.entrant_id
+                                      )
+                                    }
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="mt-4 grid gap-3 md:grid-cols-[2fr,2fr,1fr,1fr,auto]">
+                            <select
+                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                              value={eliminatorEliminatedId}
+                              onChange={(event) =>
+                                setEliminatorEliminatedId(event.target.value)
+                              }
+                            >
+                              <option value="">Eliminated entrant</option>
+                              {eliminatorEntriesList.map((entry) => (
+                                <option key={entry.id} value={entry.entrant_id}>
+                                  {entrantOptions.find(
+                                    (entrant) => entrant.id === entry.entrant_id
+                                  )?.name ?? "Entrant"}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                              value={eliminatorEliminatedById}
+                              onChange={(event) =>
+                                setEliminatorEliminatedById(event.target.value)
+                              }
+                            >
+                              <option value="">Eliminated by</option>
+                              {eliminatorEntriesList.map((entry) => (
+                                <option key={entry.id} value={entry.entrant_id}>
+                                  {entrantOptions.find(
+                                    (entrant) => entrant.id === entry.entrant_id
+                                  )?.name ?? "Entrant"}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                              value={eliminatorEliminationType}
+                              onChange={(event) =>
+                                setEliminatorEliminationType(
+                                  event.target.value as "pinfall" | "submission"
+                                )
+                              }
+                            >
+                              <option value="pinfall">Pinfall</option>
+                              <option value="submission">Submission</option>
+                            </select>
+                            <input
+                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                              placeholder="Order"
+                              value={eliminatorEliminationOrder}
+                              onChange={(event) =>
+                                setEliminatorEliminationOrder(event.target.value)
+                              }
+                            />
+                            <button
+                              className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[11px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                              type="button"
+                              onClick={() =>
+                                handleAddEliminatorElimination(eliminator.id)
+                              }
+                            >
+                              Add elimination
+                            </button>
+                          </div>
+                          {eliminatorElimsList.length > 0 && (
+                            <div className="mt-4 space-y-2 text-sm text-zinc-200">
+                              {eliminatorElimsList.map((elim) => (
+                                <div
+                                  key={elim.id}
+                                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2"
+                                >
+                                  <span>
+                                    {elim.elimination_order}.{" "}
+                                    {entrantOptions.find(
+                                      (entrant) =>
+                                        entrant.id === elim.eliminated_entrant_id
+                                    )?.name ?? "Entrant"}{" "}
+                                    ({elim.elimination_type})
+                                  </span>
+                                  <button
+                                    className="text-xs font-semibold uppercase tracking-wide text-red-200 hover:text-red-100"
+                                    type="button"
+                                    onClick={() =>
+                                      handleRemoveEliminatorElimination(elim.id)
+                                    }
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           {adminTab === "events" && (

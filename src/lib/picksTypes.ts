@@ -8,6 +8,16 @@ export type EventRow = {
   iron_person_entrant_id?: string | null;
 };
 
+export type EliminatorRow = {
+  id: string;
+  name: string;
+  status: string;
+  roster_year: number | null;
+  roster_gender: string | null;
+  entrant_limit: number;
+  show_id: string | null;
+};
+
 export type ShowRow = {
   id: string;
   name: string;
@@ -48,8 +58,16 @@ export type RumblePick = {
   most_eliminations: string | null;
 };
 
+export type EliminatorPick = {
+  entry_order: Record<string, number | null>;
+  elimination_order: Record<string, number | null>;
+  elimination_type: Record<string, "pinfall" | "submission" | null>;
+  most_eliminations: string | null;
+};
+
 export type PicksPayload = {
   rumbles: Record<string, RumblePick>;
+  eliminators?: Record<string, EliminatorPick>;
   match_picks: Record<string, string | null>;
   match_finish_picks: Record<
     string,
@@ -66,6 +84,20 @@ export type RumbleEntryRow = {
   eliminated_at: string | null;
   eliminations_count: number;
   is_confirmed?: boolean;
+};
+
+export type EliminatorEntryRow = {
+  eliminator_id: string;
+  entrant_id: string;
+  entry_order: number | null;
+};
+
+export type EliminatorEliminationRow = {
+  eliminator_id: string;
+  eliminated_entrant_id: string;
+  eliminated_by_entrant_id: string | null;
+  elimination_type: "pinfall" | "submission";
+  elimination_order: number;
 };
 
 export type MatchRow = {
