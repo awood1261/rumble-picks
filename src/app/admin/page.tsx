@@ -247,8 +247,15 @@ export default function AdminPage() {
   const [matchParticipantsOpen, setMatchParticipantsOpen] = useState<
     Record<string, boolean>
   >({});
+  const [orderIndexEdits, setOrderIndexEdits] = useState<Record<string, string>>(
+    {}
+  );
   const [scrollMatchId, setScrollMatchId] = useState<string | null>(null);
   const matchRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [scrollEliminatorId, setScrollEliminatorId] = useState<string | null>(
+    null
+  );
+  const eliminatorRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const formatLocalDateTime = (value: string | null) => {
     if (!value) return "";
@@ -287,8 +294,28 @@ export default function AdminPage() {
     if (!activeShow) return [];
     return events
       .filter((event) => event.show_id === activeShow.id)
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort(
+        (a, b) =>
+          (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+          a.name.localeCompare(b.name)
+      );
   }, [activeShow, events]);
+  const orderedShowMatches = useMemo(() => {
+    return [...showMatches].sort(
+      (a, b) =>
+        (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+        a.name.localeCompare(b.name)
+    );
+  }, [showMatches]);
+  const orderedShowEliminators = useMemo(() => {
+    return [...eliminators]
+      .filter((eliminator) => eliminator.show_id === activeShow?.id)
+      .sort(
+        (a, b) =>
+          (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+          a.name.localeCompare(b.name)
+      );
+  }, [eliminators, activeShow?.id]);
   const visibleShowEvents = useMemo(() => {
     if (!focusedEventId) return showEvents;
     return showEvents.filter((event) => event.id === focusedEventId);
@@ -306,6 +333,47 @@ export default function AdminPage() {
   const eventNameById = useMemo(() => {
     return new Map(events.map((event) => [event.id, event.name]));
   }, [events]);
+  const orderedShowItems = useMemo(() => {
+    const eventItems = showEvents.map((event) => ({
+      id: event.id,
+      name: event.name,
+      type: "event" as const,
+      order_index: event.order_index ?? null,
+      detail: `${event.rumble_gender ?? "unspecified"}${
+        event.roster_year ? ` • ${event.roster_year}` : ""
+      }`,
+    }));
+    const matchItems = orderedShowMatches.map((match) => ({
+      id: match.id,
+      name: match.name,
+      type: "match" as const,
+      order_index: match.order_index ?? null,
+      detail: `${formatMatchTypeLabel(match.match_type ?? "match")}${
+        match.event_id
+          ? ` • ${eventNameById.get(match.event_id) ?? "Unassigned"}`
+          : ""
+      }`,
+    }));
+    const eliminatorItems = orderedShowEliminators.map((eliminator) => ({
+      id: eliminator.id,
+      name: eliminator.name,
+      type: "eliminator" as const,
+      order_index: eliminator.order_index ?? null,
+      detail: `${eliminator.roster_gender ?? "all"} • ${
+        eliminator.roster_year ?? "any"
+      } • ${eliminator.entrant_limit} entrants`,
+    }));
+    return [...eventItems, ...matchItems, ...eliminatorItems].sort(
+      (a, b) =>
+        (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+        a.name.localeCompare(b.name)
+    );
+  }, [
+    showEvents,
+    orderedShowMatches,
+    orderedShowEliminators,
+    eventNameById,
+  ]);
   useEffect(() => {
     setEventRosterYear(
       activeEvent?.roster_year ? String(activeEvent.roster_year) : ""
@@ -382,6 +450,14 @@ export default function AdminPage() {
       setScrollMatchId(null);
     }
   }, [adminTab, scrollMatchId]);
+  useEffect(() => {
+    if (adminTab !== "eliminators" || !scrollEliminatorId) return;
+    const element = eliminatorRefs.current[scrollEliminatorId];
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setScrollEliminatorId(null);
+    }
+  }, [adminTab, scrollEliminatorId]);
   const scrollToEventEditor = () => {
     requestAnimationFrame(() => {
       const target = document.getElementById("event-editor");
@@ -651,11 +727,13 @@ export default function AdminPage() {
           .order("name", { ascending: true }),
         supabase
           .from("events")
-          .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
+          .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id, order_index")
+          .order("order_index", { ascending: true, nullsLast: true })
           .order("created_at", { ascending: false }),
         supabase
           .from("eliminators")
-          .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id")
+          .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index")
+          .order("order_index", { ascending: true, nullsLast: true })
           .order("created_at", { ascending: false }),
         supabase
           .from("entrants")
@@ -667,8 +745,9 @@ export default function AdminPage() {
           const query = supabase
             .from("matches")
             .select(
-              "id, name, kind, match_type, status, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
+              "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
             )
+            .order("order_index", { ascending: true, nullsLast: true })
             .order("created_at", { ascending: true });
           if (showIdForQuery) {
             return query.eq("show_id", showIdForQuery);
@@ -844,11 +923,13 @@ export default function AdminPage() {
             .order("name", { ascending: true }),
           supabase
             .from("events")
-            .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id")
+            .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id, order_index")
+            .order("order_index", { ascending: true, nullsLast: true })
             .order("created_at", { ascending: false }),
           supabase
             .from("eliminators")
-            .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id")
+            .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index")
+            .order("order_index", { ascending: true, nullsLast: true })
             .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
@@ -867,8 +948,9 @@ export default function AdminPage() {
             const query = supabase
               .from("matches")
               .select(
-                "id, name, kind, match_type, status, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
+                "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
               )
+              .order("order_index", { ascending: true, nullsLast: true })
               .order("created_at", { ascending: true });
             if (showIdForQuery) {
               return query.eq("show_id", showIdForQuery);
@@ -1021,6 +1103,133 @@ export default function AdminPage() {
     setEventGender("men");
     setEventRosterYear("");
     setEventShowId("");
+    refreshData();
+  };
+
+  const handleMoveEventOrder = async (eventId: string, direction: "up" | "down") => {
+    const ordered = showEvents;
+    const index = ordered.findIndex((event) => event.id === eventId);
+    const nextIndex = direction === "up" ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) {
+      return;
+    }
+    const current = ordered[index];
+    const target = ordered[nextIndex];
+    const currentOrder = current.order_index ?? index + 1;
+    const targetOrder = target.order_index ?? nextIndex + 1;
+    const [{ error: currentError }, { error: targetError }] = await Promise.all([
+      supabase.from("events").update({ order_index: targetOrder }).eq("id", current.id),
+      supabase.from("events").update({ order_index: currentOrder }).eq("id", target.id),
+    ]);
+    if (currentError || targetError) {
+      setMessage(currentError?.message ?? targetError?.message ?? "Failed to update order.");
+      return;
+    }
+    refreshData();
+  };
+
+  const handleMoveMatchOrder = async (matchId: string, direction: "up" | "down") => {
+    const ordered = orderedShowMatches;
+    const index = ordered.findIndex((match) => match.id === matchId);
+    const nextIndex = direction === "up" ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) {
+      return;
+    }
+    const current = ordered[index];
+    const target = ordered[nextIndex];
+    const currentOrder = current.order_index ?? index + 1;
+    const targetOrder = target.order_index ?? nextIndex + 1;
+    const [{ error: currentError }, { error: targetError }] = await Promise.all([
+      supabase.from("matches").update({ order_index: targetOrder }).eq("id", current.id),
+      supabase.from("matches").update({ order_index: currentOrder }).eq("id", target.id),
+    ]);
+    if (currentError || targetError) {
+      setMessage(currentError?.message ?? targetError?.message ?? "Failed to update order.");
+      return;
+    }
+    refreshData();
+  };
+
+  const handleMoveEliminatorOrder = async (
+    eliminatorId: string,
+    direction: "up" | "down"
+  ) => {
+    const ordered = orderedShowEliminators;
+    const index = ordered.findIndex((eliminator) => eliminator.id === eliminatorId);
+    const nextIndex = direction === "up" ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) {
+      return;
+    }
+    const current = ordered[index];
+    const target = ordered[nextIndex];
+    const currentOrder = current.order_index ?? index + 1;
+    const targetOrder = target.order_index ?? nextIndex + 1;
+    const [{ error: currentError }, { error: targetError }] = await Promise.all([
+      supabase.from("eliminators").update({ order_index: targetOrder }).eq("id", current.id),
+      supabase.from("eliminators").update({ order_index: currentOrder }).eq("id", target.id),
+    ]);
+    if (currentError || targetError) {
+      setMessage(currentError?.message ?? targetError?.message ?? "Failed to update order.");
+      return;
+    }
+    refreshData();
+  };
+
+  const handleUpdateShowOrder = async (item: {
+    id: string;
+    type: "event" | "match" | "eliminator";
+  }) => {
+    const key = `${item.type}:${item.id}`;
+    const rawValue = orderIndexEdits[key];
+    const normalized = rawValue?.trim() ?? "";
+    if (normalized === "") {
+      return;
+    }
+    const nextValue = Number(normalized);
+    if (Number.isNaN(nextValue)) {
+      setMessage("Order must be a number.");
+      return;
+    }
+    const currentIndex = orderedShowItems.findIndex(
+      (row) => row.id === item.id && row.type === item.type
+    );
+    if (currentIndex < 0) {
+      return;
+    }
+    const clampedIndex = Math.min(
+      Math.max(nextValue - 1, 0),
+      Math.max(orderedShowItems.length - 1, 0)
+    );
+    const reordered = [...orderedShowItems];
+    const [moved] = reordered.splice(currentIndex, 1);
+    reordered.splice(clampedIndex, 0, moved);
+    const updates = reordered.map((row, index) => ({
+      ...row,
+      nextOrder: index + 1,
+    }));
+    const updatePromises = updates.map((row) => {
+      const table =
+        row.type === "event"
+          ? "events"
+          : row.type === "match"
+            ? "matches"
+            : "eliminators";
+      return supabase
+        .from(table)
+        .update({ order_index: row.nextOrder })
+        .eq("id", row.id);
+    });
+    const results = await Promise.all(updatePromises);
+    const errorResult = results.find((result) => result.error);
+    if (errorResult?.error) {
+      setMessage(errorResult.error.message);
+      return;
+    }
+    setOrderIndexEdits((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
     refreshData();
   };
 
@@ -1847,6 +2056,28 @@ export default function AdminPage() {
     refreshData();
   };
 
+  const handleClearEliminatorResults = async (eliminatorId: string) => {
+    setMessage(null);
+    const { error: entryError } = await supabase
+      .from("eliminator_entries")
+      .update({ entry_order: null })
+      .eq("eliminator_id", eliminatorId);
+    if (entryError) {
+      setMessage(entryError.message);
+      return;
+    }
+    const { error: elimError } = await supabase
+      .from("eliminator_eliminations")
+      .delete()
+      .eq("eliminator_id", eliminatorId);
+    if (elimError) {
+      setMessage(elimError.message);
+      return;
+    }
+    setToastMessage("Eliminator results cleared.");
+    refreshData();
+  };
+
   useEffect(() => {
     if (!entryEntrantId) {
       if (entryNumber) {
@@ -2312,109 +2543,125 @@ export default function AdminPage() {
             </div>
           )}
 
-          {(showEvents.length > 0 || showMatches.length > 0) && (
-            <div className="mt-6 grid gap-4 lg:grid-cols-2">
-              {showEvents.length > 0 && (
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                      Rumble events on this show
-                    </p>
-                    {focusedEventId && (
-                      <button
-                        className="text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:text-amber-100"
-                        type="button"
-                        onClick={() => setFocusedEventId("")}
-                      >
-                        Back to all events
-                      </button>
-                    )}
-                  </div>
-                  <div className="mt-3 space-y-3 text-sm text-zinc-200">
-                    {visibleShowEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
-                      >
+          {orderedShowItems.length > 0 && (
+            <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                  Show card order
+                </p>
+                {focusedEventId && (
+                  <button
+                    className="text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:text-amber-100"
+                    type="button"
+                    onClick={() => setFocusedEventId("")}
+                  >
+                    Back to all events
+                  </button>
+                )}
+              </div>
+              <div className="mt-3 space-y-3 text-sm text-zinc-200">
+                {orderedShowItems.map((item) => {
+                  const key = `${item.type}:${item.id}`;
+                  const orderValue =
+                    orderIndexEdits[key] ??
+                    (item.order_index !== null && item.order_index !== undefined
+                      ? String(item.order_index)
+                      : "");
+                  const displayOrder =
+                    item.order_index ?? orderedShowItems.indexOf(item) + 1;
+                  return (
+                    <div
+                      key={key}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
+                    >
+                      <div className="flex items-center gap-4">
+                        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200/80">
+                          #{displayOrder}
+                        </span>
                         <div>
-                          <p className="font-medium text-zinc-100">{event.name}</p>
-                          <p className="text-xs text-zinc-500">
-                            {event.rumble_gender ?? "unspecified"}
-                            {event.roster_year ? ` • ${event.roster_year}` : ""}
-                          </p>
+                        <p className="font-medium text-zinc-100">{item.name}</p>
+                        <p className="text-xs text-zinc-500">
+                          {item.type.toUpperCase()} • {item.detail}
+                        </p>
                         </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="text-[11px] uppercase tracking-[0.25em] text-zinc-500">
+                          Order
+                          <input
+                            className="ml-2 h-9 w-20 rounded-xl border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
+                            value={orderValue}
+                            onChange={(event) =>
+                              setOrderIndexEdits((prev) => ({
+                                ...prev,
+                                [key]: event.target.value,
+                              }))
+                            }
+                            onBlur={() => handleUpdateShowOrder(item)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                handleUpdateShowOrder(item);
+                              }
+                            }}
+                          />
+                        </label>
                         <button
                           className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
                           type="button"
                           onClick={() => {
-                            if (event.show_id) {
-                              setSelectedShowId(event.show_id);
+                            if (item.type === "event") {
+                              const event = showEvents.find(
+                                (eventItem) => eventItem.id === item.id
+                              );
+                              if (event?.show_id) {
+                                setSelectedShowId(event.show_id);
+                              }
+                              setFocusedEventId(item.id);
+                              setSelectedEventId(item.id);
+                              setAdminTab("events");
+                              scrollToEventEditor();
+                              return;
                             }
-                            setFocusedEventId(event.id);
-                            setSelectedEventId(event.id);
-                            setAdminTab("events");
-                            scrollToEventEditor();
-                          }}
-                        >
-                          Edit event
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {showMatches.length > 0 && (
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                    Matches on this show
-                  </p>
-                  <div className="mt-3 space-y-3 text-sm text-zinc-200">
-                    {showMatches.map((match) => (
-                      <div
-                        key={match.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3"
-                      >
-                        <div>
-                          <p className="font-medium text-zinc-100">{match.name}</p>
-                          <p className="text-xs text-zinc-500">
-                            {formatMatchTypeLabel(match.match_type ?? "match")}
-                            {match.event_id
-                              ? ` • ${eventNameById.get(match.event_id) ?? "Unassigned"}`
-                              : ""}
-                          </p>
-                        </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                          type="button"
-                          onClick={() => {
-                            if (match.event_id) {
-                              setSelectedEventId(match.event_id);
+                            if (item.type === "match") {
+                              const match = orderedShowMatches.find(
+                                (matchItem) => matchItem.id === item.id
+                              );
+                              if (match?.event_id) {
+                                setSelectedEventId(match.event_id);
+                              }
+                              setAdminTab("matches");
+                              setScrollMatchId(item.id);
+                              return;
                             }
-                            setAdminTab("matches");
-                            setScrollMatchId(match.id);
+                            setAdminTab("eliminators");
+                            setScrollEliminatorId(item.id);
                           }}
                         >
-                          Edit match
+                          Edit
                         </button>
-                        <button
-                          className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-4 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
-                          type="button"
-                          onClick={() => {
-                            setAdminTab("matches");
-                            setScrollMatchId(match.id);
-                            handleClearMatchResults(match.id);
-                          }}
-                        >
-                          Clear results
-                        </button>
+                        {item.type === "match" && (
+                          <button
+                            className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-4 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                            type="button"
+                            onClick={() => handleClearMatchResults(item.id)}
+                          >
+                            Clear results
+                          </button>
+                        )}
+                        {item.type === "eliminator" && (
+                          <button
+                            className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-4 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                            type="button"
+                            onClick={() => handleClearEliminatorResults(item.id)}
+                          >
+                            Clear results
+                          </button>
+                        )}
                       </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </section>
@@ -2625,6 +2872,9 @@ export default function AdminPage() {
                       return (
                         <div
                           key={eliminator.id}
+                          ref={(node) => {
+                            eliminatorRefs.current[eliminator.id] = node;
+                          }}
                           className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
                         >
                           <div className="flex flex-wrap items-center justify-between gap-3">

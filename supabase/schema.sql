@@ -84,6 +84,7 @@ create table if not exists public.eliminators (
   roster_year integer,
   roster_gender text,
   entrant_limit integer not null default 6,
+  order_index integer,
   created_at timestamptz not null default now(),
   constraint eliminators_entrant_limit_chk check (entrant_limit between 6 and 10)
 );
@@ -261,6 +262,12 @@ create trigger set_scores_updated_at
 
 alter table public.events
   add column if not exists iron_person_entrant_id uuid references public.entrants(id);
+
+alter table public.events
+  add column if not exists order_index integer;
+
+alter table public.matches
+  add column if not exists order_index integer;
 
 alter table public.profiles enable row level security;
 alter table public.promotions enable row level security;

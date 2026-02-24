@@ -139,10 +139,15 @@ export default function PicksPage() {
     () => shows.find((show) => show.id === selectedShowId) ?? null,
     [shows, selectedShowId],
   );
-  const showEvents = useMemo(
-    () => events.filter((event) => event.show_id === selectedShowId),
-    [events, selectedShowId],
-  );
+  const showEvents = useMemo(() => {
+    return events
+      .filter((event) => event.show_id === selectedShowId)
+      .sort(
+        (a, b) =>
+          (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+          a.name.localeCompare(b.name)
+      );
+  }, [events, selectedShowId]);
   const selectedPromotionImageUrl = useMemo(() => {
     if (!selectedShow?.promotion_id) return null;
     return (
@@ -618,8 +623,9 @@ export default function PicksPage() {
       supabase
         .from("events")
         .select(
-          "id, name, status, rumble_gender, roster_year, show_id, iron_person_entrant_id",
+          "id, name, status, rumble_gender, roster_year, show_id, iron_person_entrant_id, order_index",
         )
+        .order("order_index", { ascending: true, nullsLast: true })
         .order("name", { ascending: true }),
     ]).then(([showsResult, promotionsResult, eventsResult]) => {
       if (showsResult.error) {
@@ -689,9 +695,10 @@ export default function PicksPage() {
     const { data: matchRows, error: matchError } = await supabase
       .from("matches")
       .select(
-        "id, name, kind, match_type, status, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference",
+        "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference",
       )
       .eq("show_id", selectedShowId)
+      .order("order_index", { ascending: true, nullsLast: true })
       .order("created_at", { ascending: true });
     if (matchError) {
       setMessage(matchError.message);
@@ -735,8 +742,11 @@ export default function PicksPage() {
     if (!selectedShowId) return;
     const { data: eliminatorRows, error: eliminatorError } = await supabase
       .from("eliminators")
-      .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id")
+      .select(
+        "id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index"
+      )
       .eq("show_id", selectedShowId)
+      .order("order_index", { ascending: true, nullsLast: true })
       .order("created_at", { ascending: true });
     if (eliminatorError) {
       setMessage(eliminatorError.message);
@@ -1225,17 +1235,31 @@ export default function PicksPage() {
     setEditSection(section);
   };
 
-  const stepItems = useMemo(
-    () => [
-      ...showEvents.map((event) => ({ type: "event" as const, id: event.id })),
-      ...eliminators.map((eliminator) => ({
-        type: "eliminator" as const,
-        id: eliminator.id,
-      })),
-      ...matches.map((match) => ({ type: "match" as const, id: match.id })),
-    ],
-    [matches, showEvents, eliminators],
-  );
+  const stepItems = useMemo(() => {
+    const eventItems = showEvents.map((event) => ({
+      type: "event" as const,
+      id: event.id,
+      order_index: event.order_index ?? null,
+      name: event.name,
+    }));
+    const eliminatorItems = eliminators.map((eliminator) => ({
+      type: "eliminator" as const,
+      id: eliminator.id,
+      order_index: eliminator.order_index ?? null,
+      name: eliminator.name,
+    }));
+    const matchItems = matches.map((match) => ({
+      type: "match" as const,
+      id: match.id,
+      order_index: match.order_index ?? null,
+      name: match.name,
+    }));
+    return [...eventItems, ...eliminatorItems, ...matchItems].sort(
+      (a, b) =>
+        (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+        a.name.localeCompare(b.name)
+    );
+  }, [matches, showEvents, eliminators]);
   const stepIndexById = useMemo(() => {
     const map = new Map<string, number>();
     stepItems.forEach((item, index) => {
@@ -1354,201 +1378,238 @@ export default function PicksPage() {
               You can edit your picks until the show starts.
             </p>
             <div className="mt-6 space-y-4">
-              {showEvents.map((event) => {
-                const pick = getRumblePick(event.id);
-                const entrants = pick.entrants
-                  .map((id) => entrantByIdAll.get(id)?.name)
-                  .filter(Boolean)
-                  .join(", ");
-                const finalFour = pick.final_four
-                  .map((id) => entrantByIdAll.get(id)?.name)
-                  .filter(Boolean)
-                  .join(", ");
-                const winnerEntrant = pick.winner
-                  ? entrantByIdAll.get(pick.winner)
-                  : null;
-                const winner = pick.winner
-                  ? entrantByIdAll.get(pick.winner)?.name
-                  : null;
-                return (
-                  <div
-                    key={event.id}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                        {event.name}
-                      </p>
-                      <button
-                        type="button"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
-                        onClick={() =>
-                          setStepIndex(
-                            stepIndexById.get(`event:${event.id}`) ?? 0,
-                          )
-                        }
-                        aria-label={`Edit ${event.name}`}
+              {[...showEvents, ...eliminators, ...matches]
+                .map((item) => ({
+                  type: ("match_type" in item
+                    ? "match"
+                    : "entrant_limit" in item
+                      ? "eliminator"
+                      : "event") as "event" | "match" | "eliminator",
+                  id: item.id,
+                  order_index: item.order_index ?? null,
+                  name: item.name,
+                }))
+                .sort(
+                  (a, b) =>
+                    (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+                    a.name.localeCompare(b.name)
+                )
+                .map((item) => {
+                  if (item.type === "event") {
+                    const event = showEvents.find((row) => row.id === item.id);
+                    if (!event) return null;
+                    const pick = getRumblePick(event.id);
+                    const entrants = pick.entrants
+                      .map((id) => entrantByIdAll.get(id)?.name)
+                      .filter(Boolean)
+                      .join(", ");
+                    const finalFour = pick.final_four
+                      .map((id) => entrantByIdAll.get(id)?.name)
+                      .filter(Boolean)
+                      .join(", ");
+                    const winnerEntrant = pick.winner
+                      ? entrantByIdAll.get(pick.winner)
+                      : null;
+                    const winner = pick.winner
+                      ? entrantByIdAll.get(pick.winner)?.name
+                      : null;
+                    return (
+                      <div
+                        key={`event:${event.id}`}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
                       >
-                        ✎
-                      </button>
-                    </div>
-                    <p className="mt-2 text-sm text-zinc-300">
-                      Entrants: {entrants || "None selected"}
-                    </p>
-                    <p className="mt-1 text-sm text-zinc-300">
-                      Final Four: {finalFour || "None selected"}
-                    </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-zinc-300">
-                      <span>Winner:</span>
-                      {winnerEntrant?.image_url ? (
-                        <img
-                          src={winnerEntrant.image_url}
-                          alt={winnerEntrant.name}
-                          className="h-7 w-7 rounded-full border border-zinc-700 object-cover"
-                        />
-                      ) : null}
-                      <span>{winner || "Not set"}</span>
-                    </div>
-                  </div>
-                );
-              })}
-              {eliminators.map((eliminator) => {
-                const pick =
-                  payload.eliminators?.[eliminator.id] ?? emptyEliminatorPick;
-                const entriesForEliminator = eliminatorEntries.filter(
-                  (entry) => entry.eliminator_id === eliminator.id,
-                );
-                const entryOrder = entriesForEliminator
-                  .map((entry) => {
-                    const entrant = entrantByIdAll.get(entry.entrant_id);
-                    const order = pick.entry_order?.[entry.entrant_id];
-                    return order ? `${order}. ${entrant?.name ?? "Entrant"}` : null;
-                  })
-                  .filter(Boolean)
-                  .sort((a, b) => Number(a.split(".")[0]) - Number(b.split(".")[0]))
-                  .join(", ");
-                const eliminationOrder = entriesForEliminator
-                  .map((entry) => {
-                    const entrant = entrantByIdAll.get(entry.entrant_id);
-                    const order = pick.elimination_order?.[entry.entrant_id];
-                    return order ? `${order}. ${entrant?.name ?? "Entrant"}` : null;
-                  })
-                  .filter(Boolean)
-                  .sort((a, b) => Number(a.split(".")[0]) - Number(b.split(".")[0]))
-                  .join(", ");
-                const mostElims = pick.most_eliminations
-                  ? entrantByIdAll.get(pick.most_eliminations)?.name
-                  : null;
-                return (
-                  <div
-                    key={eliminator.id}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                        {eliminator.name}
-                      </p>
-                      <button
-                        type="button"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
-                        onClick={() =>
-                          setStepIndex(
-                            stepIndexById.get(`eliminator:${eliminator.id}`) ?? 0,
-                          )
-                        }
-                        aria-label={`Edit ${eliminator.name}`}
-                      >
-                        ✎
-                      </button>
-                    </div>
-                    <p className="mt-2 text-sm text-zinc-300">
-                      <span className="font-semibold text-zinc-100">
-                        Entry order:
-                      </span>{" "}
-                      {entryOrder || "Not set"}
-                    </p>
-                    <p className="mt-1 text-sm text-zinc-300">
-                      <span className="font-semibold text-zinc-100">
-                        Elimination order:
-                      </span>{" "}
-                      {eliminationOrder || "Not set"}
-                    </p>
-                    <p className="mt-1 text-sm text-zinc-300">
-                      <span className="font-semibold text-zinc-100">
-                        Most eliminations:
-                      </span>{" "}
-                      {mostElims || "Not set"}
-                    </p>
-                  </div>
-                );
-              })}
-              {matches.map((match) => {
-                const winnerSideId = payload.match_picks[match.id] ?? null;
-                const sideEntrants = matchEntrantsByMatch[match.id] ?? [];
-                const sides = matchSidesByMatch[match.id] ?? [];
-                const winnerSide =
-                  sides.find((side) => side.id === winnerSideId) ?? null;
-                const winnerEntrants = sideEntrants
-                  .filter((row) => row.side_id === winnerSideId)
-                  .map((row) => entrantByIdAll.get(row.entrant_id))
-                  .filter(Boolean) as EntrantRow[];
-                const winnerLabel =
-                  winnerSide?.label?.trim() && winnerEntrants.length > 1
-                    ? winnerSide.label.trim()
-                    : null;
-                const winnerNames = winnerEntrants
-                  .map((entrant) => entrant.name)
-                  .filter(Boolean)
-                  .join(", ");
-                const winnerDisplay = winnerLabel ?? (winnerNames || "Not set");
-                return (
-                  <div
-                    key={match.id}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                        {match.name}
-                      </p>
-                      <button
-                        type="button"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
-                        onClick={() =>
-                          setStepIndex(
-                            stepIndexById.get(`match:${match.id}`) ?? 0,
-                          )
-                        }
-                        aria-label={`Edit ${match.name}`}
-                      >
-                        ✎
-                      </button>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-300">
-                      <span>Winner:</span>
-                      {winnerEntrants.length > 0 && (
-                        <div className="flex -space-x-2">
-                          {winnerEntrants.map((entrant) =>
-                            entrant.image_url ? (
-                              <img
-                                key={entrant.id}
-                                src={entrant.image_url}
-                                alt={entrant.name}
-                                className="h-7 w-7 rounded-full border border-zinc-700 object-cover"
-                              />
-                            ) : (
-                              <div
-                                key={entrant.id}
-                                className="h-7 w-7 rounded-full border border-zinc-700 bg-zinc-800"
-                              />
-                            ),
-                          )}
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                            {event.name}
+                          </p>
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
+                            onClick={() =>
+                              setStepIndex(
+                                stepIndexById.get(`event:${event.id}`) ?? 0,
+                              )
+                            }
+                            aria-label={`Edit ${event.name}`}
+                          >
+                            ✎
+                          </button>
                         </div>
-                      )}
-                      <span>{winnerDisplay}</span>
+                        <p className="mt-2 text-sm text-zinc-300">
+                          Entrants: {entrants || "None selected"}
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-300">
+                          Final Four: {finalFour || "None selected"}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+                          <span>Winner:</span>
+                          {winnerEntrant?.image_url ? (
+                            <img
+                              src={winnerEntrant.image_url}
+                              alt={winnerEntrant.name}
+                              className="h-7 w-7 rounded-full border border-zinc-700 object-cover"
+                            />
+                          ) : null}
+                          <span>{winner || "Not set"}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (item.type === "eliminator") {
+                    const eliminator = eliminators.find(
+                      (row) => row.id === item.id,
+                    );
+                    if (!eliminator) return null;
+                    const pick =
+                      payload.eliminators?.[eliminator.id] ??
+                      emptyEliminatorPick;
+                    const entriesForEliminator = eliminatorEntries.filter(
+                      (entry) => entry.eliminator_id === eliminator.id,
+                    );
+                    const entryOrder = entriesForEliminator
+                      .map((entry) => {
+                        const entrant = entrantByIdAll.get(entry.entrant_id);
+                        const order = pick.entry_order?.[entry.entrant_id];
+                        return order
+                          ? `${order}. ${entrant?.name ?? "Entrant"}`
+                          : null;
+                      })
+                      .filter(Boolean)
+                      .sort(
+                        (a, b) =>
+                          Number(a.split(".")[0]) - Number(b.split(".")[0]),
+                      )
+                      .join(", ");
+                    const eliminationOrder = entriesForEliminator
+                      .map((entry) => {
+                        const entrant = entrantByIdAll.get(entry.entrant_id);
+                        const order = pick.elimination_order?.[entry.entrant_id];
+                        return order
+                          ? `${order}. ${entrant?.name ?? "Entrant"}`
+                          : null;
+                      })
+                      .filter(Boolean)
+                      .sort(
+                        (a, b) =>
+                          Number(a.split(".")[0]) - Number(b.split(".")[0]),
+                      )
+                      .join(", ");
+                    const mostElims = pick.most_eliminations
+                      ? entrantByIdAll.get(pick.most_eliminations)?.name
+                      : null;
+                    return (
+                      <div
+                        key={`eliminator:${eliminator.id}`}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                            {eliminator.name}
+                          </p>
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
+                            onClick={() =>
+                              setStepIndex(
+                                stepIndexById.get(
+                                  `eliminator:${eliminator.id}`,
+                                ) ?? 0,
+                              )
+                            }
+                            aria-label={`Edit ${eliminator.name}`}
+                          >
+                            ✎
+                          </button>
+                        </div>
+                        <p className="mt-2 text-sm text-zinc-300">
+                          <span className="font-semibold text-zinc-100">
+                            Entry order:
+                          </span>{" "}
+                          {entryOrder || "Not set"}
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-300">
+                          <span className="font-semibold text-zinc-100">
+                            Elimination order:
+                          </span>{" "}
+                          {eliminationOrder || "Not set"}
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-300">
+                          <span className="font-semibold text-zinc-100">
+                            Most eliminations:
+                          </span>{" "}
+                          {mostElims || "Not set"}
+                        </p>
+                      </div>
+                    );
+                  }
+                  const match = matches.find((row) => row.id === item.id);
+                  if (!match) return null;
+                  const winnerSideId = payload.match_picks[match.id] ?? null;
+                  const sideEntrants = matchEntrantsByMatch[match.id] ?? [];
+                  const sides = matchSidesByMatch[match.id] ?? [];
+                  const winnerSide =
+                    sides.find((side) => side.id === winnerSideId) ?? null;
+                  const winnerEntrants = sideEntrants
+                    .filter((row) => row.side_id === winnerSideId)
+                    .map((row) => entrantByIdAll.get(row.entrant_id))
+                    .filter(Boolean) as EntrantRow[];
+                  const winnerLabel =
+                    winnerSide?.label?.trim() && winnerEntrants.length > 1
+                      ? winnerSide.label.trim()
+                      : null;
+                  const winnerNames = winnerEntrants
+                    .map((entrant) => entrant.name)
+                    .filter(Boolean)
+                    .join(", ");
+                  const winnerDisplay = winnerLabel ?? (winnerNames || "Not set");
+                  return (
+                    <div
+                      key={`match:${match.id}`}
+                      className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          {match.name}
+                        </p>
+                        <button
+                          type="button"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
+                          onClick={() =>
+                            setStepIndex(
+                              stepIndexById.get(`match:${match.id}`) ?? 0,
+                            )
+                          }
+                          aria-label={`Edit ${match.name}`}
+                        >
+                          ✎
+                        </button>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+                        <span>Winner:</span>
+                        {winnerEntrants.length > 0 && (
+                          <div className="flex -space-x-2">
+                            {winnerEntrants.map((entrant) =>
+                              entrant.image_url ? (
+                                <img
+                                  key={entrant.id}
+                                  src={entrant.image_url}
+                                  alt={entrant.name}
+                                  className="h-7 w-7 rounded-full border border-zinc-700 object-cover"
+                                />
+                              ) : (
+                                <div
+                                  key={entrant.id}
+                                  className="h-7 w-7 rounded-full border border-zinc-700 bg-zinc-800"
+                                />
+                              ),
+                            )}
+                          </div>
+                        )}
+                        <span>{winnerDisplay}</span>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <button

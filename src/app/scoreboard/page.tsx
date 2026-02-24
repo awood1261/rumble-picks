@@ -225,7 +225,14 @@ export default function ScoreboardPage() {
   }, [scores, profiles]);
 
   const showEvents = useMemo(
-    () => events.filter((event) => event.show_id === selectedShowId),
+    () =>
+      events
+        .filter((event) => event.show_id === selectedShowId)
+        .sort(
+          (a, b) =>
+            (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+            a.name.localeCompare(b.name)
+        ),
     [events, selectedShowId]
   );
 
@@ -703,7 +710,8 @@ export default function ScoreboardPage() {
     const loadEvents = async () => {
       const { data: eventRows, error } = await supabase
         .from("events")
-        .select("id, name, show_id, rumble_gender, iron_person_entrant_id")
+        .select("id, name, show_id, rumble_gender, iron_person_entrant_id, order_index")
+        .order("order_index", { ascending: true, nullsLast: true })
         .order("name", { ascending: true });
       if (error) {
         setMessage(error.message);
@@ -730,8 +738,9 @@ export default function ScoreboardPage() {
     }
     const { data: eliminatorRows, error } = await supabase
       .from("eliminators")
-      .select("id")
-      .eq("show_id", selectedShowId);
+      .select("id, order_index")
+      .eq("show_id", selectedShowId)
+      .order("order_index", { ascending: true, nullsLast: true });
     if (error) {
       setMessage(error.message);
       return;
@@ -797,13 +806,14 @@ export default function ScoreboardPage() {
         setMatchEntrants([]);
         return;
       }
-      const { data: matchRows, error } = await supabase
-        .from("matches")
-        .select(
-          "id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
-        )
-        .eq("show_id", selectedShowId)
-        .order("created_at", { ascending: true });
+    const { data: matchRows, error } = await supabase
+      .from("matches")
+      .select(
+        "id, order_index, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
+      )
+      .eq("show_id", selectedShowId)
+      .order("order_index", { ascending: true, nullsLast: true })
+      .order("created_at", { ascending: true });
       if (error) {
         setMessage(error.message);
         return;

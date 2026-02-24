@@ -527,8 +527,10 @@ export default function ScoreboardPicksPage() {
         .maybeSingle(),
       supabase
         .from("events")
-        .select("id, name, show_id, rumble_gender, iron_person_entrant_id")
-        .eq("show_id", validShowId),
+        .select("id, name, show_id, rumble_gender, iron_person_entrant_id, order_index")
+        .eq("show_id", validShowId)
+        .order("order_index", { ascending: true, nullsLast: true })
+        .order("name", { ascending: true }),
       supabase
         .from("profiles")
         .select("id, display_name")
@@ -537,9 +539,10 @@ export default function ScoreboardPicksPage() {
       supabase
         .from("matches")
         .select(
-          "id, name, kind, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
+          "id, name, kind, order_index, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
         )
         .eq("show_id", validShowId)
+        .order("order_index", { ascending: true, nullsLast: true })
         .order("created_at", { ascending: true }),
       supabase
         .from("picks")
@@ -567,7 +570,11 @@ export default function ScoreboardPicksPage() {
       return;
     }
 
-    const eventList = (eventRows ?? []) as EventRow[];
+    const eventList = ((eventRows ?? []) as EventRow[]).sort(
+      (a, b) =>
+        (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+        a.name.localeCompare(b.name)
+    );
     setPayload((pickRow?.payload as PicksPayload) ?? null);
     setShow(showRow ?? null);
     setEvents(eventList);
@@ -617,7 +624,11 @@ export default function ScoreboardPicksPage() {
       }
       setRumbleEntries((entryRows ?? []) as RumbleEntryRow[]);
     }
-    const matchList = (matchRows ?? []) as MatchRow[];
+    const matchList = ((matchRows ?? []) as MatchRow[]).sort(
+      (a, b) =>
+        (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+        a.name.localeCompare(b.name)
+    );
     setMatches(matchList);
 
     if (matchError) {
