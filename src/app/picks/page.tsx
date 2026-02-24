@@ -1256,6 +1256,9 @@ export default function PicksPage() {
   const handleStepContinue = async () => {
     await handleSave();
     setStepIndex((prev) => Math.min(prev + 1, totalSteps));
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   const currentStepMatchReady =
@@ -1695,7 +1698,12 @@ export default function PicksPage() {
               <button
                 className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
                 type="button"
-                onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
+                onClick={() => {
+                  setStepIndex((prev) => Math.max(prev - 1, 0));
+                  if (typeof window !== "undefined") {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }
+                }}
                 disabled={stepIndex === 0}
               >
                 Back

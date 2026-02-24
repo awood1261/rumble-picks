@@ -1148,17 +1148,114 @@ export const EliminatorPicksSection = ({
     pick.elimination_type,
     pick.winner_id,
   ]);
+  const allEmpty = useMemo(() => {
+    const hasAnyEntryOrder = Object.values(pick.entry_order ?? {}).some(Boolean);
+    const hasAnyElimOrder = Object.values(pick.elimination_order ?? {}).some(Boolean);
+    const hasAnyElimType = Object.values(pick.elimination_type ?? {}).some(Boolean);
+    const hasWinner = Boolean(pick.winner_id);
+    const hasMostElims = Boolean(pick.most_eliminations);
+    return (
+      !hasAnyEntryOrder &&
+      !hasAnyElimOrder &&
+      !hasAnyElimType &&
+      !hasWinner &&
+      !hasMostElims
+    );
+  }, [
+    pick.entry_order,
+    pick.elimination_order,
+    pick.elimination_type,
+    pick.winner_id,
+    pick.most_eliminations,
+  ]);
+  const onlyWinnerPick = useMemo(() => {
+    const hasAnyEntryOrder = Object.values(pick.entry_order ?? {}).some(Boolean);
+    const hasAnyElimOrder = Object.values(pick.elimination_order ?? {}).some(Boolean);
+    const hasAnyElimType = Object.values(pick.elimination_type ?? {}).some(Boolean);
+    const hasMostElims = Boolean(pick.most_eliminations);
+    return (
+      Boolean(pick.winner_id) &&
+      !hasAnyEntryOrder &&
+      !hasAnyElimOrder &&
+      !hasAnyElimType &&
+      !hasMostElims
+    );
+  }, [
+    pick.entry_order,
+    pick.elimination_order,
+    pick.elimination_type,
+    pick.winner_id,
+    pick.most_eliminations,
+  ]);
+  const allComplete = useMemo(() => {
+    if (!pick.winner_id || !pick.most_eliminations) {
+      return false;
+    }
+    return orderedEntries.every((entry) => {
+      const id = entry.entrant_id;
+      if (!pick.entry_order?.[id]) return false;
+      if (pick.winner_id === id) {
+        return true;
+      }
+      return Boolean(pick.elimination_order?.[id]) &&
+        Boolean(pick.elimination_type?.[id]);
+    });
+  }, [
+    orderedEntries,
+    pick.entry_order,
+    pick.elimination_order,
+    pick.elimination_type,
+    pick.winner_id,
+    pick.most_eliminations,
+  ]);
   const [openEntrantId, setOpenEntrantId] = useState<string | null>(
     firstIncomplete
   );
+  const [hasUserToggled, setHasUserToggled] = useState(false);
   useEffect(() => {
+    if (hasUserToggled) {
+      if (
+        openEntrantId &&
+        !orderedEntries.some((entry) => entry.entrant_id === openEntrantId)
+      ) {
+        setOpenEntrantId(firstIncomplete ?? null);
+      }
+      return;
+    }
+    if (allComplete) {
+      setOpenEntrantId(null);
+      return;
+    }
+    if (onlyWinnerPick && pick.winner_id) {
+      setOpenEntrantId(pick.winner_id);
+      return;
+    }
+    if (allEmpty) {
+      if (pick.winner_id) {
+        setOpenEntrantId(pick.winner_id);
+        return;
+      }
+      if (!openEntrantId) {
+        setOpenEntrantId(null);
+      }
+      return;
+    }
     if (
       !openEntrantId ||
       !orderedEntries.some((entry) => entry.entrant_id === openEntrantId)
     ) {
       setOpenEntrantId(firstIncomplete);
     }
-  }, [firstIncomplete, orderedEntries, openEntrantId]);
+  }, [
+    firstIncomplete,
+    orderedEntries,
+    openEntrantId,
+    allComplete,
+    allEmpty,
+    onlyWinnerPick,
+    pick.winner_id,
+    hasUserToggled,
+  ]);
   const entryOptions = Array.from(
     { length: eliminator.entrant_limit },
     (_, index) => index + 1
@@ -1194,6 +1291,10 @@ export const EliminatorPicksSection = ({
                 value={pick.winner_id ?? ""}
                 onChange={(event) => {
                   const nextWinner = event.target.value || null;
+                  setHasUserToggled(true);
+                  if (nextWinner) {
+                    setOpenEntrantId(nextWinner);
+                  }
                   setPayload((prev) => {
                     const current = prev.eliminators?.[eliminator.id] ?? pick;
                     const nextEntryOrder = { ...(current.entry_order ?? {}) };
@@ -1275,9 +1376,10 @@ export const EliminatorPicksSection = ({
                       type="button"
                       className="flex w-full items-center justify-between gap-3 text-left"
                       onClick={() =>
-                        setOpenEntrantId((prev) =>
-                          prev === entry.entrant_id ? null : entry.entrant_id
-                        )
+                        setOpenEntrantId((prev) => {
+                          setHasUserToggled(true);
+                          return prev === entry.entrant_id ? null : entry.entrant_id;
+                        })
                       }
                       aria-expanded={isOpen}
                     >
