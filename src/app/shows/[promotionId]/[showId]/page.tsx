@@ -16,6 +16,7 @@ export default function ShowDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   const formattedStart = useMemo(() => {
     if (!show?.starts_at) return null;
@@ -27,6 +28,30 @@ export default function ShowDetailPage() {
       year: "numeric",
     });
   }, [show?.starts_at]);
+
+  const lockStatusText = useMemo(() => {
+    if (!show?.starts_at) {
+      return "Lock time not set";
+    }
+    const startTime = new Date(show.starts_at).getTime();
+    const diffMs = startTime - now;
+    if (diffMs <= 0) {
+      return "Show is locked";
+    }
+    const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const parts = [
+      days ? `${days}d` : null,
+      hours ? `${pad(hours)}h` : null,
+      minutes ? `${pad(minutes)}m` : null,
+      `${pad(seconds)}s`,
+    ].filter(Boolean);
+    return `Picks lock in ${parts.join(" ")}`;
+  }, [show?.starts_at, now]);
 
   useEffect(() => {
     let ignore = false;
@@ -64,6 +89,12 @@ export default function ShowDetailPage() {
       ignore = true;
     };
   }, [showId]);
+
+  useEffect(() => {
+    if (!show?.starts_at) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [show?.starts_at]);
 
   useEffect(() => {
     let ignore = false;
@@ -142,6 +173,12 @@ export default function ShowDetailPage() {
                 <h1 className="mt-3 text-4xl font-semibold text-amber-100 sm:text-5xl">
                   {show.name}
                 </h1>
+                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-zinc-200">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-black/70 px-3 py-1">
+                    <span className="text-amber-200">🔒</span>
+                    {lockStatusText}
+                  </span>
+                </p>
               </div>
             </div>
             {show.tagline ? (
