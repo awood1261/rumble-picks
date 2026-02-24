@@ -1446,12 +1446,75 @@ export const MatchPicksSection = ({
                               matchupSides.length === 3 ? "items-end pb-10" : "items-center"
                             }`}
                           >
-                            {isPrestige ? (
+                            {matchupSides.length === 3 ? (
+                              <>
+                                <div className="absolute left-1/3 -translate-x-1/2">
+                                  {isPrestige ? (
+                                    <div className="relative flex items-center justify-center">
+                                      <span className="relative inline-flex h-11 w-12 items-center justify-center text-[11px] font-bold uppercase tracking-[0.2em] text-amber-100 drop-shadow-[0_0_18px_rgba(198,162,74,0.35)]">
+                                        <svg
+                                          className="absolute inset-0 h-full w-full"
+                                          viewBox="0 0 64 72"
+                                          aria-hidden="true"
+                                        >
+                                          <path
+                                            d="M8 6h48l4 10v22c0 18-12.5 27.5-28 28C16.5 65.5 4 56 4 38V16l4-10z"
+                                            fill="#000000"
+                                            stroke="#C6A24A"
+                                            strokeWidth="3"
+                                          />
+                                        </svg>
+                                        <span className="relative z-10">VS</span>
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="rounded-full bg-black px-2.5 py-1 text-[10px] uppercase tracking-[0.35em] text-amber-200 shadow-lg">
+                                      VS
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="absolute left-2/3 -translate-x-1/2">
+                                  {isPrestige ? (
+                                    <div className="relative flex items-center justify-center">
+                                      <span className="relative inline-flex h-11 w-12 items-center justify-center text-[11px] font-bold uppercase tracking-[0.2em] text-amber-100 drop-shadow-[0_0_18px_rgba(198,162,74,0.35)]">
+                                        <svg
+                                          className="absolute inset-0 h-full w-full"
+                                          viewBox="0 0 64 72"
+                                          aria-hidden="true"
+                                        >
+                                          <path
+                                            d="M8 6h48l4 10v22c0 18-12.5 27.5-28 28C16.5 65.5 4 56 4 38V16l4-10z"
+                                            fill="#000000"
+                                            stroke="#C6A24A"
+                                            strokeWidth="3"
+                                          />
+                                        </svg>
+                                        <span className="relative z-10">VS</span>
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="rounded-full bg-black px-2.5 py-1 text-[10px] uppercase tracking-[0.35em] text-amber-200 shadow-lg">
+                                      VS
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            ) : isPrestige ? (
                               <div className="relative flex items-center justify-center">
-                                <span className="absolute -top-2 h-1 w-12 rounded-full bg-amber-300/60" />
-                                <span className="absolute -bottom-2 h-1 w-12 rounded-full bg-amber-300/60" />
-                                <span className="rounded-full border border-amber-300/80 bg-black/70 px-4 py-2 text-xs uppercase tracking-[0.45em] text-amber-100 shadow-[0_0_30px_rgba(198,162,74,0.45)]">
-                                  VS
+                                <span className="relative inline-flex h-14 w-16 items-center justify-center text-sm font-bold uppercase tracking-[0.25em] text-amber-100 drop-shadow-[0_0_22px_rgba(198,162,74,0.35)]">
+                                  <svg
+                                    className="absolute inset-0 h-full w-full"
+                                    viewBox="0 0 64 72"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      d="M8 6h48l4 10v22c0 18-12.5 27.5-28 28C16.5 65.5 4 56 4 38V16l4-10z"
+                                      fill="#000000"
+                                      stroke="#C6A24A"
+                                      strokeWidth="3"
+                                    />
+                                  </svg>
+                                  <span className="relative z-10">VS</span>
                                 </span>
                               </div>
                             ) : (
