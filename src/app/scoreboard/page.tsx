@@ -722,6 +722,53 @@ export default function ScoreboardPage() {
     lastDeltaRef.current = {};
   }, [selectedShowId]);
 
+  const loadEliminators = useCallback(async () => {
+    if (!selectedShowId) {
+      setEliminatorEntries([]);
+      setEliminatorEliminations([]);
+      return;
+    }
+    const { data: eliminatorRows, error } = await supabase
+      .from("eliminators")
+      .select("id")
+      .eq("show_id", selectedShowId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    const eliminatorIds = (eliminatorRows ?? []).map((row) => row.id);
+    if (eliminatorIds.length === 0) {
+      setEliminatorEntries([]);
+      setEliminatorEliminations([]);
+      return;
+    }
+    const [
+      { data: entryRows, error: entryError },
+      { data: elimRows, error: elimError },
+    ] = await Promise.all([
+      supabase
+        .from("eliminator_entries")
+        .select("eliminator_id, entrant_id, entry_order")
+        .in("eliminator_id", eliminatorIds),
+      supabase
+        .from("eliminator_eliminations")
+        .select(
+          "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
+        )
+        .in("eliminator_id", eliminatorIds),
+    ]);
+    if (entryError) {
+      setMessage(entryError.message);
+      return;
+    }
+    if (elimError) {
+      setMessage(elimError.message);
+      return;
+    }
+    setEliminatorEntries((entryRows ?? []) as EliminatorEntryRow[]);
+    setEliminatorEliminations((elimRows ?? []) as EliminatorEliminationRow[]);
+  }, [selectedShowId]);
+
   useEffect(() => {
     if (!selectedShowId) {
       return;
@@ -789,53 +836,6 @@ export default function ScoreboardPage() {
     };
 
     loadMatches();
-  }, [selectedShowId]);
-
-  const loadEliminators = useCallback(async () => {
-    if (!selectedShowId) {
-      setEliminatorEntries([]);
-      setEliminatorEliminations([]);
-      return;
-    }
-    const { data: eliminatorRows, error } = await supabase
-      .from("eliminators")
-      .select("id")
-      .eq("show_id", selectedShowId);
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-    const eliminatorIds = (eliminatorRows ?? []).map((row) => row.id);
-    if (eliminatorIds.length === 0) {
-      setEliminatorEntries([]);
-      setEliminatorEliminations([]);
-      return;
-    }
-    const [
-      { data: entryRows, error: entryError },
-      { data: elimRows, error: elimError },
-    ] = await Promise.all([
-      supabase
-        .from("eliminator_entries")
-        .select("eliminator_id, entrant_id, entry_order")
-        .in("eliminator_id", eliminatorIds),
-      supabase
-        .from("eliminator_eliminations")
-        .select(
-          "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
-        )
-        .in("eliminator_id", eliminatorIds),
-    ]);
-    if (entryError) {
-      setMessage(entryError.message);
-      return;
-    }
-    if (elimError) {
-      setMessage(elimError.message);
-      return;
-    }
-    setEliminatorEntries((entryRows ?? []) as EliminatorEntryRow[]);
-    setEliminatorEliminations((elimRows ?? []) as EliminatorEliminationRow[]);
   }, [selectedShowId]);
 
   useEffect(() => {
