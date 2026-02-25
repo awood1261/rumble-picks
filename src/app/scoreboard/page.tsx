@@ -1021,8 +1021,43 @@ export default function ScoreboardPage() {
 
         <section className="mt-8 space-y-6">
           {loading ? (
-            <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface)] px-6 py-10 text-sm text-[color:var(--bp-muted)]">
-              Loading scoreboard…
+            <div className="space-y-6 animate-pulse">
+              <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface-2)] px-6 py-5">
+                <div className="flex items-center justify-between">
+                  <div className="h-3 w-28 rounded-full bg-white/10" />
+                  <div className="h-4 w-20 rounded-full bg-white/10" />
+                </div>
+                <div className="mt-5 flex items-center gap-4">
+                  <div className="h-16 w-16 rounded-3xl bg-white/10" />
+                  <div className="space-y-2">
+                    <div className="h-3 w-20 rounded-full bg-white/10" />
+                    <div className="h-6 w-44 rounded-full bg-white/10" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-end justify-center gap-3 sm:gap-4">
+                <div className="h-28 w-32 rounded-none border border-white/10 bg-[color:var(--bp-surface)] sm:h-32" />
+                <div className="h-36 w-36 rounded-3xl border border-white/10 bg-[color:var(--bp-surface)] sm:h-40" />
+                <div className="h-28 w-32 rounded-none border border-white/10 bg-[color:var(--bp-surface)] sm:h-32" />
+              </div>
+              <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface)]">
+                <div className="border-b border-white/5 px-6 py-4">
+                  <div className="h-3 w-24 rounded-full bg-white/10" />
+                </div>
+                <div className="divide-y divide-white/5">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={index} className="flex items-center gap-4 px-6 py-4">
+                      <div className="h-6 w-8 rounded-full bg-white/10" />
+                      <div className="h-10 w-10 rounded-2xl bg-white/10" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-32 rounded-full bg-white/10" />
+                        <div className="h-3 w-20 rounded-full bg-white/10" />
+                      </div>
+                      <div className="h-4 w-12 rounded-full bg-white/10" />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : filteredScoreboard.length === 0 ? (
             <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface)] px-6 py-8 text-sm text-[color:var(--bp-text)]">
