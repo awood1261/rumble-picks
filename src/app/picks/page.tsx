@@ -1336,7 +1336,7 @@ export default function PicksPage() {
                 {selectedShow?.name ?? "Show"}
               </span>
             </div>
-            <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+            <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-amber-200">
               <span className="text-sm leading-none">🔒</span>
               <span>{lockStatusText}</span>
             </div>

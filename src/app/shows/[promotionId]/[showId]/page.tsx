@@ -173,7 +173,7 @@ export default function ShowDetailPage() {
                 <h1 className="mt-3 text-4xl font-semibold text-amber-100 sm:text-5xl">
                   {show.name}
                 </h1>
-                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.25em] text-zinc-200">
+                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.15em] text-zinc-200">
                   <span className="inline-flex items-center gap-2 rounded-full bg-black/70 px-3 py-1">
                     <span className="text-amber-200">🔒</span>
                     {lockStatusText}

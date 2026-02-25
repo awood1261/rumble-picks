@@ -1014,8 +1014,6 @@ export default function ScoreboardPage() {
           </div>
         </header>
 
-        <UpdateProgress />
-
         {message && (
           <div className="mt-6 rounded-2xl border border-white/5 bg-[color:var(--bp-surface)] px-4 py-3 text-sm text-[color:var(--bp-text)]">
             {message}
@@ -1042,10 +1040,12 @@ export default function ScoreboardPage() {
             </div>
           ) : (
             <>
-              <div className="rounded-3xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] p-6 shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+              <div className="rounded-3xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-6 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.35em] text-[color:var(--bp-gold)]">
                   <span>Current leader</span>
-                  {showResultsComplete ? <span>Champion</span> : <span>Live</span>}
+                  <span className="text-lg font-semibold text-[color:var(--bp-gold)]">
+                    {topThree[0]?.points ?? 0} pts
+                  </span>
                 </div>
                 <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-4">
@@ -1062,85 +1062,85 @@ export default function ScoreboardPage() {
                       <p className="text-2xl font-semibold text-[color:var(--bp-text)] sm:text-3xl">
                         {topThree[0]?.display_name ?? "TBD"}
                       </p>
-                      {currentUserId && topThree[0]?.user_id !== currentUserId ? (
-                        <p className="mt-1 text-sm text-[color:var(--bp-muted)]">
-                          Gap to leader:{" "}
-                          <span className="font-semibold text-[color:var(--bp-gold)]">
-                            {Math.max(
-                              0,
-                              (topThree[0]?.points ?? 0) -
-                                (filteredScoreboard.find((row) => row.user_id === currentUserId)
-                                  ?.points ?? 0)
-                            )}{" "}
-                            pts
-                          </span>
-                        </p>
-                      ) : (
+                      {currentUserId && topThree[0]?.user_id === currentUserId ? (
                         <p className="mt-1 text-sm text-[color:var(--bp-muted)]">
                           You are in the lead.
                         </p>
-                      )}
+                      ) : null}
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--bp-dim)]">
-                      Points
-                    </p>
-                    <p className="text-4xl font-semibold text-[color:var(--bp-gold)] sm:text-5xl">
-                      {topThree[0]?.points ?? 0}
-                    </p>
                   </div>
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
-                {topThree.map((row, index) => {
-                  const delta = rankDelta[row.user_id];
-                  const borderColor =
-                    index === 0
-                      ? "border-[color:var(--bp-gold-30)]"
-                      : index === 1
-                      ? "border-[color:var(--bp-silver)]/40"
-                      : "border-[color:var(--bp-bronze)]/40";
-                  const badgeColor =
-                    index === 0
-                      ? "bg-[color:var(--bp-gold)] text-black"
-                      : index === 1
-                      ? "bg-[color:var(--bp-silver)] text-black"
-                      : "bg-[color:var(--bp-bronze)] text-black";
-                  return (
-                    <Link
-                      key={row.id}
-                      className={`group relative rounded-3xl border ${borderColor} bg-[color:var(--bp-surface)] px-5 py-5 transition hover:border-[color:var(--bp-gold)] ${
-                        index === 0 ? "-translate-y-2 md:-translate-y-3" : "translate-y-0"
-                      }`}
-                      href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${badgeColor}`}>
-                          {index + 1}
-                        </span>
-                        <MovementPill delta={delta ?? null} />
-                      </div>
-                      <div className="mt-4 flex items-center gap-3">
-                        <img
-                          src={avatarSrcForKey(row.avatar_key)}
-                          alt={row.display_name}
-                          className="h-12 w-12 rounded-2xl border border-white/10 bg-black/40"
-                          loading="lazy"
-                        />
-                        <div>
-                          <p className="text-base font-semibold text-[color:var(--bp-text)]">
+              <div className="relative flex flex-row items-end justify-center">
+                {[1, 0, 2]
+                  .filter((index) => index < topThree.length)
+                  .map((rankIndex) => {
+                    const row = topThree[rankIndex];
+                    const delta = rankDelta[row.user_id];
+                    const borderColor =
+                      rankIndex === 0
+                        ? "border-[color:var(--bp-gold-30)]"
+                        : rankIndex === 1
+                        ? "border-[color:var(--bp-silver)]/40"
+                        : "border-[color:var(--bp-bronze)]/40";
+                    const badgeColor =
+                      rankIndex === 0
+                        ? "bg-[color:var(--bp-gold)] text-black"
+                        : rankIndex === 1
+                        ? "bg-[color:var(--bp-silver)] text-black"
+                        : "bg-[color:var(--bp-bronze)] text-black";
+                    return (
+                      <Link
+                        key={row.id}
+                        className={`group relative w-full rounded-3xl border ${borderColor} bg-[color:var(--bp-bg)] px-4 py-4 transition hover:border-[color:var(--bp-gold)] ${
+                          rankIndex === 0
+                            ? "z-20 -translate-y-2 scale-[1.08] sm:-translate-y-3 sm:scale-[1.1] md:scale-[1.12] md:px-5 md:py-5"
+                            : "z-10"
+                        } ${
+                          rankIndex === 1
+                            ? "-mr-6 sm:-mr-8 md:-mr-10"
+                            : rankIndex === 2
+                            ? "-ml-6 sm:-ml-8 md:-ml-10"
+                            : ""
+                        } max-w-[10rem] sm:max-w-[11.5rem] md:max-w-[13.5rem]`}
+                        href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${badgeColor}`}
+                            >
+                              {rankIndex + 1}
+                            </span>
+                            <img
+                              src={avatarSrcForKey(row.avatar_key)}
+                              alt={row.display_name}
+                              className="h-10 w-10 rounded-2xl border border-white/10 bg-black/40"
+                              loading="lazy"
+                            />
+                          </div>
+                          <MovementPill delta={delta ?? null} />
+                        </div>
+                        <div
+                          className={`mt-3 min-w-0 ${
+                            rankIndex === 0
+                              ? "text-center"
+                              : rankIndex === 2
+                              ? "text-right"
+                              : ""
+                          }`}
+                        >
+                          <p className="truncate text-base font-semibold text-[color:var(--bp-text)]">
                             {row.display_name}
                           </p>
                           <p className="text-sm text-[color:var(--bp-muted)]">
                             {row.points} pts
                           </p>
                         </div>
-                      </div>
-                    </Link>
-                  );
-                })}
+                      </Link>
+                    );
+                  })}
               </div>
 
               <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface)]">
@@ -1166,19 +1166,19 @@ export default function ScoreboardPage() {
                         }`}
                         href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
                       >
-                        <div className="flex items-center gap-4">
-                          <span className="w-10 text-lg font-semibold text-[color:var(--bp-gold)]">
+                        <div className="flex min-w-0 flex-1 items-center gap-1">
+                          <span className="w-10 shrink-0 text-lg font-semibold text-[color:var(--bp-gold)]">
                             {index + 4}
                           </span>
-                          <div className="flex items-center gap-3">
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
                             <img
                               src={avatarSrcForKey(row.avatar_key)}
                               alt={row.display_name}
-                              className="h-10 w-10 rounded-2xl border border-white/10 bg-black/40"
+                              className="h-10 w-10 shrink-0 rounded-2xl border border-white/10 bg-black/40"
                               loading="lazy"
                             />
-                            <div>
-                              <p className="text-base font-semibold text-[color:var(--bp-text)]">
+                            <div className="min-w-0">
+                              <p className="truncate text-base font-semibold text-[color:var(--bp-text)]">
                                 {row.display_name}
                                 {isCurrentUser && (
                                   <span className="ml-2 inline-flex items-center rounded-full border border-[color:var(--bp-gold-30)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)]">
