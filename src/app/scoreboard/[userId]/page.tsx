@@ -20,6 +20,16 @@ type RumblePick = {
 
 type PicksPayload = {
   rumbles: Record<string, RumblePick>;
+  eliminators?: Record<
+    string,
+    {
+      entry_order?: Record<string, number | null>;
+      elimination_order?: Record<string, number | null>;
+      elimination_type?: Record<string, "pinfall" | "submission" | null>;
+      winner_id?: string | null;
+      most_eliminations?: string | null;
+    }
+  >;
   match_picks?: Record<string, string | null>;
   match_finish_picks?: Record<
     string,
@@ -42,6 +52,7 @@ type EventRow = {
   show_id: string | null;
   rumble_gender: string | null;
   iron_person_entrant_id?: string | null;
+  order_index?: number | null;
 };
 
 type ShowRow = {
@@ -62,6 +73,28 @@ type RumbleEntryRow = {
   eliminated_at: string | null;
   eliminations_count: number;
   is_confirmed?: boolean;
+};
+
+type EliminatorRow = {
+  id: string;
+  name: string;
+  show_id: string | null;
+  entrant_limit: number;
+  order_index?: number | null;
+};
+
+type EliminatorEntryRow = {
+  eliminator_id: string;
+  entrant_id: string;
+  entry_order: number | null;
+};
+
+type EliminatorEliminationRow = {
+  eliminator_id: string;
+  eliminated_entrant_id: string;
+  eliminated_by_entrant_id: string | null;
+  elimination_type: "pinfall" | "submission";
+  elimination_order: number;
 };
 
 type MatchRow = {
@@ -99,6 +132,14 @@ const emptyRumblePick: RumblePick = {
   entry_2: null,
   entry_30: null,
   iron_person: null,
+  most_eliminations: null,
+};
+
+const emptyEliminatorPick = {
+  entry_order: {},
+  elimination_order: {},
+  elimination_type: {},
+  winner_id: null,
   most_eliminations: null,
 };
 
@@ -143,6 +184,13 @@ export default function ScoreboardPicksPage() {
   const [payload, setPayload] = useState<PicksPayload | null>(null);
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [rumbleEntries, setRumbleEntries] = useState<RumbleEntryRow[]>([]);
+  const [eliminators, setEliminators] = useState<EliminatorRow[]>([]);
+  const [eliminatorEntries, setEliminatorEntries] = useState<
+    EliminatorEntryRow[]
+  >([]);
+  const [eliminatorEliminations, setEliminatorEliminations] = useState<
+    EliminatorEliminationRow[]
+  >([]);
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
@@ -429,6 +477,85 @@ export default function ScoreboardPicksPage() {
     );
   }, [eventPointsByEvent, events]);
 
+  const eliminatorPointsById = useMemo(() => {
+    const map: Record<
+      string,
+      {
+        entryOrder: number;
+        eliminationOrder: number;
+        eliminationType: number;
+        mostElims: number;
+        total: number;
+      }
+    > = {};
+    eliminators.forEach((eliminator) => {
+      const entries = eliminatorEntries.filter(
+        (entry) => entry.eliminator_id === eliminator.id
+      );
+      const eliminations = eliminatorEliminations.filter(
+        (entry) => entry.eliminator_id === eliminator.id
+      );
+      const pick = payload?.eliminators?.[eliminator.id];
+      const entryReady = entries.length > 0 && entries.every((entry) => entry.entry_order);
+      const eliminationReady =
+        eliminations.length === Math.max(entries.length - 1, 0);
+      let entryOrder = 0;
+      let eliminationOrder = 0;
+      let eliminationType = 0;
+      let mostElims = 0;
+      if (pick && entryReady) {
+        const orderMap = pick.entry_order ?? {};
+        entries.forEach((entry) => {
+          if (entry.entry_order && orderMap[entry.entrant_id] === entry.entry_order) {
+            entryOrder += scoringRules.eliminator_entry_order;
+          }
+        });
+      }
+      if (pick && eliminationReady) {
+        const elimOrderMap = pick.elimination_order ?? {};
+        const elimTypeMap = pick.elimination_type ?? {};
+        eliminations.forEach((entry) => {
+          if (elimOrderMap[entry.eliminated_entrant_id] === entry.elimination_order) {
+            eliminationOrder += scoringRules.eliminator_elimination_order;
+          }
+          if (elimTypeMap[entry.eliminated_entrant_id] === entry.elimination_type) {
+            eliminationType += scoringRules.eliminator_elimination_type;
+          }
+        });
+        if (pick.most_eliminations) {
+          const eliminationsByEntrant = eliminations.reduce((acc, row) => {
+            if (!row.eliminated_by_entrant_id) return acc;
+            acc[row.eliminated_by_entrant_id] =
+              (acc[row.eliminated_by_entrant_id] ?? 0) + 1;
+            return acc;
+          }, {} as Record<string, number>);
+          const maxElims = Math.max(0, ...Object.values(eliminationsByEntrant));
+          const topElims = Object.keys(eliminationsByEntrant).filter(
+            (id) => eliminationsByEntrant[id] === maxElims
+          );
+          if (topElims.includes(pick.most_eliminations)) {
+            mostElims = scoringRules.eliminator_most_eliminations;
+          }
+        }
+      }
+      map[eliminator.id] = {
+        entryOrder,
+        eliminationOrder,
+        eliminationType,
+        mostElims,
+        total: entryOrder + eliminationOrder + eliminationType + mostElims,
+      };
+    });
+    return map;
+  }, [eliminators, eliminatorEntries, eliminatorEliminations, payload]);
+
+  const eliminatorPointsSummary = useMemo(() => {
+    return eliminators.reduce(
+      (acc, eliminator) => acc + (eliminatorPointsById[eliminator.id]?.total ?? 0),
+      0
+    );
+  }, [eliminators, eliminatorPointsById]);
+
   const matchPointsSummary = useMemo(() => {
     const summary = {
       winner: 0,
@@ -496,8 +623,12 @@ export default function ScoreboardPicksPage() {
   }, [matchEntrants, matches, payload]);
 
   const totalShowPoints = useMemo(() => {
-    return eventPointsSummary.total + matchPointsSummary.total;
-  }, [eventPointsSummary.total, matchPointsSummary.total]);
+    return (
+      eventPointsSummary.total +
+      matchPointsSummary.total +
+      eliminatorPointsSummary
+    );
+  }, [eventPointsSummary.total, matchPointsSummary.total, eliminatorPointsSummary]);
 
   const load = useCallback(async () => {
     if (!validShowId) {
@@ -511,6 +642,7 @@ export default function ScoreboardPicksPage() {
       { data: eventRows },
       { data: profileRow },
       { data: matchRows, error: matchError },
+      { data: eliminatorRows, error: eliminatorError },
       { data: allPickRows, error: allPickError },
       { data: scoreRows, error: scoreError },
     ] = await Promise.all([
@@ -545,6 +677,12 @@ export default function ScoreboardPicksPage() {
         .order("order_index", { ascending: true, nullsLast: true })
         .order("created_at", { ascending: true }),
       supabase
+        .from("eliminators")
+        .select("id, name, show_id, entrant_limit, order_index")
+        .eq("show_id", validShowId)
+        .order("order_index", { ascending: true, nullsLast: true })
+        .order("name", { ascending: true }),
+      supabase
         .from("picks")
         .select("payload")
         .eq("show_id", validShowId),
@@ -569,6 +707,11 @@ export default function ScoreboardPicksPage() {
       setLoading(false);
       return;
     }
+    if (eliminatorError) {
+      setMessage(eliminatorError.message);
+      setLoading(false);
+      return;
+    }
 
     const eventList = ((eventRows ?? []) as EventRow[]).sort(
       (a, b) =>
@@ -579,6 +722,12 @@ export default function ScoreboardPicksPage() {
     setShow(showRow ?? null);
     setEvents(eventList);
     setProfile(profileRow ?? null);
+    const eliminatorList = ((eliminatorRows ?? []) as EliminatorRow[]).sort(
+      (a, b) =>
+        (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+        a.name.localeCompare(b.name)
+    );
+    setEliminators(eliminatorList);
     const nextStats: Record<string, { total: number; bySide: Record<string, number> }> = {};
     (allPickRows ?? []).forEach((row) => {
       const payloadRow = row.payload as PicksPayload | null;
@@ -672,12 +821,62 @@ export default function ScoreboardPicksPage() {
       setMatchEntrants([]);
     }
 
+    let eliminatorEntryRowsList: EliminatorEntryRow[] = [];
+    let eliminatorElimRowsList: EliminatorEliminationRow[] = [];
+    if (eliminatorList.length > 0) {
+      const eliminatorIds = eliminatorList.map((eliminator) => eliminator.id);
+      const [
+        { data: eliminatorEntryRows, error: eliminatorEntryError },
+        { data: eliminatorElimRows, error: eliminatorElimError },
+      ] = await Promise.all([
+        supabase
+          .from("eliminator_entries")
+          .select("eliminator_id, entrant_id, entry_order")
+          .in("eliminator_id", eliminatorIds),
+        supabase
+          .from("eliminator_eliminations")
+          .select(
+            "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
+          )
+          .in("eliminator_id", eliminatorIds),
+      ]);
+      if (eliminatorEntryError) {
+        setMessage(eliminatorEntryError.message);
+        setLoading(false);
+        return;
+      }
+      if (eliminatorElimError) {
+        setMessage(eliminatorElimError.message);
+        setLoading(false);
+        return;
+      }
+      eliminatorEntryRowsList = (eliminatorEntryRows ?? []) as EliminatorEntryRow[];
+      eliminatorElimRowsList = (eliminatorElimRows ?? []) as EliminatorEliminationRow[];
+      setEliminatorEntries(eliminatorEntryRowsList);
+      setEliminatorEliminations(eliminatorElimRowsList);
+    } else {
+      setEliminatorEntries([]);
+      setEliminatorEliminations([]);
+    }
+
     const matchFinishIds = Object.values(
       pickRow?.payload?.match_finish_picks ?? {}
     )
       .flatMap((pick) => [pick?.winner, pick?.loser])
       .filter(Boolean);
     const matchEntrantIds = matchEntrantRowsList
+      .map((row) => row.entrant_id)
+      .filter(Boolean);
+    const eliminatorPickIds = Object.values(
+      pickRow?.payload?.eliminators ?? {}
+    ).flatMap((pick) => [
+      ...Object.keys(pick?.entry_order ?? {}),
+      ...Object.keys(pick?.elimination_order ?? {}),
+      ...Object.keys(pick?.elimination_type ?? {}),
+      pick?.winner_id,
+      pick?.most_eliminations,
+    ]);
+    const eliminatorEntrantIds = eliminatorEntryRowsList
       .map((row) => row.entrant_id)
       .filter(Boolean);
     const rumblePickIds = Object.values(pickRow?.payload?.rumbles ?? {}).flatMap(
@@ -691,7 +890,13 @@ export default function ScoreboardPicksPage() {
         rumble?.most_eliminations,
       ]
     );
-    const ids = [...rumblePickIds, ...matchFinishIds, ...matchEntrantIds]
+    const ids = [
+      ...rumblePickIds,
+      ...matchFinishIds,
+      ...matchEntrantIds,
+      ...eliminatorPickIds,
+      ...eliminatorEntrantIds,
+    ]
       .filter(Boolean)
       .map(String);
 
@@ -789,6 +994,53 @@ export default function ScoreboardPicksPage() {
         })}
       </ul>
     );
+  };
+
+  const renderEliminatorOrder = (
+    entries: EliminatorEntryRow[],
+    orderMap: Record<string, number | null> | undefined
+  ) => {
+    const ordered = entries
+      .map((entry) => {
+        const order = orderMap?.[entry.entrant_id];
+        if (!order) return null;
+        return {
+          order,
+          name: entrantMap.get(entry.entrant_id)?.name ?? "Entrant",
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.order - b.order) as Array<{
+      order: number;
+      name: string;
+    }>;
+    if (ordered.length === 0) return "Not set";
+    return ordered.map((entry) => `${entry.order}. ${entry.name}`).join(", ");
+  };
+
+  const renderEliminatorTypes = (
+    entries: EliminatorEntryRow[],
+    typeMap: Record<string, "pinfall" | "submission" | null> | undefined,
+    orderMap: Record<string, number | null> | undefined
+  ) => {
+    const ordered = entries
+      .map((entry) => {
+        const type = typeMap?.[entry.entrant_id];
+        if (!type) return null;
+        return {
+          order: orderMap?.[entry.entrant_id] ?? 999,
+          name: entrantMap.get(entry.entrant_id)?.name ?? "Entrant",
+          type: type === "pinfall" ? "Pinfall" : "Submission",
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)) as Array<{
+      order: number;
+      name: string;
+      type: string;
+    }>;
+    if (ordered.length === 0) return "Not set";
+    return ordered.map((entry) => `${entry.name}: ${entry.type}`).join(", ");
   };
 
   if (loading) {
@@ -1058,6 +1310,146 @@ export default function ScoreboardPicksPage() {
             );
           })}
 
+        {eliminators.length > 0 && (
+          <section className="mt-10">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-lg font-semibold">Eliminator Picks</h2>
+              <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                {eliminatorPointsSummary} pts
+              </span>
+            </div>
+            <div className="mt-4 grid gap-4">
+              {eliminators.map((eliminator) => {
+                const pick =
+                  payload.eliminators?.[eliminator.id] ?? emptyEliminatorPick;
+                const entries = eliminatorEntries.filter(
+                  (entry) => entry.eliminator_id === eliminator.id
+                );
+                const points = eliminatorPointsById[eliminator.id] ?? {
+                  entryOrder: 0,
+                  eliminationOrder: 0,
+                  eliminationType: 0,
+                  mostElims: 0,
+                  total: 0,
+                };
+                const entryOrderText = renderEliminatorOrder(
+                  entries,
+                  pick.entry_order
+                );
+                const eliminationOrderText = renderEliminatorOrder(
+                  entries,
+                  pick.elimination_order
+                );
+                const eliminationTypeText = renderEliminatorTypes(
+                  entries,
+                  pick.elimination_type,
+                  pick.elimination_order
+                );
+                const winnerName = pick.winner_id
+                  ? entrantMap.get(pick.winner_id)?.name ?? "Selected"
+                  : "Not set";
+                const mostElimsName = pick.most_eliminations
+                  ? entrantMap.get(pick.most_eliminations)?.name ?? "Selected"
+                  : "Not set";
+
+                return (
+                  <div
+                    key={eliminator.id}
+                    className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4"
+                  >
+                    <details className="group peer">
+                      <summary className="relative flex cursor-pointer list-none items-start justify-between gap-3">
+                        <div className="flex flex-col gap-1">
+                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                            Eliminator
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-lg font-semibold text-zinc-100">
+                              {eliminator.name}
+                            </p>
+                            <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                              {points.total} pts
+                            </span>
+                          </div>
+                        </div>
+                        <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
+                          <ChevronIcon />
+                        </span>
+                      </summary>
+                      {entries.length === 0 ? (
+                        <p className="mt-3 text-sm text-zinc-400">
+                          No entrants available yet.
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-3 text-sm text-zinc-200">
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                                Entry order
+                              </span>
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                                {points.entryOrder} pts
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-zinc-300">
+                              {entryOrderText}
+                            </p>
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                                Elimination order
+                              </span>
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                                {points.eliminationOrder} pts
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-zinc-300">
+                              {eliminationOrderText}
+                            </p>
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                                Elimination type
+                              </span>
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                                {points.eliminationType} pts
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-zinc-300">
+                              {eliminationTypeText}
+                            </p>
+                          </div>
+                          <div className="flex items-center justify-between text-sm text-zinc-200">
+                            <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                              Winner
+                            </span>
+                            <span className="text-sm text-zinc-300">
+                              {winnerName}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm text-zinc-200">
+                            <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                              Most eliminations
+                            </span>
+                            <span className="text-sm text-zinc-300">
+                              {mostElimsName}
+                            </span>
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                              {points.mostElims} pts
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </details>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         <div className="mt-10 flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-semibold">Match Picks</h2>
           <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
@@ -1186,19 +1578,6 @@ export default function ScoreboardPicksPage() {
                                   {matchTotalPoints} pts
                                 </span>
                               </div>
-                              {sideEntries.length > 0 && (
-                                <p className="mt-2 text-[11px] font-semibold text-amber-200">
-                                  {sideEntries
-                                    .map((side) =>
-                                      `${side.label}: ${
-                                        side.percent === null
-                                          ? "—"
-                                          : `${side.percent}% of fans' pick`
-                                      }`
-                                    )
-                                    .join(" • ")}
-                                </p>
-                              )}
                             </div>
                             {winner && (
                               <span

@@ -1856,6 +1856,7 @@ export const MatchPicksSection = ({
             scoringRules.match_interference +
             (showFinishWinner ? scoringRules.match_finish_winner : 0) +
             (showFinishLoser ? scoringRules.match_finish_loser : 0);
+          const bonusSectionId = `bonus-picks-${match.id}`;
 
           return (
             <div
@@ -2120,13 +2121,29 @@ export const MatchPicksSection = ({
                                       : "hover:bg-white/5"
                                   }`}
                                   onClick={() =>
-                                    setPayload((prev) => ({
-                                      ...prev,
-                                      match_picks: {
-                                        ...prev.match_picks,
-                                        [match.id]: sideEntry.side.id,
-                                      },
-                                    }))
+                                    {
+                                      setPayload((prev) => ({
+                                        ...prev,
+                                        match_picks: {
+                                          ...prev.match_picks,
+                                          [match.id]: sideEntry.side.id,
+                                        },
+                                      }));
+                                      if (bonusPointsTotal > 0) {
+                                        requestAnimationFrame(() => {
+                                          const el =
+                                            typeof document !== "undefined"
+                                              ? document.getElementById(
+                                                  bonusSectionId,
+                                                )
+                                              : null;
+                                          el?.scrollIntoView({
+                                            behavior: "smooth",
+                                            block: "start",
+                                          });
+                                        });
+                                      }
+                                    }
                                   }
                                   aria-label={`Select ${sideEntry.label ?? `Side ${index + 1}`} as winner`}
                                 />
@@ -2139,14 +2156,15 @@ export const MatchPicksSection = ({
                 )}
               </div>
               <div className="mt-4">
-                <BonusPicksAccordion
-                  defaultOpen={false}
-                  summaryText={
-                    hasBonusPick
-                      ? `Saved · +${bonusPointsTotal} pts`
-                      : `+${bonusPointsTotal} pts`
-                  }
-                >
+                <div id={bonusSectionId} className="scroll-mt-6">
+                  <BonusPicksAccordion
+                    defaultOpen={false}
+                    summaryText={
+                      hasBonusPick
+                        ? `Saved · +${bonusPointsTotal} pts`
+                        : `+${bonusPointsTotal} pts`
+                    }
+                  >
                   <div className="space-y-4">
                     <div>
                       <div className="flex items-center justify-between">
@@ -2318,7 +2336,8 @@ export const MatchPicksSection = ({
                   <p className="mt-3 text-xs text-zinc-500">
                     Bonus picks can earn extra points.
                   </p>
-                </BonusPicksAccordion>
+                  </BonusPicksAccordion>
+                </div>
               </div>
             </div>
           );

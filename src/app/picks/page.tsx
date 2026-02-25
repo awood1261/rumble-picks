@@ -1272,6 +1272,8 @@ export default function PicksPage() {
     stepItems[Math.min(stepIndex, Math.max(totalSteps - 1, 0))];
   const progressPercent =
     totalSteps > 0 ? Math.round(((stepIndex + 1) / totalSteps) * 100) : 0;
+  const loadingStepType: "event" | "match" | "eliminator" =
+    currentStep?.type ?? "match";
 
   useEffect(() => {
     setStepIndex(0);
@@ -1290,10 +1292,105 @@ export default function PicksPage() {
     Boolean(payload.match_picks[currentStep.id]);
 
   if (loading) {
+    const renderStepSkeleton = (type: "event" | "match" | "eliminator") => {
+      if (type === "event") {
+        return (
+          <div className="mt-6 space-y-6">
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <div className="h-4 w-32 rounded-full bg-zinc-800/80" />
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-10 rounded-2xl bg-zinc-800/60"
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <div className="h-4 w-28 rounded-full bg-zinc-800/80" />
+              <div className="mt-4 flex gap-3">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-12 w-12 rounded-full bg-zinc-800/60"
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <div className="h-4 w-24 rounded-full bg-zinc-800/80" />
+              <div className="mt-4 space-y-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-9 rounded-2xl bg-zinc-800/60"
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      }
+      if (type === "eliminator") {
+        return (
+          <div className="mt-6 space-y-4">
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <div className="h-4 w-36 rounded-full bg-zinc-800/80" />
+              <div className="mt-4 h-10 w-1/2 rounded-2xl bg-zinc-800/60" />
+            </div>
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={index}
+                className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-zinc-800/70" />
+                  <div className="h-4 w-40 rounded-full bg-zinc-800/70" />
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="h-9 rounded-2xl bg-zinc-800/60" />
+                  <div className="h-9 rounded-2xl bg-zinc-800/60" />
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      return (
+        <div className="mt-6 space-y-4">
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <div className="h-4 w-28 rounded-full bg-zinc-800/80" />
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <div className="h-48 rounded-2xl bg-zinc-800/60 sm:h-60" />
+              <div className="h-48 rounded-2xl bg-zinc-800/60 sm:h-60" />
+            </div>
+          </div>
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <div className="h-4 w-36 rounded-full bg-zinc-800/80" />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="h-9 rounded-2xl bg-zinc-800/60" />
+              <div className="h-9 rounded-2xl bg-zinc-800/60" />
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
-        <main className="mx-auto flex min-h-screen max-w-5xl items-center justify-center px-6">
-          <p>Loading picks…</p>
+        <main className="mx-auto w-full max-w-6xl px-6 py-6 pb-28 sm:py-10 sm:pb-32">
+          <div className="animate-pulse">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="h-3 w-32 rounded-full bg-zinc-800/80" />
+              <div className="flex items-center justify-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-zinc-800/80" />
+                <div className="h-7 w-48 rounded-full bg-zinc-800/80 sm:h-8" />
+              </div>
+              <div className="h-4 w-56 rounded-full bg-zinc-800/80" />
+            </div>
+            {renderStepSkeleton(loadingStepType)}
+          </div>
         </main>
       </div>
     );
