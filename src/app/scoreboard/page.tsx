@@ -870,8 +870,7 @@ export default function ScoreboardPage() {
           "--bp-bronze": "#A9724A",
           "--bp-green": "#2ECC71",
           "--bp-red": "#E74C3C",
-          backgroundImage:
-            "radial-gradient(circle at top, rgba(198,162,74,0.10), transparent 55%), linear-gradient(#111214, #0D0E10)",
+          backgroundColor: "#000000",
         } as CSSProperties
       }
     >
@@ -1040,7 +1039,7 @@ export default function ScoreboardPage() {
             </div>
           ) : (
             <>
-              <div className="rounded-3xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-6 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+              <div className="rounded-3xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-6 py-4 shadow-[0_12px_36px_rgba(0,0,0,0.45),0_0_24px_rgba(198,162,74,0.35)]">
                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.35em] text-[color:var(--bp-gold)]">
                   <span>Current leader</span>
                   <span className="text-lg font-semibold text-[color:var(--bp-gold)]">
@@ -1078,6 +1077,7 @@ export default function ScoreboardPage() {
                   .map((rankIndex) => {
                     const row = topThree[rankIndex];
                     const delta = rankDelta[row.user_id];
+                    const hasDelta = delta !== null && delta !== undefined && delta !== 0;
                     const borderColor =
                       rankIndex === 0
                         ? "border-[color:var(--bp-gold-30)]"
@@ -1093,9 +1093,9 @@ export default function ScoreboardPage() {
                     return (
                       <Link
                         key={row.id}
-                        className={`group relative w-full rounded-3xl border ${borderColor} bg-[color:var(--bp-bg)] px-4 py-4 transition hover:border-[color:var(--bp-gold)] ${
+                        className={`group relative w-full border ${borderColor} bg-[color:var(--bp-bg)] px-4 py-4 transition hover:border-[color:var(--bp-gold)] ${
                           rankIndex === 0
-                            ? "z-20 -translate-y-2 scale-[1.08] sm:-translate-y-3 sm:scale-[1.1] md:scale-[1.12] md:px-5 md:py-5"
+                            ? "z-20 -translate-y-2 -mb-8 scale-[1.08] pb-8 sm:-translate-y-3 sm:-mb-10 sm:scale-[1.1] sm:pb-10 md:scale-[1.12] md:px-5 md:py-5"
                             : "z-10"
                         } ${
                           rankIndex === 1
@@ -1103,7 +1103,7 @@ export default function ScoreboardPage() {
                             : rankIndex === 2
                             ? "-ml-6 sm:-ml-8 md:-ml-10"
                             : ""
-                        } max-w-[10rem] sm:max-w-[11.5rem] md:max-w-[13.5rem]`}
+                        } ${rankIndex === 0 ? "rounded-3xl" : "rounded-none"} max-w-[10rem] sm:max-w-[11.5rem] md:max-w-[13.5rem]`}
                         href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
                       >
                         <div className="flex flex-col items-center text-center">
@@ -1112,14 +1112,18 @@ export default function ScoreboardPage() {
                           >
                             {rankIndex + 1}
                           </span>
-                          <div className="mt-3 flex w-full items-center justify-between gap-3">
+                          <div
+                            className={`mt-3 flex w-full items-center gap-3 ${
+                              hasDelta ? "justify-between" : "justify-center"
+                            }`}
+                          >
                             <img
                               src={avatarSrcForKey(row.avatar_key)}
                               alt={row.display_name}
                               className="h-10 w-10 rounded-2xl border border-white/10 bg-black/40"
                               loading="lazy"
                             />
-                            <MovementPill delta={delta ?? null} />
+                            {hasDelta ? <MovementPill delta={delta ?? null} /> : null}
                           </div>
                         </div>
                         <div className="mt-3 min-w-0 text-center">
@@ -1139,9 +1143,6 @@ export default function ScoreboardPage() {
                 <div className="flex items-center justify-between border-b border-white/5 px-6 py-4">
                   <p className="text-xs uppercase tracking-[0.35em] text-[color:var(--bp-muted)]">
                     Standings
-                  </p>
-                  <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--bp-dim)]">
-                    Positions 4+
                   </p>
                 </div>
                 <div className="divide-y divide-white/5">
