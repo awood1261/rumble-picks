@@ -1106,31 +1106,23 @@ export default function ScoreboardPage() {
                         } max-w-[10rem] sm:max-w-[11.5rem] md:max-w-[13.5rem]`}
                         href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${badgeColor}`}
-                            >
-                              {rankIndex + 1}
-                            </span>
+                        <div className="flex flex-col items-center text-center">
+                          <span
+                            className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${badgeColor}`}
+                          >
+                            {rankIndex + 1}
+                          </span>
+                          <div className="mt-3 flex w-full items-center justify-between gap-3">
                             <img
                               src={avatarSrcForKey(row.avatar_key)}
                               alt={row.display_name}
                               className="h-10 w-10 rounded-2xl border border-white/10 bg-black/40"
                               loading="lazy"
                             />
+                            <MovementPill delta={delta ?? null} />
                           </div>
-                          <MovementPill delta={delta ?? null} />
                         </div>
-                        <div
-                          className={`mt-3 min-w-0 ${
-                            rankIndex === 0
-                              ? "text-center"
-                              : rankIndex === 2
-                              ? "text-right"
-                              : ""
-                          }`}
-                        >
+                        <div className="mt-3 min-w-0 text-center">
                           <p className="truncate text-base font-semibold text-[color:var(--bp-text)]">
                             {row.display_name}
                           </p>
