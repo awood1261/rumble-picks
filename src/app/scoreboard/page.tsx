@@ -1095,7 +1095,7 @@ export default function ScoreboardPage() {
                         key={row.id}
                         className={`group relative w-full border ${borderColor} bg-[color:var(--bp-bg)] px-4 py-4 transition hover:border-[color:var(--bp-gold)] ${
                           rankIndex === 0
-                            ? "z-20 -translate-y-2 -mb-8 scale-[1.08] pb-8 sm:-translate-y-3 sm:-mb-10 sm:scale-[1.1] sm:pb-10 md:scale-[1.12] md:px-5 md:py-5"
+                            ? "z-20 -translate-y-4 -mb-6 scale-[1.08] pb-8 sm:-translate-y-6 sm:-mb-8 sm:scale-[1.1] sm:pb-10 md:scale-[1.12] md:px-5 md:py-5"
                             : "z-10"
                         } ${
                           rankIndex === 1
