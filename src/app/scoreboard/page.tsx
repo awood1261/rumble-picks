@@ -699,10 +699,16 @@ export default function ScoreboardPage() {
       setShows(showRows ?? []);
       setPromotions(promotionRows ?? []);
       if (showRows && showRows.length > 0) {
+        const storedShowId =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem("bp:lastShowId")
+            : null;
         const defaultId =
           queryShowId && showRows.some((show) => show.id === queryShowId)
             ? queryShowId
-            : showRows[0].id;
+            : storedShowId && showRows.some((show) => show.id === storedShowId)
+              ? storedShowId
+              : showRows[0].id;
         setSelectedShowId((current) => current || defaultId);
       }
     };
@@ -723,6 +729,11 @@ export default function ScoreboardPage() {
     loadShows();
     loadEvents();
   }, [loadScores, queryShowId]);
+
+  useEffect(() => {
+    if (!selectedShowId || typeof window === "undefined") return;
+    window.localStorage.setItem("bp:lastShowId", selectedShowId);
+  }, [selectedShowId]);
 
   useEffect(() => {
     previousRanksRef.current = {};

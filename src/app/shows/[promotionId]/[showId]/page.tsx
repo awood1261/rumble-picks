@@ -93,6 +93,11 @@ export default function ShowDetailPage() {
   }, [showId]);
 
   useEffect(() => {
+    if (!show?.id || typeof window === "undefined") return;
+    window.localStorage.setItem("bp:lastShowId", show.id);
+  }, [show?.id]);
+
+  useEffect(() => {
     if (!show?.starts_at) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);

@@ -1637,12 +1637,14 @@ type SegmentedOption = {
 type BonusPicksAccordionProps = {
   defaultOpen?: boolean;
   summaryText?: string;
+  status?: "none" | "partial" | "complete";
   children: React.ReactNode;
 };
 
 const BonusPicksAccordion = ({
   defaultOpen = false,
   summaryText,
+  status = "none",
   children,
 }: BonusPicksAccordionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -1664,8 +1666,13 @@ const BonusPicksAccordion = ({
     >
       <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
         <span className="flex items-center gap-2">
-          <span className="inline-flex h-5 w-5 items-center justify-center text-[11px]">
-            ＋
+          <span
+            className={`inline-flex h-6 w-6 items-center justify-center ${
+              status === "complete" ? "text-[12px]" : "text-[18px]"
+            } ${status === "complete" ? "text-amber-300" : "text-zinc-400"}`}
+            aria-hidden
+          >
+            {status === "complete" ? "✓" : status === "partial" ? "◔" : "○"}
           </span>
           Bonus picks
         </span>
@@ -1850,6 +1857,20 @@ export const MatchPicksSection = ({
             Boolean(finishPick.method) ||
             Boolean(finishPick.winner) ||
             Boolean(finishPick.loser);
+          const bonusChoiceCount =
+            (lengthPick ? 1 : 0) +
+            (finishPick.method ? 1 : 0) +
+            (interferencePick ? 1 : 0) +
+            (showFinishWinner && finishPick.winner ? 1 : 0) +
+            (showFinishLoser && finishPick.loser ? 1 : 0);
+          const bonusTotalChoices =
+            3 + (showFinishWinner ? 1 : 0) + (showFinishLoser ? 1 : 0);
+          const bonusStatus =
+            bonusChoiceCount === 0
+              ? "none"
+              : bonusChoiceCount >= bonusTotalChoices
+                ? "complete"
+                : "partial";
           const bonusPointsTotal =
             scoringRules.match_length +
             scoringRules.match_finish_method +
@@ -2159,12 +2180,13 @@ export const MatchPicksSection = ({
                 <div id={bonusSectionId} className="scroll-mt-6">
                   <BonusPicksAccordion
                     defaultOpen={false}
-                    summaryText={
-                      hasBonusPick
-                        ? `Saved · +${bonusPointsTotal} pts`
-                        : `+${bonusPointsTotal} pts`
-                    }
-                  >
+                  summaryText={
+                    hasBonusPick
+                      ? `Saved · +${bonusPointsTotal} pts`
+                      : `+${bonusPointsTotal} pts`
+                  }
+                  status={bonusStatus}
+                >
                   <div className="space-y-4">
                     <div>
                       <div className="flex items-center justify-between">

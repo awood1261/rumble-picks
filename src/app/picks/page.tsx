@@ -130,6 +130,7 @@ export default function PicksPage() {
     null,
   );
   const [stepIndex, setStepIndex] = useState(0);
+  const hasAutoJumpedRef = useRef(false);
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [editSection, setEditSection] = useState<EditSection>(null);
@@ -645,10 +646,25 @@ export default function PicksPage() {
       setPromotions(promotionsResult.data ?? []);
       setEvents(eventsResult.data ?? []);
       if (showRows.length > 0) {
-        setSelectedShowId((prev) => prev || queryShowId || showRows[0].id);
+        const storedShowId =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem("bp:lastShowId")
+            : null;
+        const preferredShowId =
+          queryShowId && showRows.some((show) => show.id === queryShowId)
+            ? queryShowId
+            : storedShowId && showRows.some((show) => show.id === storedShowId)
+              ? storedShowId
+              : showRows[0].id;
+        setSelectedShowId((prev) => prev || preferredShowId);
       }
     });
   }, [queryShowId, userId]);
+
+  useEffect(() => {
+    if (!selectedShowId || typeof window === "undefined") return;
+    window.localStorage.setItem("bp:lastShowId", selectedShowId);
+  }, [selectedShowId]);
 
   useEffect(() => {
     if (!selectedShow?.starts_at) return;
@@ -1277,19 +1293,68 @@ export default function PicksPage() {
 
   useEffect(() => {
     setStepIndex(0);
+    hasAutoJumpedRef.current = false;
   }, [selectedShowId, totalSteps]);
+
+  const scrollToTop = () => {
+    if (typeof window === "undefined") return;
+    const scrollEl = document.scrollingElement ?? document.documentElement;
+    scrollEl.scrollTo({ top: 0, behavior: "auto" });
+    requestAnimationFrame(() => {
+      scrollEl.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    setTimeout(() => {
+      scrollEl.scrollTo({ top: 0, behavior: "auto" });
+    }, 200);
+  };
 
   const handleStepContinue = async () => {
     await handleSave();
     setStepIndex((prev) => Math.min(prev + 1, totalSteps));
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    scrollToTop();
   };
 
   const currentStepMatchReady =
     currentStep?.type !== "match" ||
     Boolean(payload.match_picks[currentStep.id]);
+
+  const allStepsComplete = useMemo(() => {
+    if (!selectedShowId) return false;
+    if (stepItems.length === 0) return false;
+    return stepItems.every((item) => {
+      if (item.type === "match") {
+        return Boolean(payload.match_picks[item.id]);
+      }
+      if (item.type === "event") {
+        const pick = payload.rumbles[item.id] ?? emptyRumblePick;
+        return Boolean(
+          pick.entrants.length ||
+            pick.final_four.length ||
+            pick.winner ||
+            pick.entry_1 ||
+            pick.entry_2 ||
+            pick.entry_30 ||
+            pick.iron_person ||
+            pick.most_eliminations
+        );
+      }
+      const pick = payload.eliminators?.[item.id] ?? emptyEliminatorPick;
+      return Boolean(
+        pick.winner_id ||
+          pick.most_eliminations ||
+          Object.values(pick.entry_order ?? {}).some(Boolean) ||
+          Object.values(pick.elimination_order ?? {}).some(Boolean) ||
+          Object.values(pick.elimination_type ?? {}).some(Boolean)
+      );
+    });
+  }, [payload.eliminators, payload.match_picks, payload.rumbles, selectedShowId, stepItems]);
+
+  useEffect(() => {
+    if (hasAutoJumpedRef.current) return;
+    if (!allStepsComplete) return;
+    setStepIndex(totalSteps);
+    hasAutoJumpedRef.current = true;
+  }, [allStepsComplete, totalSteps]);
 
   if (loading) {
     const renderStepSkeleton = (type: "event" | "match" | "eliminator") => {
@@ -1437,7 +1502,8 @@ export default function PicksPage() {
               <span className="text-sm leading-none">🔒</span>
               <span>{lockStatusText}</span>
             </div>
-            {currentStep?.type === "match" &&
+            {stepIndex < totalSteps &&
+              currentStep?.type === "match" &&
               matches.some(
                 (match) => match.id === currentStep.id && match.is_main_event
               ) && (
@@ -1858,9 +1924,7 @@ export default function PicksPage() {
                 type="button"
                 onClick={() => {
                   setStepIndex((prev) => Math.max(prev - 1, 0));
-                  if (typeof window !== "undefined") {
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }
+                  scrollToTop();
                 }}
                 disabled={stepIndex === 0}
               >
