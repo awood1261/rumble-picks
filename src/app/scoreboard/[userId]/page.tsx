@@ -648,7 +648,9 @@ export default function ScoreboardPicksPage() {
     ] = await Promise.all([
       supabase
         .from("picks")
-        .select("payload")
+        .select(
+          "rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+        )
         .eq("show_id", validShowId)
         .eq("user_id", userId)
         .maybeSingle(),
@@ -684,7 +686,7 @@ export default function ScoreboardPicksPage() {
         .order("name", { ascending: true }),
       supabase
         .from("picks")
-        .select("payload")
+        .select("match_picks:payload->match_picks")
         .eq("show_id", validShowId),
       supabase
         .from("scores")
@@ -718,7 +720,17 @@ export default function ScoreboardPicksPage() {
         (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
         a.name.localeCompare(b.name)
     );
-    setPayload((pickRow?.payload as PicksPayload) ?? null);
+    const nextPayload = pickRow
+      ? ({
+          rumbles: pickRow.rumbles ?? {},
+          eliminators: pickRow.eliminators ?? {},
+          match_picks: pickRow.match_picks ?? {},
+          match_finish_picks: pickRow.match_finish_picks ?? {},
+          match_length_picks: pickRow.match_length_picks ?? {},
+          match_interference_picks: pickRow.match_interference_picks ?? {},
+        } as PicksPayload)
+      : null;
+    setPayload(nextPayload);
     setShow(showRow ?? null);
     setEvents(eventList);
     setProfile(profileRow ?? null);
@@ -730,8 +742,9 @@ export default function ScoreboardPicksPage() {
     setEliminators(eliminatorList);
     const nextStats: Record<string, { total: number; bySide: Record<string, number> }> = {};
     (allPickRows ?? []).forEach((row) => {
-      const payloadRow = row.payload as PicksPayload | null;
-      const matchPicks = payloadRow?.match_picks ?? {};
+      const matchPicks =
+        (row as { match_picks?: Record<string, string | null> })
+          .match_picks ?? {};
       Object.entries(matchPicks).forEach(([matchId, sideId]) => {
         if (!sideId) return;
         if (!nextStats[matchId]) {
@@ -860,7 +873,7 @@ export default function ScoreboardPicksPage() {
     }
 
     const matchFinishIds = Object.values(
-      pickRow?.payload?.match_finish_picks ?? {}
+      nextPayload?.match_finish_picks ?? {}
     )
       .flatMap((pick) => [pick?.winner, pick?.loser])
       .filter(Boolean);
@@ -868,7 +881,7 @@ export default function ScoreboardPicksPage() {
       .map((row) => row.entrant_id)
       .filter(Boolean);
     const eliminatorPickIds = Object.values(
-      pickRow?.payload?.eliminators ?? {}
+      nextPayload?.eliminators ?? {}
     ).flatMap((pick) => [
       ...Object.keys(pick?.entry_order ?? {}),
       ...Object.keys(pick?.elimination_order ?? {}),
@@ -879,7 +892,7 @@ export default function ScoreboardPicksPage() {
     const eliminatorEntrantIds = eliminatorEntryRowsList
       .map((row) => row.entrant_id)
       .filter(Boolean);
-    const rumblePickIds = Object.values(pickRow?.payload?.rumbles ?? {}).flatMap(
+    const rumblePickIds = Object.values(nextPayload?.rumbles ?? {}).flatMap(
       (rumble) => [
         ...(rumble?.entrants ?? []),
         ...(rumble?.final_four ?? []),
@@ -932,7 +945,9 @@ export default function ScoreboardPicksPage() {
     ] = await Promise.all([
       supabase
         .from("picks")
-        .select("payload")
+        .select(
+          "rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+        )
         .eq("show_id", validShowId)
         .eq("user_id", userId)
         .maybeSingle(),
@@ -951,7 +966,17 @@ export default function ScoreboardPicksPage() {
       return;
     }
 
-    setPayload((pickRow?.payload as PicksPayload) ?? null);
+    const nextPayload = pickRow
+      ? ({
+          rumbles: pickRow.rumbles ?? {},
+          eliminators: pickRow.eliminators ?? {},
+          match_picks: pickRow.match_picks ?? {},
+          match_finish_picks: pickRow.match_finish_picks ?? {},
+          match_length_picks: pickRow.match_length_picks ?? {},
+          match_interference_picks: pickRow.match_interference_picks ?? {},
+        } as PicksPayload)
+      : null;
+    setPayload(nextPayload);
 
     const scoreList = (scoreRows ?? []) as { user_id: string; points: number }[];
     if (scoreList.length > 0) {
@@ -996,7 +1021,7 @@ export default function ScoreboardPicksPage() {
     }
 
     const nextEntrantIds = new Set<string>();
-    const payloadData = pickRow?.payload as PicksPayload | null;
+    const payloadData = nextPayload;
     Object.values(payloadData?.rumbles ?? {}).forEach((rumble) => {
       [
         ...(rumble?.entrants ?? []),

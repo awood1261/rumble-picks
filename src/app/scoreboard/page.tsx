@@ -21,38 +21,35 @@ type ScoreRow = {
 type PickRow = {
   id: string;
   user_id: string;
-  show_id: string | null;
-  payload: {
-    rumbles?: Record<
-      string,
-      {
-        entrants: string[];
-        final_four: string[];
-        winner: string | null;
-        entry_1: string | null;
-        entry_2: string | null;
-        entry_30: string | null;
-        iron_person: string | null;
-        most_eliminations: string | null;
-      }
-    >;
-    eliminators?: Record<
-      string,
-      {
-        entry_order?: Record<string, number | null>;
-        elimination_order?: Record<string, number | null>;
-        elimination_type?: Record<string, "pinfall" | "submission" | null>;
-        most_eliminations?: string | null;
-      }
-    >;
-    match_picks?: Record<string, string | null>;
-    match_finish_picks?: Record<
-      string,
-      { method: string | null; winner: string | null; loser: string | null }
-    >;
-    match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
-    match_interference_picks?: Record<string, "yes" | "no" | null>;
-  };
+  rumbles?: Record<
+    string,
+    {
+      entrants: string[];
+      final_four: string[];
+      winner: string | null;
+      entry_1: string | null;
+      entry_2: string | null;
+      entry_30: string | null;
+      iron_person: string | null;
+      most_eliminations: string | null;
+    }
+  >;
+  eliminators?: Record<
+    string,
+    {
+      entry_order?: Record<string, number | null>;
+      elimination_order?: Record<string, number | null>;
+      elimination_type?: Record<string, "pinfall" | "submission" | null>;
+      most_eliminations?: string | null;
+    }
+  >;
+  match_picks?: Record<string, string | null>;
+  match_finish_picks?: Record<
+    string,
+    { method: string | null; winner: string | null; loser: string | null }
+  >;
+  match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
+  match_interference_picks?: Record<string, "yes" | "no" | null>;
   updated_at: string;
 };
 
@@ -461,7 +458,9 @@ export default function ScoreboardPage() {
     }
     const { data: pickRows, error: pickError } = await supabase
       .from("picks")
-      .select("id, user_id, show_id, payload, updated_at")
+      .select(
+        "id, user_id, updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+      )
       .eq("show_id", selectedShowId);
 
     if (pickError) {
@@ -496,7 +495,7 @@ export default function ScoreboardPage() {
     const scoreboardRows: ScoreRow[] = picks.map((pick) => {
       let points = 0;
       const breakdown: Record<string, number> = {};
-      const rumbles = pick.payload?.rumbles ?? {};
+      const rumbles = pick.rumbles ?? {};
       showEvents.forEach((event) => {
         const entries = eventEntriesById[event.id] ?? [];
         const rumblePick = rumbles[event.id];
@@ -520,11 +519,11 @@ export default function ScoreboardPage() {
         entry_30: null,
         iron_person: null,
         most_eliminations: null,
-        eliminators: pick.payload?.eliminators ?? {},
-        match_picks: pick.payload?.match_picks ?? {},
-        match_finish_picks: pick.payload?.match_finish_picks ?? {},
-        match_length_picks: pick.payload?.match_length_picks ?? {},
-        match_interference_picks: pick.payload?.match_interference_picks ?? {},
+        eliminators: pick.eliminators ?? {},
+        match_picks: pick.match_picks ?? {},
+        match_finish_picks: pick.match_finish_picks ?? {},
+        match_length_picks: pick.match_length_picks ?? {},
+        match_interference_picks: pick.match_interference_picks ?? {},
       };
       const matchScore = calculateScore(
         matchPayload,
@@ -546,7 +545,7 @@ export default function ScoreboardPage() {
       return {
         id: pick.id,
         user_id: pick.user_id,
-        show_id: pick.show_id,
+        show_id: selectedShowId,
         points,
         breakdown,
         updated_at: pick.updated_at,

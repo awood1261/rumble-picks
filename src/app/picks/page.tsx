@@ -815,7 +815,7 @@ export default function PicksPage() {
     if (!selectedShowId) return;
     const { data, error } = await supabase
       .from("picks")
-      .select("payload")
+      .select("match_picks:payload->match_picks")
       .eq("show_id", selectedShowId);
     if (error) {
       setMessage(error.message);
@@ -826,8 +826,9 @@ export default function PicksPage() {
       { total: number; bySide: Record<string, number> }
     > = {};
     (data ?? []).forEach((row) => {
-      const payloadRow = row.payload as PicksPayload | null;
-      const matchPicks = payloadRow?.match_picks ?? {};
+      const matchPicks =
+        (row as { match_picks?: Record<string, string | null> }).match_picks ??
+        {};
       Object.entries(matchPicks).forEach(([matchId, sideId]) => {
         if (!sideId) return;
         if (!nextStats[matchId]) {
@@ -861,12 +862,14 @@ export default function PicksPage() {
       try {
         const [{ data: pickRows }, { data: entrantRows, error: entrantError }] =
           await Promise.all([
-            supabase
-              .from("picks")
-              .select("payload")
-              .eq("show_id", selectedShowId)
-              .eq("user_id", userId)
-              .maybeSingle(),
+          supabase
+            .from("picks")
+            .select(
+              "rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+            )
+            .eq("show_id", selectedShowId)
+            .eq("user_id", userId)
+            .maybeSingle(),
             supabase
               .from("entrants")
               .select(
@@ -887,7 +890,16 @@ export default function PicksPage() {
         await loadMatches();
         await loadMatchPickStats();
 
-        const savedPayload = pickRows?.payload as Partial<PicksPayload> | null;
+        const savedPayload = pickRows
+          ? ({
+              rumbles: pickRows.rumbles ?? {},
+              eliminators: pickRows.eliminators ?? {},
+              match_picks: pickRows.match_picks ?? {},
+              match_finish_picks: pickRows.match_finish_picks ?? {},
+              match_length_picks: pickRows.match_length_picks ?? {},
+              match_interference_picks: pickRows.match_interference_picks ?? {},
+            } as Partial<PicksPayload>)
+          : null;
         const nextRumbles: Record<string, RumblePick> = {};
         const existingRumbles = savedPayload?.rumbles ?? {};
         showEvents.forEach((event) => {
