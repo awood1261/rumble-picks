@@ -135,7 +135,7 @@ type ProfileRow = {
 
 type ScoreboardRow = ScoreRow & { display_name: string; avatar_key: string | null };
 
-const SCOREBOARD_POLL_INTERVAL_MS = 30000;
+const SCOREBOARD_POLL_INTERVAL_MS = 120000;
 
 const MovementPill = ({ delta }: { delta: number | null }) => {
   if (typeof delta !== "number" || delta === 0) return null;
@@ -186,6 +186,7 @@ export default function ScoreboardPage() {
   const [eliminatorEliminations, setEliminatorEliminations] = useState<
     EliminatorEliminationRow[]
   >([]);
+  const [eliminatorIds, setEliminatorIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [rankDelta, setRankDelta] = useState<Record<string, number | null>>({});
@@ -741,10 +742,11 @@ export default function ScoreboardPage() {
     lastDeltaRef.current = {};
   }, [selectedShowId]);
 
-  const loadEliminators = useCallback(async () => {
+  const loadEliminatorEntries = useCallback(async () => {
     if (!selectedShowId) {
       setEliminatorEntries([]);
       setEliminatorEliminations([]);
+      setEliminatorIds([]);
       return;
     }
     const { data: eliminatorRows, error } = await supabase
@@ -756,38 +758,42 @@ export default function ScoreboardPage() {
       setMessage(error.message);
       return;
     }
-    const eliminatorIds = (eliminatorRows ?? []).map((row) => row.id);
-    if (eliminatorIds.length === 0) {
+    const ids = (eliminatorRows ?? []).map((row) => row.id);
+    setEliminatorIds(ids);
+    if (ids.length === 0) {
       setEliminatorEntries([]);
       setEliminatorEliminations([]);
       return;
     }
-    const [
-      { data: entryRows, error: entryError },
-      { data: elimRows, error: elimError },
-    ] = await Promise.all([
-      supabase
-        .from("eliminator_entries")
-        .select("eliminator_id, entrant_id, entry_order")
-        .in("eliminator_id", eliminatorIds),
-      supabase
-        .from("eliminator_eliminations")
-        .select(
-          "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
-        )
-        .in("eliminator_id", eliminatorIds),
-    ]);
+    const { data: entryRows, error: entryError } = await supabase
+      .from("eliminator_entries")
+      .select("eliminator_id, entrant_id, entry_order")
+      .in("eliminator_id", ids);
     if (entryError) {
       setMessage(entryError.message);
       return;
     }
+    setEliminatorEntries((entryRows ?? []) as EliminatorEntryRow[]);
+  }, [selectedShowId]);
+
+  const loadEliminatorEliminations = useCallback(async () => {
+    if (!selectedShowId) return;
+    if (eliminatorIds.length === 0) {
+      setEliminatorEliminations([]);
+      return;
+    }
+    const { data: elimRows, error: elimError } = await supabase
+      .from("eliminator_eliminations")
+      .select(
+        "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
+      )
+      .in("eliminator_id", eliminatorIds);
     if (elimError) {
       setMessage(elimError.message);
       return;
     }
-    setEliminatorEntries((entryRows ?? []) as EliminatorEntryRow[]);
     setEliminatorEliminations((elimRows ?? []) as EliminatorEliminationRow[]);
-  }, [selectedShowId]);
+  }, [eliminatorIds, selectedShowId]);
 
   useEffect(() => {
     if (!selectedShowId) {
@@ -796,18 +802,36 @@ export default function ScoreboardPage() {
 
     loadRumbleEntriesRef.current();
     loadScoresRef.current();
-    loadEliminators();
+    loadEliminatorEntries();
+    loadEliminatorEliminations();
     setLastUpdateAt(Date.now());
+
+    if (typeof document !== "undefined" && document.hidden) {
+      return;
+    }
 
     const interval = setInterval(() => {
       setLastUpdateAt(Date.now());
       loadScoresRef.current();
       loadRumbleEntriesRef.current();
-      loadEliminators();
+      loadEliminatorEliminations();
     }, SCOREBOARD_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [selectedShowId, showEvents, loadEliminators]);
+  }, [selectedShowId, showEvents, loadEliminatorEliminations, loadEliminatorEntries]);
+
+  useEffect(() => {
+    if (!selectedShowId) return;
+    const handleVisibility = () => {
+      if (document.hidden) return;
+      setLastUpdateAt(Date.now());
+      loadScoresRef.current();
+      loadRumbleEntriesRef.current();
+      loadEliminatorEliminations();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [loadEliminatorEliminations, selectedShowId, showEvents]);
 
   useEffect(() => {
     const loadMatches = async () => {
@@ -860,8 +884,9 @@ export default function ScoreboardPage() {
   }, [selectedShowId]);
 
   useEffect(() => {
-    loadEliminators();
-  }, [loadEliminators]);
+    loadEliminatorEntries();
+    loadEliminatorEliminations();
+  }, [loadEliminatorEliminations, loadEliminatorEntries]);
 
   return (
     <div

@@ -122,7 +122,7 @@ type MatchEntrantRow = {
   side_id: string | null;
 };
 
-const PICKS_POLL_INTERVAL_MS = 15000;
+const PICKS_POLL_INTERVAL_MS = 120000;
 
 const emptyRumblePick: RumblePick = {
   entrants: [],
@@ -922,6 +922,158 @@ export default function ScoreboardPicksPage() {
     setLoading(false);
   }, [validShowId, userId]);
 
+  const loadLive = useCallback(async () => {
+    if (!validShowId) {
+      return;
+    }
+    const [
+      { data: pickRow, error: pickError },
+      { data: scoreRows, error: scoreError },
+    ] = await Promise.all([
+      supabase
+        .from("picks")
+        .select("payload")
+        .eq("show_id", validShowId)
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("scores")
+        .select("user_id, points")
+        .eq("show_id", validShowId),
+    ]);
+
+    if (pickError) {
+      setMessage(pickError.message);
+      return;
+    }
+    if (scoreError) {
+      setMessage(scoreError.message);
+      return;
+    }
+
+    setPayload((pickRow?.payload as PicksPayload) ?? null);
+
+    const scoreList = (scoreRows ?? []) as { user_id: string; points: number }[];
+    if (scoreList.length > 0) {
+      const sortedScores = [...scoreList].sort((a, b) => b.points - a.points);
+      const index = sortedScores.findIndex((row) => row.user_id === userId);
+      setRankInfo({
+        rank: index >= 0 ? index + 1 : null,
+        total: sortedScores.length,
+      });
+    } else {
+      setRankInfo({ rank: null, total: 0 });
+    }
+
+    if (events.length > 0) {
+      const eventIds = events.map((event) => event.id);
+      const { data: entryRows, error: entryError } = await supabase
+        .from("rumble_entries")
+        .select(
+          "event_id, entrant_id, entry_number, eliminated_at, eliminations_count, is_confirmed"
+        )
+        .in("event_id", eventIds);
+      if (entryError) {
+        setMessage(entryError.message);
+        return;
+      }
+      setRumbleEntries((entryRows ?? []) as RumbleEntryRow[]);
+    }
+
+    if (eliminators.length > 0) {
+      const eliminatorIds = eliminators.map((row) => row.id);
+      const { data: elimRows, error: elimError } = await supabase
+        .from("eliminator_eliminations")
+        .select(
+          "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
+        )
+        .in("eliminator_id", eliminatorIds);
+      if (elimError) {
+        setMessage(elimError.message);
+        return;
+      }
+      setEliminatorEliminations((elimRows ?? []) as EliminatorEliminationRow[]);
+    }
+
+    const nextEntrantIds = new Set<string>();
+    const payloadData = pickRow?.payload as PicksPayload | null;
+    Object.values(payloadData?.rumbles ?? {}).forEach((rumble) => {
+      [
+        ...(rumble?.entrants ?? []),
+        ...(rumble?.final_four ?? []),
+        rumble?.winner,
+        rumble?.entry_1,
+        rumble?.entry_2,
+        rumble?.entry_30,
+        rumble?.iron_person,
+        rumble?.most_eliminations,
+      ]
+        .filter(Boolean)
+        .forEach((id) => nextEntrantIds.add(String(id)));
+    });
+    Object.values(payloadData?.match_finish_picks ?? {}).forEach((pick) => {
+      [pick?.winner, pick?.loser]
+        .filter(Boolean)
+        .forEach((id) => nextEntrantIds.add(String(id)));
+    });
+    Object.values(payloadData?.eliminators ?? {}).forEach((pick) => {
+      [
+        ...Object.keys(pick?.entry_order ?? {}),
+        ...Object.keys(pick?.elimination_order ?? {}),
+        ...Object.keys(pick?.elimination_type ?? {}),
+        pick?.winner_id,
+        pick?.most_eliminations,
+      ]
+        .filter(Boolean)
+        .forEach((id) => nextEntrantIds.add(String(id)));
+    });
+    matchEntrants.forEach((row) => {
+      if (row.entrant_id) {
+        nextEntrantIds.add(String(row.entrant_id));
+      }
+    });
+    eliminatorEntries.forEach((row) => {
+      if (row.entrant_id) {
+        nextEntrantIds.add(String(row.entrant_id));
+      }
+    });
+    rumbleEntries.forEach((row) => {
+      if (row.entrant_id) {
+        nextEntrantIds.add(String(row.entrant_id));
+      }
+    });
+    const currentIds = new Set(entrants.map((entrant) => entrant.id));
+    const missingIds = Array.from(nextEntrantIds).filter(
+      (id) => !currentIds.has(id)
+    );
+    if (missingIds.length > 0) {
+      const { data: entrantRows, error: entrantError } = await supabase
+        .from("entrants")
+        .select("id, name, promotion, image_url")
+        .in("id", missingIds);
+      if (entrantError) {
+        setMessage(entrantError.message);
+        return;
+      }
+      setEntrants((prev) => {
+        const next = new Map(prev.map((entrant) => [entrant.id, entrant]));
+        (entrantRows ?? []).forEach((entrant) => {
+          next.set(entrant.id, entrant);
+        });
+        return Array.from(next.values());
+      });
+    }
+  }, [
+    eliminatorEntries,
+    eliminators,
+    entrants,
+    events,
+    matchEntrants,
+    rumbleEntries,
+    userId,
+    validShowId,
+  ]);
+
   useEffect(() => {
     load();
 
@@ -929,12 +1081,26 @@ export default function ScoreboardPicksPage() {
       return;
     }
 
+    if (typeof document !== "undefined" && document.hidden) {
+      return;
+    }
+
     const interval = setInterval(() => {
-      load();
+      loadLive();
     }, PICKS_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [load, validShowId]);
+  }, [load, loadLive, validShowId]);
+
+  useEffect(() => {
+    if (!validShowId) return;
+    const handleVisibility = () => {
+      if (document.hidden) return;
+      loadLive();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [loadLive, validShowId]);
 
   const renderList = (
     ids: string[] | undefined,

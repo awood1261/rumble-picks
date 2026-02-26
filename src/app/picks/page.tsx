@@ -40,7 +40,7 @@ import type {
   ShowRow,
 } from "../../lib/picksTypes";
 
-const SCORING_POLL_INTERVAL_MS = 15000;
+const SCORING_POLL_INTERVAL_MS = 120000;
 
 const emptyRumblePick: RumblePick = {
   entrants: [],
@@ -131,10 +131,13 @@ export default function PicksPage() {
   );
   const [stepIndex, setStepIndex] = useState(0);
   const hasAutoJumpedRef = useRef(false);
+  const lastLoadedShowIdRef = useRef<string | null>(null);
+  const picksLoadedForShowIdRef = useRef<string | null>(null);
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [editSection, setEditSection] = useState<EditSection>(null);
   const [focusedEventId, setFocusedEventId] = useState<string>("");
+  const [isPicksLoading, setIsPicksLoading] = useState(false);
 
   const selectedShow = useMemo(
     () => shows.find((show) => show.id === selectedShowId) ?? null,
@@ -773,37 +776,40 @@ export default function PicksPage() {
 
     if (eliminatorList.length > 0) {
       const eliminatorIds = eliminatorList.map((row) => row.id);
-      const [
-        { data: entryRows, error: entryError },
-        { data: elimRows, error: elimError },
-      ] = await Promise.all([
-        supabase
-          .from("eliminator_entries")
-          .select("eliminator_id, entrant_id, entry_order")
-          .in("eliminator_id", eliminatorIds),
-        supabase
-          .from("eliminator_eliminations")
-          .select(
-            "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order",
-          )
-          .in("eliminator_id", eliminatorIds),
-      ]);
+      const { data: entryRows, error: entryError } = await supabase
+        .from("eliminator_entries")
+        .select("eliminator_id, entrant_id, entry_order")
+        .in("eliminator_id", eliminatorIds);
       if (entryError) {
         setMessage(entryError.message);
         return;
       }
-      if (elimError) {
-        setMessage(elimError.message);
-        return;
-      }
       setEliminatorEntries((entryRows ?? []) as EliminatorEntryRow[]);
-      setEliminatorEliminations((elimRows ?? []) as EliminatorEliminationRow[]);
     } else {
       setEliminatorEntries([]);
-      setEliminatorEliminations([]);
     }
     return eliminatorList;
   }, [selectedShowId]);
+
+  const loadEliminatorEliminations = useCallback(async () => {
+    if (!selectedShowId) return;
+    if (eliminators.length === 0) {
+      setEliminatorEliminations([]);
+      return;
+    }
+    const eliminatorIds = eliminators.map((row) => row.id);
+    const { data: elimRows, error: elimError } = await supabase
+      .from("eliminator_eliminations")
+      .select(
+        "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order",
+      )
+      .in("eliminator_id", eliminatorIds);
+    if (elimError) {
+      setMessage(elimError.message);
+      return;
+    }
+    setEliminatorEliminations((elimRows ?? []) as EliminatorEliminationRow[]);
+  }, [eliminators, selectedShowId]);
 
   const loadMatchPickStats = useCallback(async () => {
     if (!selectedShowId) return;
@@ -837,100 +843,114 @@ export default function PicksPage() {
 
   useEffect(() => {
     if (!selectedShowId || !userId) return;
+    const showChanged = lastLoadedShowIdRef.current !== selectedShowId;
+    lastLoadedShowIdRef.current = selectedShowId;
+    const needsSkeleton = picksLoadedForShowIdRef.current !== selectedShowId;
     setMessage(null);
-    setPayload(emptyPayload);
-    setHasSaved(false);
-    setEditSection(null);
-    setFocusedEventId("");
+    if (showChanged) {
+      setPayload(emptyPayload);
+      setHasSaved(false);
+      setEditSection(null);
+      setFocusedEventId("");
+    }
+    if (needsSkeleton) {
+      setIsPicksLoading(true);
+    }
 
     const loadShowData = async () => {
-      const [{ data: pickRows }, { data: entrantRows, error: entrantError }] =
-        await Promise.all([
-          supabase
-            .from("picks")
-            .select("payload")
-            .eq("show_id", selectedShowId)
-            .eq("user_id", userId)
-            .maybeSingle(),
-          supabase
-            .from("entrants")
-            .select(
-              "id, name, promotion, gender, image_url, roster_year, event_id, is_custom, created_by, status",
-            )
-            .order("name", { ascending: true }),
-        ]);
+      try {
+        const [{ data: pickRows }, { data: entrantRows, error: entrantError }] =
+          await Promise.all([
+            supabase
+              .from("picks")
+              .select("payload")
+              .eq("show_id", selectedShowId)
+              .eq("user_id", userId)
+              .maybeSingle(),
+            supabase
+              .from("entrants")
+              .select(
+                "id, name, promotion, gender, image_url, roster_year, event_id, is_custom, created_by, status",
+              )
+              .order("name", { ascending: true }),
+          ]);
 
-      if (entrantError) {
-        setMessage(entrantError.message);
-        return;
-      }
+        if (entrantError) {
+          setMessage(entrantError.message);
+          return;
+        }
 
-      setEntrants(entrantRows ?? []);
-      await loadRumbleEntries();
-      const eliminatorList = (await loadEliminators()) ?? [];
-      await loadMatches();
-      await loadMatchPickStats();
+        setEntrants(entrantRows ?? []);
+        await loadRumbleEntries();
+        const eliminatorList = (await loadEliminators()) ?? [];
+        await loadEliminatorEliminations();
+        await loadMatches();
+        await loadMatchPickStats();
 
-      const savedPayload = pickRows?.payload as Partial<PicksPayload> | null;
-      const nextRumbles: Record<string, RumblePick> = {};
-      const existingRumbles = savedPayload?.rumbles ?? {};
-      showEvents.forEach((event) => {
-        const base = {
-          ...emptyRumblePick,
-          ...(existingRumbles[event.id] ?? {}),
-        };
-        nextRumbles[event.id] = {
-          ...base,
-        };
-      });
-      const nextEliminators: Record<string, typeof emptyEliminatorPick> = {};
-      const existingEliminators = savedPayload?.eliminators ?? {};
-      eliminatorList.forEach((eliminator) => {
-        const base = {
-          ...emptyEliminatorPick,
-          ...(existingEliminators[eliminator.id] ?? {}),
-        };
-        nextEliminators[eliminator.id] = {
-          ...base,
-        };
-      });
-
-      if (savedPayload) {
-        setPayload({
-          rumbles: nextRumbles,
-          eliminators: nextEliminators,
-          match_picks:
-            (savedPayload.match_picks as Record<string, string | null>) ?? {},
-          match_finish_picks:
-            (savedPayload.match_finish_picks as Record<
-              string,
-              {
-                method: string | null;
-                winner: string | null;
-                loser: string | null;
-              }
-            >) ?? {},
-          match_length_picks:
-            (savedPayload.match_length_picks as Record<
-              string,
-              "sprint" | "standard" | "epic" | null
-            >) ?? {},
-          match_interference_picks:
-            (savedPayload.match_interference_picks as Record<
-              string,
-              "yes" | "no" | null
-            >) ?? {},
+        const savedPayload = pickRows?.payload as Partial<PicksPayload> | null;
+        const nextRumbles: Record<string, RumblePick> = {};
+        const existingRumbles = savedPayload?.rumbles ?? {};
+        showEvents.forEach((event) => {
+          const base = {
+            ...emptyRumblePick,
+            ...(existingRumbles[event.id] ?? {}),
+          };
+          nextRumbles[event.id] = {
+            ...base,
+          };
         });
-        setHasSaved(true);
-      } else {
-        setPayload({
-          rumbles: nextRumbles,
-          eliminators: nextEliminators,
-          match_picks: {},
-          match_finish_picks: {},
-          match_length_picks: {},
-          match_interference_picks: {},
+        const nextEliminators: Record<string, typeof emptyEliminatorPick> = {};
+        const existingEliminators = savedPayload?.eliminators ?? {};
+        eliminatorList.forEach((eliminator) => {
+          const base = {
+            ...emptyEliminatorPick,
+            ...(existingEliminators[eliminator.id] ?? {}),
+          };
+          nextEliminators[eliminator.id] = {
+            ...base,
+          };
         });
+
+        if (savedPayload) {
+          setPayload({
+            rumbles: nextRumbles,
+            eliminators: nextEliminators,
+            match_picks:
+              (savedPayload.match_picks as Record<string, string | null>) ?? {},
+            match_finish_picks:
+              (savedPayload.match_finish_picks as Record<
+                string,
+                {
+                  method: string | null;
+                  winner: string | null;
+                  loser: string | null;
+                }
+              >) ?? {},
+            match_length_picks:
+              (savedPayload.match_length_picks as Record<
+                string,
+                "sprint" | "standard" | "epic" | null
+              >) ?? {},
+            match_interference_picks:
+              (savedPayload.match_interference_picks as Record<
+                string,
+                "yes" | "no" | null
+              >) ?? {},
+          });
+          setHasSaved(true);
+        } else {
+          setPayload({
+            rumbles: nextRumbles,
+            eliminators: nextEliminators,
+            match_picks: {},
+            match_finish_picks: {},
+            match_length_picks: {},
+            match_interference_picks: {},
+          });
+        }
+      } finally {
+        setIsPicksLoading(false);
+        picksLoadedForShowIdRef.current = selectedShowId;
       }
     };
 
@@ -941,6 +961,7 @@ export default function PicksPage() {
     loadMatches,
     loadRumbleEntries,
     loadEliminators,
+    loadEliminatorEliminations,
     loadMatchPickStats,
     showEvents,
   ]);
@@ -970,11 +991,11 @@ export default function PicksPage() {
 
   useEffect(() => {
     if (!selectedShowId || !userId) return;
+    if (typeof document !== "undefined" && document.hidden) return;
     const interval = setInterval(() => {
       loadRank();
       loadRumbleEntries();
-      loadEliminators();
-      loadMatches();
+      loadEliminatorEliminations();
       loadMatchPickStats();
     }, SCORING_POLL_INTERVAL_MS);
 
@@ -982,8 +1003,27 @@ export default function PicksPage() {
   }, [
     loadRank,
     loadRumbleEntries,
-    loadEliminators,
-    loadMatches,
+    loadEliminatorEliminations,
+    loadMatchPickStats,
+    selectedShowId,
+    userId,
+  ]);
+
+  useEffect(() => {
+    if (!selectedShowId || !userId) return;
+    const handleVisibility = () => {
+      if (document.hidden) return;
+      loadRank();
+      loadRumbleEntries();
+      loadEliminatorEliminations();
+      loadMatchPickStats();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [
+    loadRank,
+    loadRumbleEntries,
+    loadEliminatorEliminations,
     loadMatchPickStats,
     selectedShowId,
     userId,
@@ -1356,92 +1396,113 @@ export default function PicksPage() {
     hasAutoJumpedRef.current = true;
   }, [allStepsComplete, totalSteps]);
 
-  if (loading) {
-    const renderStepSkeleton = (type: "event" | "match" | "eliminator") => {
-      if (type === "event") {
-        return (
-          <div className="mt-6 space-y-6">
-            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-              <div className="h-4 w-32 rounded-full bg-zinc-800/80" />
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <div
-                    key={index}
-                    className="h-10 rounded-2xl bg-zinc-800/60"
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-              <div className="h-4 w-28 rounded-full bg-zinc-800/80" />
-              <div className="mt-4 flex gap-3">
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <div
-                    key={index}
-                    className="h-12 w-12 rounded-full bg-zinc-800/60"
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-              <div className="h-4 w-24 rounded-full bg-zinc-800/80" />
-              <div className="mt-4 space-y-3">
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <div
-                    key={index}
-                    className="h-9 rounded-2xl bg-zinc-800/60"
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      }
-      if (type === "eliminator") {
-        return (
-          <div className="mt-6 space-y-4">
-            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-              <div className="h-4 w-36 rounded-full bg-zinc-800/80" />
-              <div className="mt-4 h-10 w-1/2 rounded-2xl bg-zinc-800/60" />
-            </div>
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div
-                key={index}
-                className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-zinc-800/70" />
-                  <div className="h-4 w-40 rounded-full bg-zinc-800/70" />
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="h-9 rounded-2xl bg-zinc-800/60" />
-                  <div className="h-9 rounded-2xl bg-zinc-800/60" />
-                </div>
-              </div>
-            ))}
-          </div>
-        );
-      }
+  const renderStepSkeleton = (type: "event" | "match" | "eliminator") => {
+    if (type === "event") {
       return (
-        <div className="mt-6 space-y-4">
+        <div className="mt-6 space-y-6">
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <div className="h-4 w-32 rounded-full bg-zinc-800/80" />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-10 rounded-2xl bg-zinc-800/60"
+                />
+              ))}
+            </div>
+          </div>
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <div className="h-4 w-28 rounded-full bg-zinc-800/80" />
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <div className="h-48 rounded-2xl bg-zinc-800/60 sm:h-60" />
-              <div className="h-48 rounded-2xl bg-zinc-800/60 sm:h-60" />
+            <div className="mt-4 flex gap-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-12 w-12 rounded-full bg-zinc-800/60"
+                />
+              ))}
             </div>
           </div>
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-            <div className="h-4 w-36 rounded-full bg-zinc-800/80" />
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="h-9 rounded-2xl bg-zinc-800/60" />
-              <div className="h-9 rounded-2xl bg-zinc-800/60" />
+            <div className="h-4 w-24 rounded-full bg-zinc-800/80" />
+            <div className="mt-4 space-y-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-9 rounded-2xl bg-zinc-800/60"
+                />
+              ))}
             </div>
           </div>
         </div>
       );
-    };
+    }
+    if (type === "eliminator") {
+      return (
+        <div className="mt-6 space-y-4">
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <div className="h-4 w-36 rounded-full bg-zinc-800/80" />
+            <div className="mt-4 h-10 w-1/2 rounded-2xl bg-zinc-800/60" />
+          </div>
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={index}
+              className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-zinc-800/70" />
+                <div className="h-4 w-40 rounded-full bg-zinc-800/70" />
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="h-9 rounded-2xl bg-zinc-800/60" />
+                <div className="h-9 rounded-2xl bg-zinc-800/60" />
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return (
+      <div className="mt-6 space-y-4">
+        <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <div className="h-4 w-28 rounded-full bg-zinc-800/80" />
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <div className="h-48 rounded-2xl bg-zinc-800/60 sm:h-60" />
+            <div className="h-48 rounded-2xl bg-zinc-800/60 sm:h-60" />
+          </div>
+        </div>
+        <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          <div className="h-4 w-36 rounded-full bg-zinc-800/80" />
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="h-9 rounded-2xl bg-zinc-800/60" />
+            <div className="h-9 rounded-2xl bg-zinc-800/60" />
+          </div>
+        </div>
+      </div>
+    );
+  };
 
+  if (loading) {
+
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-200">
+        <main className="mx-auto w-full max-w-6xl px-6 py-6 pb-28 sm:py-10 sm:pb-32">
+          <div className="animate-pulse">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="h-3 w-32 rounded-full bg-zinc-800/80" />
+              <div className="flex items-center justify-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-zinc-800/80" />
+                <div className="h-7 w-48 rounded-full bg-zinc-800/80 sm:h-8" />
+              </div>
+              <div className="h-4 w-56 rounded-full bg-zinc-800/80" />
+            </div>
+            {renderStepSkeleton(loadingStepType)}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (isPicksLoading) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
         <main className="mx-auto w-full max-w-6xl px-6 py-6 pb-28 sm:py-10 sm:pb-32">
