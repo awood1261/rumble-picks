@@ -48,6 +48,7 @@ create table if not exists public.shows (
   promotion_id uuid references public.promotions(id) on delete set null,
   starts_at timestamptz,
   status text not null default 'draft',
+  requires_email_registration boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -56,6 +57,9 @@ alter table public.shows
 
 alter table public.shows
   add column if not exists promotion_id uuid references public.promotions(id) on delete set null;
+
+alter table public.shows
+  add column if not exists requires_email_registration boolean not null default true;
 
 create table if not exists public.promotions (
   id uuid primary key default gen_random_uuid(),

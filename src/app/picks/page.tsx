@@ -610,7 +610,7 @@ export default function PicksPage() {
   }, []);
 
   useEffect(() => {
-    if (!sessionEmail) return;
+    if (!userId) return;
     Promise.all([
       supabase
         .from("shows")
@@ -648,7 +648,7 @@ export default function PicksPage() {
         setSelectedShowId((prev) => prev || queryShowId || showRows[0].id);
       }
     });
-  }, [sessionEmail, queryShowId]);
+  }, [queryShowId, userId]);
 
   useEffect(() => {
     if (!selectedShow?.starts_at) return;
@@ -1396,7 +1396,7 @@ export default function PicksPage() {
     );
   }
 
-  if (!sessionEmail) {
+  if (!userId) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
         <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">

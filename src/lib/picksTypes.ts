@@ -28,6 +28,7 @@ export type ShowRow = {
   promotion_id: string | null;
   starts_at: string | null;
   status: string;
+  requires_email_registration?: boolean | null;
 };
 
 export type PromotionRow = {

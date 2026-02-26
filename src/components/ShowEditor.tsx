@@ -11,6 +11,8 @@ type ShowEditorProps = {
   setImageUrl: (value: string) => void;
   tagline: string;
   setTagline: (value: string) => void;
+  requiresEmailRegistration: boolean;
+  setRequiresEmailRegistration: (value: boolean) => void;
   startsAt: string;
   setStartsAt: (value: string) => void;
   saving: boolean;
@@ -30,6 +32,8 @@ export const ShowEditor = ({
   setImageUrl,
   tagline,
   setTagline,
+  requiresEmailRegistration,
+  setRequiresEmailRegistration,
   startsAt,
   setStartsAt,
   saving,
@@ -107,5 +111,15 @@ export const ShowEditor = ({
       onChange={(event) => setTagline(event.target.value)}
       disabled={disabled}
     />
+    <label className="mt-3 flex items-center gap-3 text-sm text-zinc-300">
+      <input
+        type="checkbox"
+        className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+        checked={requiresEmailRegistration}
+        onChange={(event) => setRequiresEmailRegistration(event.target.checked)}
+        disabled={disabled}
+      />
+      Require email registration for this show
+    </label>
   </div>
 );

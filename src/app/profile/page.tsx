@@ -7,6 +7,7 @@ import {
   AVATAR_OPTIONS,
   DEFAULT_AVATAR_KEY,
 } from "../../lib/avatarOptions";
+import { containsProfanity } from "../../lib/profanityFilter";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -15,6 +16,10 @@ export default function ProfilePage() {
   const [avatarKey, setAvatarKey] = useState(DEFAULT_AVATAR_KEY);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [upgradeEmail, setUpgradeEmail] = useState("");
+  const [upgradePassword, setUpgradePassword] = useState("");
+  const [upgradeMarketingOptIn, setUpgradeMarketingOptIn] = useState(false);
+  const [upgradeBusy, setUpgradeBusy] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -59,6 +64,11 @@ export default function ProfilePage() {
       setBusy(false);
       return;
     }
+    if (containsProfanity(trimmed)) {
+      setMessage("Please choose a different username.");
+      setBusy(false);
+      return;
+    }
     const { error: profileError } = await supabase
       .from("profiles")
       .update({ display_name: trimmed, avatar_key: avatarKey })
@@ -78,6 +88,30 @@ export default function ProfilePage() {
     }
     setMessage("Username updated.");
     setBusy(false);
+  };
+
+  const handleUpgrade = async () => {
+    setMessage(null);
+    setUpgradeBusy(true);
+    if (!upgradeEmail.trim() || !upgradePassword.trim()) {
+      setMessage("Email and password are required.");
+      setUpgradeBusy(false);
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({
+      email: upgradeEmail.trim(),
+      password: upgradePassword,
+      data: {
+        marketing_opt_in: upgradeMarketingOptIn,
+      },
+    });
+    if (error) {
+      setMessage(error.message);
+      setUpgradeBusy(false);
+      return;
+    }
+    setMessage("Check your inbox to confirm your email.");
+    setUpgradeBusy(false);
   };
 
   return (
@@ -144,6 +178,67 @@ export default function ProfilePage() {
               {busy ? "Saving..." : "Save profile"}
             </button>
           </div>
+
+          {!email && (
+            <div className="mt-8 border-t border-zinc-800 pt-6">
+              <h2 className="text-lg font-semibold text-zinc-100">
+                Add email sign-in
+              </h2>
+              <p className="mt-2 text-sm text-zinc-400">
+                Link an email so you can recover your account on other devices.
+              </p>
+              <div className="mt-4 space-y-3">
+                <div className="space-y-2 text-sm">
+                  <label className="block text-zinc-300" htmlFor="upgradeEmail">
+                    Email
+                  </label>
+                  <input
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition focus:border-amber-400"
+                    id="upgradeEmail"
+                    type="email"
+                    value={upgradeEmail}
+                    onChange={(event) => setUpgradeEmail(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2 text-sm">
+                  <label
+                    className="block text-zinc-300"
+                    htmlFor="upgradePassword"
+                  >
+                    Password
+                  </label>
+                  <input
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition focus:border-amber-400"
+                    id="upgradePassword"
+                    type="password"
+                    value={upgradePassword}
+                    onChange={(event) => setUpgradePassword(event.target.value)}
+                  />
+                </div>
+                <label className="flex items-start gap-3 text-xs text-zinc-400">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                    checked={upgradeMarketingOptIn}
+                    onChange={(event) =>
+                      setUpgradeMarketingOptIn(event.target.checked)
+                    }
+                  />
+                  <span>
+                    I want to receive updates about future shows and promotion news.
+                  </span>
+                </label>
+                <button
+                  className="inline-flex h-11 w-full items-center justify-center rounded-full bg-amber-400 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                  type="button"
+                  onClick={handleUpgrade}
+                  disabled={upgradeBusy}
+                >
+                  {upgradeBusy ? "Updating..." : "Add email"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {message && (
             <p className="mt-4 rounded-2xl border border-zinc-800 bg-black/40 px-4 py-3 text-sm text-zinc-200">

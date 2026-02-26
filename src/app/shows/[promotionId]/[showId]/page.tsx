@@ -59,7 +59,9 @@ export default function ShowDetailPage() {
     const load = async () => {
       const { data, error } = await supabase
         .from("shows")
-        .select("id, name, tagline, image_url, starts_at, status, promotion_id")
+        .select(
+          "id, name, tagline, image_url, starts_at, status, promotion_id, requires_email_registration"
+        )
         .eq("id", showId)
         .maybeSingle();
       if (ignore) return;
@@ -186,7 +188,24 @@ export default function ShowDetailPage() {
                 {show.tagline}
               </p>
             ) : null}
-            <div className="mt-8 flex flex-wrap gap-3">
+            {authChecked && !isSignedIn ? (
+              <div className="mt-6 space-y-3">
+                <p className="text-sm text-zinc-200">
+                  {show?.requires_email_registration
+                    ? "Email registration is required for this show."
+                    : "Create a quick profile to lock your picks."}
+                </p>
+                <Link
+                  href={`/login?show=${show.id}`}
+                  className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
+                >
+                  {show?.requires_email_registration
+                    ? "Sign in to make picks"
+                    : "Create profile"}
+                </Link>
+              </div>
+            ) : null}
+            <div className="mt-6 flex flex-wrap gap-3">
               {isSignedIn ? (
                 <Link
                   href={`/picks?show=${show.id}`}
@@ -202,19 +221,6 @@ export default function ShowDetailPage() {
                 View scores
               </Link>
             </div>
-            {authChecked && !isSignedIn ? (
-              <div className="mt-6 space-y-3">
-                <p className="text-sm text-zinc-200">
-                  Sign in to lock your picks for this show.
-                </p>
-                <Link
-                  href="/login"
-                  className="inline-flex h-11 items-center justify-center rounded-full bg-white/10 px-5 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:bg-white/20"
-                >
-                  Sign in to make picks
-                </Link>
-              </div>
-            ) : null}
           </div>
         )}
 

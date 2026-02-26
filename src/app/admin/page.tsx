@@ -35,6 +35,7 @@ type ShowRow = {
   promotion_id: string | null;
   starts_at: string | null;
   status: string;
+  requires_email_registration?: boolean | null;
 };
 
 type PromotionRow = {
@@ -183,6 +184,7 @@ export default function AdminPage() {
   const [showImageUrl, setShowImageUrl] = useState("");
   const [showStartsAt, setShowStartsAt] = useState("");
   const [showTagline, setShowTagline] = useState("");
+  const [showRequiresEmail, setShowRequiresEmail] = useState(true);
   const [showModalOpen, setShowModalOpen] = useState(false);
   const [promotionModalOpen, setPromotionModalOpen] = useState(false);
   const [promotionName, setPromotionName] = useState("");
@@ -192,6 +194,7 @@ export default function AdminPage() {
   const [showEditImageUrl, setShowEditImageUrl] = useState("");
   const [showEditStartsAt, setShowEditStartsAt] = useState("");
   const [showEditTagline, setShowEditTagline] = useState("");
+  const [showEditRequiresEmail, setShowEditRequiresEmail] = useState(true);
   const [showEditBusy, setShowEditBusy] = useState(false);
   const [showDeleteBusy, setShowDeleteBusy] = useState(false);
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
@@ -388,6 +391,7 @@ export default function AdminPage() {
       setShowEditImageUrl("");
       setShowEditStartsAt("");
       setShowEditTagline("");
+      setShowEditRequiresEmail(true);
       return;
     }
     setShowEditName(activeShow.name ?? "");
@@ -395,6 +399,7 @@ export default function AdminPage() {
     setShowEditImageUrl(activeShow.image_url ?? "");
     setShowEditStartsAt(formatLocalDateTime(activeShow.starts_at ?? null));
     setShowEditTagline(activeShow.tagline ?? "");
+    setShowEditRequiresEmail(activeShow.requires_email_registration ?? true);
   }, [
     activeShow?.id,
     activeShow?.name,
@@ -402,6 +407,7 @@ export default function AdminPage() {
     activeShow?.promotion_id,
     activeShow?.starts_at,
     activeShow?.tagline,
+    activeShow?.requires_email_registration,
   ]);
   useEffect(() => {
     if (!selectedShowId && activeShow?.id) {
@@ -719,7 +725,9 @@ export default function AdminPage() {
       ] = await Promise.all([
         supabase
           .from("shows")
-          .select("id, name, tagline, image_url, promotion_id, status, starts_at")
+          .select(
+            "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration"
+          )
           .order("created_at", { ascending: false }),
         supabase
           .from("promotions")
@@ -915,7 +923,9 @@ export default function AdminPage() {
       ] = await Promise.all([
           supabase
             .from("shows")
-            .select("id, name, tagline, image_url, promotion_id, status, starts_at")
+            .select(
+              "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration"
+            )
             .order("created_at", { ascending: false }),
           supabase
             .from("promotions")
@@ -1252,8 +1262,9 @@ export default function AdminPage() {
         tagline: showTagline.trim() || null,
         status: "draft",
         starts_at: showStartsAt ? new Date(showStartsAt).toISOString() : null,
+        requires_email_registration: showRequiresEmail,
       })
-      .select("id, name, tagline, image_url, promotion_id")
+      .select("id, name, tagline, image_url, promotion_id, requires_email_registration")
       .single();
     if (error || !newShow) {
       setMessage(error?.message ?? "Failed to create show.");
@@ -1264,6 +1275,7 @@ export default function AdminPage() {
     setShowImageUrl("");
     setShowStartsAt("");
     setShowTagline("");
+    setShowRequiresEmail(true);
     setSelectedShowId(newShow.id);
     setEventShowId(newShow.id);
     setShowModalOpen(false);
@@ -1319,12 +1331,15 @@ export default function AdminPage() {
       starts_at: showEditStartsAt
         ? new Date(showEditStartsAt).toISOString()
         : null,
+      requires_email_registration: showEditRequiresEmail,
     };
     const { data: updatedShow, error } = await supabase
       .from("shows")
       .update(payload)
       .eq("id", activeShow.id)
-      .select("id, name, tagline, image_url, promotion_id, starts_at, status")
+      .select(
+        "id, name, tagline, image_url, promotion_id, starts_at, status, requires_email_registration"
+      )
       .single();
     if (error || !updatedShow) {
       setMessage(error?.message ?? "Unable to update show.");
@@ -2513,6 +2528,8 @@ export default function AdminPage() {
             setImageUrl={setShowEditImageUrl}
             tagline={showEditTagline}
             setTagline={setShowEditTagline}
+            requiresEmailRegistration={showEditRequiresEmail}
+            setRequiresEmailRegistration={setShowEditRequiresEmail}
             startsAt={showEditStartsAt}
             setStartsAt={setShowEditStartsAt}
             saving={showEditBusy}
@@ -4303,6 +4320,15 @@ export default function AdminPage() {
                   value={showStartsAt}
                   onChange={(event) => setShowStartsAt(event.target.value)}
                 />
+                <label className="flex items-center gap-3 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                    checked={showRequiresEmail}
+                    onChange={(event) => setShowRequiresEmail(event.target.checked)}
+                  />
+                  Require email registration
+                </label>
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-400">
                 <span>Need a new promotion?</span>
