@@ -1451,7 +1451,7 @@ export default function ScoreboardPicksPage() {
                             actuals.mostElimsReady,
                           ],
                         ];
-                        })().map(([label, value, actual, points, isReady]) => {
+                        })().map(([label, value, actual, points, isReady], index) => {
                           const entrant = value ? entrantMap.get(String(value)) : null;
                           const ready = Boolean(isReady);
                           const isCorrect =
@@ -1461,7 +1461,7 @@ export default function ScoreboardPicksPage() {
                               : value && actual === value);
                           return (
                             <div
-                              key={label}
+                              key={`${label}-${index}`}
                               className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
                                 !ready
                                   ? "border-zinc-800"
