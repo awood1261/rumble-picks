@@ -30,49 +30,59 @@ function LoginPageInner() {
   const [showPromotionLogo, setShowPromotionLogo] = useState<string | null>(null);
   const [showPromotionName, setShowPromotionName] = useState<string | null>(null);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [showChecked, setShowChecked] = useState(false);
 
   useEffect(() => {
     let ignore = false;
     const loadShow = async () => {
-      if (!showId) {
-        setRequiresEmailRegistration(true);
-        setShowName(null);
-        return;
-      }
-      const { data, error } = await supabase
-        .from("shows")
-        .select("id, name, requires_email_registration, promotion_id")
-        .eq("id", showId)
-        .maybeSingle();
-      if (ignore) return;
-      if (error || !data) {
-        setRequiresEmailRegistration(true);
-        setShowName(null);
-        setShowPromotionLogo(null);
-        setShowPromotionName(null);
-        return;
-      }
-      setRequiresEmailRegistration(data.requires_email_registration ?? true);
-      setShowName(data.name ?? null);
-      if (data.promotion_id) {
-        const { data: promotionRow, error: promotionError } = await supabase
-          .from("promotions")
-          .select("id, name, image_url")
-          .eq("id", data.promotion_id)
+      try {
+        if (!showId) {
+          setRequiresEmailRegistration(true);
+          setShowName(null);
+          setShowPromotionLogo(null);
+          setShowPromotionName(null);
+          return;
+        }
+        const { data, error } = await supabase
+          .from("shows")
+          .select("id, name, requires_email_registration, promotion_id")
+          .eq("id", showId)
           .maybeSingle();
         if (ignore) return;
-        if (!promotionError && promotionRow) {
-          setShowPromotionLogo(promotionRow.image_url ?? null);
-          setShowPromotionName(promotionRow.name ?? null);
+        if (error || !data) {
+          setRequiresEmailRegistration(true);
+          setShowName(null);
+          setShowPromotionLogo(null);
+          setShowPromotionName(null);
+          return;
+        }
+        setRequiresEmailRegistration(data.requires_email_registration ?? true);
+        setShowName(data.name ?? null);
+        if (data.promotion_id) {
+          const { data: promotionRow, error: promotionError } = await supabase
+            .from("promotions")
+            .select("id, name, image_url")
+            .eq("id", data.promotion_id)
+            .maybeSingle();
+          if (ignore) return;
+          if (!promotionError && promotionRow) {
+            setShowPromotionLogo(promotionRow.image_url ?? null);
+            setShowPromotionName(promotionRow.name ?? null);
+          } else {
+            setShowPromotionLogo(null);
+            setShowPromotionName(null);
+          }
         } else {
           setShowPromotionLogo(null);
           setShowPromotionName(null);
         }
-      } else {
-        setShowPromotionLogo(null);
-        setShowPromotionName(null);
+        setMode("sign-up");
+      } finally {
+        if (!ignore) {
+          setShowChecked(true);
+        }
       }
-      setMode("sign-up");
     };
     loadShow();
     return () => {
@@ -88,6 +98,7 @@ function LoginPageInner() {
         const session = data.session;
         const email = session?.user.email ?? null;
         setSessionEmail(email);
+        setAuthChecked(true);
         if (session?.user) {
           router.push(showId ? `/picks?show=${showId}` : "/picks");
         }
@@ -99,6 +110,7 @@ function LoginPageInner() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       const email = session?.user.email ?? null;
       setSessionEmail(email);
+      setAuthChecked(true);
       if (session?.user) {
         router.push(showId ? `/picks?show=${showId}` : "/picks");
       }
@@ -181,6 +193,26 @@ function LoginPageInner() {
     }
     setBusy(false);
   };
+
+  const isLoading = !authChecked || !showChecked;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100">
+        <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-24">
+          <div className="w-full max-w-md animate-pulse rounded-3xl border border-zinc-800 bg-zinc-900/70 p-8 shadow-xl shadow-black/40">
+            <div className="h-7 w-48 rounded-full bg-zinc-800/80" />
+            <div className="mt-4 h-4 w-64 rounded-full bg-zinc-800/70" />
+            <div className="mt-8 space-y-4">
+              <div className="h-11 w-full rounded-xl bg-zinc-800/70" />
+              <div className="h-11 w-full rounded-xl bg-zinc-800/70" />
+            </div>
+            <div className="mt-6 h-11 w-full rounded-full bg-zinc-800/70" />
+          </div>
+        </main>
+      </div>
+    );
+  }
 
 
   return (

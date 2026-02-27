@@ -179,6 +179,7 @@ function ScoreboardPageInner() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [rumbleEntries, setRumbleEntries] = useState<RumbleEntryRow[]>([]);
   const [eventEntrants, setEventEntrants] = useState<EventEntrantRow[]>([]);
   const [matches, setMatches] = useState<MatchRow[]>([]);
@@ -717,6 +718,7 @@ function ScoreboardPageInner() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setCurrentUserId(data.session?.user.id ?? null);
+      setAuthChecked(true);
     });
 
     const loadShows = async () => {
@@ -1111,6 +1113,20 @@ function ScoreboardPageInner() {
           </div>
         ) : null}
 
+        {authChecked && !currentUserId ? (
+          <div className="mt-4 rounded-2xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-4 py-3 text-sm text-[color:var(--bp-text)]">
+            <p className="text-sm text-[color:var(--bp-muted)]">
+              Want to appear on the scoreboard and track your picks?
+            </p>
+            <Link
+              className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-[color:var(--bp-gold)] px-4 text-xs font-semibold uppercase tracking-[0.3em] text-black transition hover:brightness-105"
+              href={selectedShowId ? `/login?show=${selectedShowId}` : "/login"}
+            >
+              Create profile
+            </Link>
+          </div>
+        ) : null}
+
         {message && (
           <div className="mt-6 rounded-2xl border border-white/5 bg-[color:var(--bp-surface)] px-4 py-3 text-sm text-[color:var(--bp-text)]">
             {message}
@@ -1160,18 +1176,64 @@ function ScoreboardPageInner() {
               </div>
             </div>
           ) : filteredScoreboard.length === 0 ? (
-            <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface)] px-6 py-8 text-sm text-[color:var(--bp-text)]">
-              <p>No picks yet for this show.</p>
-              <p className="mt-2 text-[color:var(--bp-muted)]">
-                Be the first to make picks and start the leaderboard.
-              </p>
-              <Link
-                className="mt-5 inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--bp-gold-30)] px-4 text-xs font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)] transition hover:border-[color:var(--bp-gold)]"
-                href="/picks"
-              >
-                Make picks
-              </Link>
-            </div>
+            authChecked && !currentUserId ? (
+              <div className="space-y-4">
+                <p className="text-sm text-[color:var(--bp-muted)]">
+                  Scoreboard preview will fill in as fans submit picks.
+                </p>
+                <div className="space-y-6 blur-sm opacity-60">
+                  <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface-2)] px-6 py-5">
+                    <div className="flex items-center justify-between">
+                      <div className="h-3 w-28 rounded-full bg-white/10" />
+                      <div className="h-4 w-20 rounded-full bg-white/10" />
+                    </div>
+                    <div className="mt-5 flex items-center gap-4">
+                      <div className="h-16 w-16 rounded-3xl bg-white/10" />
+                      <div className="space-y-2">
+                        <div className="h-3 w-20 rounded-full bg-white/10" />
+                        <div className="h-6 w-44 rounded-full bg-white/10" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-end justify-center gap-3 sm:gap-4">
+                    <div className="h-28 w-32 rounded-none border border-white/10 bg-[color:var(--bp-surface)] sm:h-32" />
+                    <div className="h-36 w-36 rounded-3xl border border-white/10 bg-[color:var(--bp-surface)] sm:h-40" />
+                    <div className="h-28 w-32 rounded-none border border-white/10 bg-[color:var(--bp-surface)] sm:h-32" />
+                  </div>
+                  <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface)]">
+                    <div className="border-b border-white/5 px-6 py-4">
+                      <div className="h-3 w-24 rounded-full bg-white/10" />
+                    </div>
+                    <div className="divide-y divide-white/5">
+                      {Array.from({ length: 4 }).map((_, index) => (
+                        <div key={index} className="flex items-center gap-4 px-6 py-4">
+                          <div className="h-6 w-8 rounded-full bg-white/10" />
+                          <div className="h-10 w-10 rounded-2xl bg-white/10" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 w-32 rounded-full bg-white/10" />
+                            <div className="h-3 w-20 rounded-full bg-white/10" />
+                          </div>
+                          <div className="h-4 w-12 rounded-full bg-white/10" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface)] px-6 py-8 text-sm text-[color:var(--bp-text)]">
+                <p>No picks yet for this show.</p>
+                <p className="mt-2 text-[color:var(--bp-muted)]">
+                  Be the first to make picks and start the leaderboard.
+                </p>
+                <Link
+                  className="mt-5 inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--bp-gold-30)] px-4 text-xs font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)] transition hover:border-[color:var(--bp-gold)]"
+                  href="/picks"
+                >
+                  Make picks
+                </Link>
+              </div>
+            )
           ) : (
             <>
               <div className="rounded-3xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-6 py-4 shadow-[0_12px_36px_rgba(0,0,0,0.45),0_0_24px_rgba(198,162,74,0.35)]">

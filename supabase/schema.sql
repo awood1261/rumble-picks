@@ -479,6 +479,11 @@ create policy "Picks are deletable by owner"
   for delete
   using (auth.uid() = user_id);
 
+create policy "Picks are deletable by admins"
+  on public.picks
+  for delete
+  using (public.is_admin(auth.uid()));
+
 -- Scores: public leaderboard, admin writes.
 create policy "Scores are viewable by everyone"
   on public.scores
