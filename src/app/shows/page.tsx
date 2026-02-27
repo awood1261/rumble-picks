@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import type { PromotionRow } from "../../lib/picksTypes";
@@ -68,9 +69,11 @@ export default function ShowsPage() {
                   </p>
                 </div>
                 {promotion.image_url ? (
-                  <img
+                  <Image
                     src={promotion.image_url}
                     alt={promotion.name}
+                    fill
+                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 50vw"
                     className="absolute inset-0 h-full w-full object-cover opacity-30 transition-opacity duration-300 group-hover:opacity-45"
                   />
                 ) : (

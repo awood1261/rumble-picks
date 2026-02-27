@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { EntrantCard } from "./EntrantCard";
 import { scoringRules } from "../lib/scoringRules";
@@ -117,9 +118,11 @@ export const ShowSelector = ({
         <div className="flex items-center gap-4">
           {promotionImageUrl ? (
             <div className="h-12 w-12 overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
-              <img
+              <Image
                 src={promotionImageUrl}
                 alt={selectedShow?.name ?? "Promotion"}
+                width={48}
+                height={48}
                 className="h-full w-full object-cover"
               />
             </div>
@@ -186,11 +189,12 @@ export const RumbleSummarySection = ({
               title={name}
             >
               {entrant?.image_url ? (
-                <img
+                <Image
                   src={entrant.image_url}
                   alt={name}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
+                  fill
+                  sizes="112px"
+                  className="object-cover"
                   onError={(event) => {
                     event.currentTarget.style.display = "none";
                   }}
@@ -1359,11 +1363,13 @@ export const EliminatorPicksSection = ({
                   {isOpen && (
                     <div className="pointer-events-none absolute inset-0">
                       {entrant?.image_url ? (
-                        <div className="absolute inset-y-0 right-0 w-2/5">
-                          <img
+                        <div className="absolute inset-y-0 right-0 w-2/5 relative">
+                          <Image
                             src={entrant.image_url}
                             alt=""
-                            className="h-full w-full object-cover object-top opacity-70"
+                            fill
+                            sizes="40vw"
+                            className="object-cover object-top opacity-70"
                           />
                           <div className="absolute inset-0 bg-gradient-to-l from-transparent via-black/40 to-black/90" />
                         </div>
@@ -1391,9 +1397,11 @@ export const EliminatorPicksSection = ({
                         ) : null}
                         {!isOpen && entrant?.image_url ? (
                           <span className="inline-flex h-12 w-12 overflow-hidden rounded-full border border-amber-400/50 bg-black/40">
-                            <img
+                            <Image
                               src={entrant.image_url}
                               alt=""
+                              width={48}
+                              height={48}
                               className="h-full w-full object-cover"
                             />
                           </span>
@@ -1889,11 +1897,13 @@ export const MatchPicksSection = ({
               }`}
             >
               {isChampionship && match.championship_image_url ? (
-                <div className="pointer-events-none absolute left-1/2 top-0 z-0 w-xs -translate-x-1/2 -translate-y-1/2">
-                  <img
+                <div className="pointer-events-none absolute left-1/2 top-0 z-0 h-36 w-xs -translate-x-1/2 -translate-y-1/2 relative sm:h-44">
+                  <Image
                     src={match.championship_image_url}
                     alt={`${match.championship_name ?? "Championship"} belt`}
-                    className="h-36 w-xs max-w-none object-cover object-center opacity-80 drop-shadow-[0_0_38px_rgba(198,162,74,0.5)] sm:h-44"
+                    fill
+                    sizes="20rem"
+                    className="object-cover object-center opacity-80 drop-shadow-[0_0_38px_rgba(198,162,74,0.5)]"
                   />
                 </div>
               ) : null}
@@ -2000,10 +2010,12 @@ export const MatchPicksSection = ({
                                           className="relative h-full w-full overflow-hidden"
                                         >
                                           {entrant.image_url ? (
-                                            <img
+                                            <Image
                                               src={entrant.image_url}
                                               alt={entrant.name}
-                                              className="h-full w-full object-cover"
+                                              fill
+                                              sizes="(min-width: 1024px) 220px, 33vw"
+                                              className="object-cover"
                                             />
                                           ) : (
                                             <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />

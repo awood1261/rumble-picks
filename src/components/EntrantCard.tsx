@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 type EntrantCardProps = {
   name: string;
   promotion?: string | null;
@@ -15,11 +17,13 @@ export const EntrantCard = ({
 }: EntrantCardProps) => {
   return (
     <div className={`flex items-center gap-3 ${className}`.trim()}>
-      <img
+      <Image
         className="h-9 w-9 rounded-full border border-zinc-800 bg-zinc-900 object-cover"
         src={imageUrl || PLACEHOLDER_IMAGE}
         alt={name}
-        loading="lazy"
+        width={36}
+        height={36}
+        sizes="36px"
         onError={(event) => {
           const target = event.currentTarget;
           if (target.src.includes(PLACEHOLDER_IMAGE)) return;
