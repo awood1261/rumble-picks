@@ -739,12 +739,12 @@ export default function AdminPage() {
         supabase
           .from("events")
           .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id, order_index")
-          .order("order_index", { ascending: true, nullsLast: true })
+          .order("order_index", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: false }),
         supabase
           .from("eliminators")
           .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index")
-          .order("order_index", { ascending: true, nullsLast: true })
+          .order("order_index", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: false }),
         supabase
           .from("entrants")
@@ -758,7 +758,7 @@ export default function AdminPage() {
             .select(
               "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
             )
-            .order("order_index", { ascending: true, nullsLast: true })
+            .order("order_index", { ascending: true, nullsFirst: false })
             .order("created_at", { ascending: true });
           if (showIdForQuery) {
             return query.eq("show_id", showIdForQuery);
@@ -937,12 +937,12 @@ export default function AdminPage() {
           supabase
             .from("events")
             .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id, order_index")
-            .order("order_index", { ascending: true, nullsLast: true })
+            .order("order_index", { ascending: true, nullsFirst: false })
             .order("created_at", { ascending: false }),
           supabase
             .from("eliminators")
             .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index")
-            .order("order_index", { ascending: true, nullsLast: true })
+            .order("order_index", { ascending: true, nullsFirst: false })
             .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
@@ -963,7 +963,7 @@ export default function AdminPage() {
               .select(
                 "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
               )
-              .order("order_index", { ascending: true, nullsLast: true })
+              .order("order_index", { ascending: true, nullsFirst: false })
               .order("created_at", { ascending: true });
             if (showIdForQuery) {
               return query.eq("show_id", showIdForQuery);
