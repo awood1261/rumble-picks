@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import { APP_BASE_URL } from "../../lib/appConfig";
@@ -12,7 +12,7 @@ import { containsProfanity } from "../../lib/profanityFilter";
 
 type AuthMode = "sign-in" | "sign-up";
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const showId = searchParams.get("show");
@@ -367,5 +367,24 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-950 text-zinc-100">
+          <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-24">
+            <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900/70 p-8 shadow-xl shadow-black/40">
+              <div className="h-7 w-48 rounded-full bg-zinc-800/80" />
+              <div className="mt-4 h-4 w-64 rounded-full bg-zinc-800/70" />
+            </div>
+          </main>
+        </div>
+      }
+    >
+      <LoginPageInner />
+    </Suspense>
   );
 }
