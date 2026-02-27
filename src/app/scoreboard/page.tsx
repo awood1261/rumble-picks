@@ -61,6 +61,7 @@ type ShowRow = {
   name: string;
   tagline?: string | null;
   promotion_id: string | null;
+  starts_at?: string | null;
 };
 
 type PromotionRow = {
@@ -196,6 +197,7 @@ function ScoreboardPageInner() {
   const previousRanksRef = useRef<Record<string, number>>({});
   const lastDeltaRef = useRef<Record<string, number>>({});
   const [lastUpdateAt, setLastUpdateAt] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const [progressOpen, setProgressOpen] = useState(false);
   const loadScoresRef = useRef<() => void>(() => {});
   const loadRumbleEntriesRef = useRef<() => void>(() => {});
@@ -306,6 +308,49 @@ function ScoreboardPageInner() {
   }, [matches, matchEntrantCountByMatch]);
 
   const showResultsComplete = eventsComplete && matchesComplete;
+
+  const hasAnyResults = useMemo(() => {
+    const matchUpdated = matches.some(
+      (match) =>
+        Boolean(match.winner_side_id) ||
+        Boolean(match.finish_method) ||
+        Boolean(match.match_length) ||
+        Boolean(match.match_interference) ||
+        Boolean(match.finish_winner_entrant_id) ||
+        Boolean(match.finish_loser_entrant_id)
+    );
+    const eventUpdated = rumbleEntries.some(
+      (entry) => Boolean(entry.eliminated_at) || Boolean(entry.is_confirmed)
+    );
+    const eliminatorUpdated = eliminatorEliminations.length > 0;
+    return matchUpdated || eventUpdated || eliminatorUpdated;
+  }, [eliminatorEliminations.length, matches, rumbleEntries]);
+
+  const lockStatusText = useMemo(() => {
+    if (!selectedShow?.starts_at) {
+      return "Lock time not set";
+    }
+    const startTime = new Date(selectedShow.starts_at).getTime();
+    const diffMs = startTime - now;
+    if (diffMs <= 0) {
+      return "Show is locked";
+    }
+    const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const parts = [
+      days ? `${days}d` : null,
+      hours ? `${pad(hours)}h` : null,
+      minutes ? `${pad(minutes)}m` : null,
+      `${pad(seconds)}s`,
+    ].filter(Boolean);
+    return `Picks lock in ${parts.join(" ")}`;
+  }, [now, selectedShow?.starts_at]);
+
+  const showPreview = !loading && Boolean(selectedShowId) && !hasAnyResults;
 
   const entrantMap = useMemo(() => {
     return new Map(eventEntrants.map((entrant) => [entrant.id, entrant]));
@@ -739,6 +784,12 @@ function ScoreboardPageInner() {
     lastDeltaRef.current = {};
   }, [selectedShowId]);
 
+  useEffect(() => {
+    if (!selectedShow?.starts_at) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [selectedShow?.starts_at]);
+
   const loadEliminatorEntries = useCallback(async () => {
     if (!selectedShowId) {
       setEliminatorEntries([]);
@@ -1048,13 +1099,27 @@ function ScoreboardPageInner() {
           </div>
         </header>
 
+        {showPreview ? (
+          <div className="mt-6 rounded-2xl border border-[color:var(--bp-gold-30)] bg-black/70 px-4 py-3 text-sm text-[color:var(--bp-text)]">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-[color:var(--bp-gold)]">
+              <span className="text-amber-200">🔒</span>
+              {lockStatusText}
+            </div>
+            <p className="mt-2 text-sm text-[color:var(--bp-muted)]">
+              Scores will update once the first match is complete.
+            </p>
+          </div>
+        ) : null}
+
         {message && (
           <div className="mt-6 rounded-2xl border border-white/5 bg-[color:var(--bp-surface)] px-4 py-3 text-sm text-[color:var(--bp-text)]">
             {message}
           </div>
         )}
 
-        <section className="mt-8 space-y-6">
+        <section
+          className={`mt-8 space-y-6 ${showPreview ? "pointer-events-none select-none blur-sm opacity-50" : ""}`}
+        >
           {loading ? (
             <div className="space-y-6 animate-pulse">
               <div className="rounded-3xl border border-white/5 bg-[color:var(--bp-surface-2)] px-6 py-5">
