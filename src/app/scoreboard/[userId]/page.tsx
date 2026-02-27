@@ -108,6 +108,7 @@ type MatchRow = {
   finish_loser_entrant_id: string | null;
   match_length?: string | null;
   match_interference?: string | null;
+  order_index?: number | null;
 };
 
 type MatchSideRow = {
