@@ -4216,7 +4216,9 @@ export default function AdminPage() {
             <button
               className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
               type="button"
-              onClick={handleRecalculateScores}
+              onClick={() => {
+                void handleRecalculateScores();
+              }}
               disabled={recalcBusy}
             >
               {recalcBusy ? "Recalculating…" : "Recalculate scores"}
