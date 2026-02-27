@@ -515,14 +515,6 @@ export default function ScoreboardPage() {
       });
 
       const matchPayload = {
-        entrants: [],
-        final_four: [],
-        winner: null,
-        entry_1: null,
-        entry_2: null,
-        entry_30: null,
-        iron_person: null,
-        most_eliminations: null,
         eliminators: pick.eliminators ?? {},
         match_picks: pick.match_picks ?? {},
         match_finish_picks: pick.match_finish_picks ?? {},
