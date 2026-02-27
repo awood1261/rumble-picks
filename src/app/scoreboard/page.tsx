@@ -72,6 +72,7 @@ type EventRow = {
   show_id: string | null;
   rumble_gender: string | null;
   iron_person_entrant_id?: string | null;
+  order_index?: number | null;
 };
 
 type RumbleEntryRow = {
