@@ -143,7 +143,29 @@ const emptyEliminatorPick = {
   most_eliminations: null,
 };
 
-const emptyActuals = {
+type EventActuals = {
+  entrantSet: Set<string>;
+  confirmedSet: Set<string>;
+  finalFourSet: Set<string>;
+  winner: string | null;
+  entry1: string | null;
+  entry2: string | null;
+  entry30: string | null;
+  ironPerson: string | null;
+  topElims: Set<string>;
+  hasData: boolean;
+  totalEntries: number;
+  remainingCount: number;
+  finalFourReady: boolean;
+  winnerReady: boolean;
+  entry1Ready: boolean;
+  entry2Ready: boolean;
+  entry30Ready: boolean;
+  ironPersonReady: boolean;
+  mostElimsReady: boolean;
+};
+
+const emptyActuals: EventActuals = {
   entrantSet: new Set<string>(),
   confirmedSet: new Set<string>(),
   finalFourSet: new Set<string>(),
@@ -287,7 +309,7 @@ export default function ScoreboardPicksPage() {
     entry.eliminated_at ? new Date(entry.eliminated_at).getTime() : Number.MAX_SAFE_INTEGER;
 
   const actualsByEvent = useMemo(() => {
-    const byEvent: Record<string, typeof emptyActuals> = {};
+    const byEvent: Record<string, EventActuals> = {};
     events.forEach((event) => {
       const eventEntries = rumbleEntries.filter(
         (entry) => entry.event_id === event.id
