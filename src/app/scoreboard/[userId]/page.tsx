@@ -1210,11 +1210,11 @@ export default function ScoreboardPicksPage() {
           name: entrantMap.get(entry.entrant_id)?.name ?? "Entrant",
         };
       })
-      .filter(Boolean)
-      .sort((a, b) => a.order - b.order) as Array<{
-      order: number;
-      name: string;
-    }>;
+      .filter(
+        (entry): entry is { order: number; name: string } =>
+          entry !== null,
+      )
+      .sort((a, b) => a.order - b.order);
     if (ordered.length === 0) return "Not set";
     return ordered.map((entry) => `${entry.order}. ${entry.name}`).join(", ");
   };
