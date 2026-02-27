@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
@@ -167,7 +167,7 @@ const UpdateProgress = () => (
   </div>
 );
 
-export default function ScoreboardPage() {
+function ScoreboardPageInner() {
   const searchParams = useSearchParams();
   const queryShowId = searchParams.get("show");
   const [scores, setScores] = useState<ScoreRow[]>([]);
@@ -1288,5 +1288,37 @@ export default function ScoreboardPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function ScoreboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[color:var(--bp-bg)] text-[color:var(--bp-text)]">
+          <main className="mx-auto w-full max-w-6xl px-6 py-6 pb-28 sm:py-10 sm:pb-32">
+            <div className="animate-pulse space-y-6">
+              <div className="rounded-3xl border border-white/10 bg-[color:var(--bp-surface)] p-6">
+                <div className="h-4 w-32 rounded-full bg-white/10" />
+                <div className="mt-4 h-10 w-56 rounded-full bg-white/10" />
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-[color:var(--bp-surface)] p-6">
+                <div className="h-4 w-28 rounded-full bg-white/10" />
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="h-32 rounded-2xl bg-white/10"
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      }
+    >
+      <ScoreboardPageInner />
+    </Suspense>
   );
 }
