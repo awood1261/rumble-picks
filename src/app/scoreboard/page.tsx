@@ -53,6 +53,8 @@ type PickRow = {
   updated_at: string;
 };
 
+type RumblePick = NonNullable<PickRow["rumbles"]>[string];
+
 type ShowRow = {
   id: string;
   name: string;
@@ -356,7 +358,7 @@ export default function ScoreboardPage() {
 
   const computeRumbleScore = useCallback(
     (
-      pick: PickRow["rumbles"][string] | undefined,
+      pick: RumblePick | undefined,
       entries: RumbleEntryRow[],
       ironOverride?: string | null
     ) => {
