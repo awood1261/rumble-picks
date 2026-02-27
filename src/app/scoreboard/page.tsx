@@ -714,7 +714,7 @@ export default function ScoreboardPage() {
       const { data: eventRows, error } = await supabase
         .from("events")
         .select("id, name, show_id, rumble_gender, iron_person_entrant_id, order_index")
-        .order("order_index", { ascending: true, nullsLast: true })
+        .order("order_index", { ascending: true, nullsFirst: false })
         .order("name", { ascending: true });
       if (error) {
         setMessage(error.message);
@@ -749,7 +749,7 @@ export default function ScoreboardPage() {
       .from("eliminators")
       .select("id, order_index")
       .eq("show_id", selectedShowId)
-      .order("order_index", { ascending: true, nullsLast: true });
+      .order("order_index", { ascending: true, nullsFirst: false });
     if (error) {
       setMessage(error.message);
       return;
@@ -843,7 +843,7 @@ export default function ScoreboardPage() {
         "id, order_index, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
       )
       .eq("show_id", selectedShowId)
-      .order("order_index", { ascending: true, nullsLast: true })
+      .order("order_index", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true });
       if (error) {
         setMessage(error.message);
