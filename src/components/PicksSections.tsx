@@ -2197,7 +2197,7 @@ export const MatchPicksSection = ({
                           +{scoringRules.match_length} pts
                         </span>
                       </div>
-                      <SegmentedPills
+                        <SegmentedPills
                         options={lengthOptions}
                         selectedValue={lengthPick}
                         disabled={isLocked}
@@ -2206,7 +2206,10 @@ export const MatchPicksSection = ({
                             ...prev,
                             match_length_picks: {
                               ...prev.match_length_picks,
-                              [match.id]: value,
+                              [match.id]: value as
+                                | "sprint"
+                                | "standard"
+                                | "epic",
                             },
                           }))
                         }
