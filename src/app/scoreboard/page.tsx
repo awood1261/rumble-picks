@@ -840,7 +840,7 @@ export default function ScoreboardPage() {
     const { data: matchRows, error } = await supabase
       .from("matches")
       .select(
-        "id, order_index, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
+        "id, order_index, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
       )
       .eq("show_id", selectedShowId)
       .order("order_index", { ascending: true, nullsFirst: false })
