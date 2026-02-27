@@ -134,6 +134,8 @@ function PicksPageInner() {
   const hasAutoJumpedRef = useRef(false);
   const lastLoadedShowIdRef = useRef<string | null>(null);
   const picksLoadedForShowIdRef = useRef<string | null>(null);
+  const isHydratingPayloadRef = useRef(false);
+  const hasLocalEditsRef = useRef(false);
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [editSection, setEditSection] = useState<EditSection>(null);
@@ -854,6 +856,7 @@ function PicksPageInner() {
       setHasSaved(false);
       setEditSection(null);
       setFocusedEventId("");
+      hasLocalEditsRef.current = false;
     }
     if (needsSkeleton) {
       setIsPicksLoading(true);
@@ -925,6 +928,8 @@ function PicksPageInner() {
         });
 
         if (savedPayload) {
+          if (hasLocalEditsRef.current) return;
+          isHydratingPayloadRef.current = true;
           setPayload({
             rumbles: nextRumbles,
             eliminators: nextEliminators,
@@ -950,8 +955,11 @@ function PicksPageInner() {
                 "yes" | "no" | null
               >) ?? {},
           });
+          isHydratingPayloadRef.current = false;
           setHasSaved(true);
         } else {
+          if (hasLocalEditsRef.current) return;
+          isHydratingPayloadRef.current = true;
           setPayload({
             rumbles: nextRumbles,
             eliminators: nextEliminators,
@@ -960,6 +968,7 @@ function PicksPageInner() {
             match_length_picks: {},
             match_interference_picks: {},
           });
+          isHydratingPayloadRef.current = false;
         }
       } finally {
         setIsPicksLoading(false);
@@ -978,6 +987,11 @@ function PicksPageInner() {
     loadMatchPickStats,
     showEvents,
   ]);
+
+  useEffect(() => {
+    if (isHydratingPayloadRef.current) return;
+    hasLocalEditsRef.current = true;
+  }, [payload]);
 
   const loadRank = useCallback(async () => {
     if (!selectedShowId || !userId) return;

@@ -2202,7 +2202,7 @@ export const MatchPicksSection = ({
                         selectedValue={lengthPick}
                         disabled={isLocked}
                         onSelect={(value) =>
-                          setPayload((prev) => ({
+                          setPayload((prev): PicksPayload => ({
                             ...prev,
                             match_length_picks: {
                               ...prev.match_length_picks,

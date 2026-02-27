@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
+import * as QRCode from "qrcode";
 import { APP_BASE_URL } from "../../lib/appConfig";
 
 export default function QrPage() {
@@ -15,7 +15,7 @@ export default function QrPage() {
       margin: 1,
       color: { dark: "#fbbf24", light: "#0a0a0a" },
     })
-      .then((url) => {
+      .then((url: string) => {
         if (active) setQrDataUrl(url);
       })
       .catch((err: Error) => {
