@@ -629,7 +629,7 @@ export default function PicksPage() {
         .select(
           "id, name, status, rumble_gender, roster_year, show_id, iron_person_entrant_id, order_index",
         )
-        .order("order_index", { ascending: true, nullsLast: true })
+        .order("order_index", { ascending: true, nullsFirst: false })
         .order("name", { ascending: true }),
     ]).then(([showsResult, promotionsResult, eventsResult]) => {
       if (showsResult.error) {
@@ -717,7 +717,7 @@ export default function PicksPage() {
         "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference",
       )
       .eq("show_id", selectedShowId)
-      .order("order_index", { ascending: true, nullsLast: true })
+      .order("order_index", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true });
     if (matchError) {
       setMessage(matchError.message);
@@ -765,7 +765,7 @@ export default function PicksPage() {
         "id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index"
       )
       .eq("show_id", selectedShowId)
-      .order("order_index", { ascending: true, nullsLast: true })
+      .order("order_index", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true });
     if (eliminatorError) {
       setMessage(eliminatorError.message);
