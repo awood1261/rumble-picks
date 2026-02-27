@@ -1234,12 +1234,11 @@ export default function ScoreboardPicksPage() {
           type: type === "pinfall" ? "Pinfall" : "Submission",
         };
       })
-      .filter(Boolean)
-      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)) as Array<{
-      order: number;
-      name: string;
-      type: string;
-    }>;
+      .filter(
+        (entry): entry is { order: number; name: string; type: string } =>
+          entry !== null,
+      )
+      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
     if (ordered.length === 0) return "Not set";
     return ordered.map((entry) => `${entry.name}: ${entry.type}`).join(", ");
   };
