@@ -215,6 +215,7 @@ export default function AdminPage() {
   const [eliminateEntryId, setEliminateEntryId] = useState("");
   const [eliminatedById, setEliminatedById] = useState("");
   const [recalcBusy, setRecalcBusy] = useState(false);
+  const [clearScoresBusy, setClearScoresBusy] = useState(false);
   const [bulkEntrySaveBusy, setBulkEntrySaveBusy] = useState(false);
   const [customEntrantName, setCustomEntrantName] = useState("");
   const [matchName, setMatchName] = useState("");
@@ -2415,6 +2416,39 @@ export default function AdminPage() {
     setRecalcBusy(false);
   };
 
+  const handleClearShowScores = async () => {
+    if (!activeShow) {
+      setMessage("Select a show before clearing scores.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Clear all picks and scores for "${activeShow.name}"? This will delete all picks and reset the scoreboard.`
+    );
+    if (!confirmed) return;
+    setClearScoresBusy(true);
+    setMessage(null);
+    try {
+      const { error: picksError } = await supabase
+        .from("picks")
+        .delete()
+        .eq("show_id", activeShow.id);
+      if (picksError) throw picksError;
+
+      const { error: scoresError } = await supabase
+        .from("scores")
+        .delete()
+        .eq("show_id", activeShow.id);
+      if (scoresError) throw scoresError;
+
+      setMessage("Scores and picks cleared for this show.");
+    } catch (error) {
+      const err = error as { message?: string };
+      setMessage(err.message ?? "Failed to clear scores and picks.");
+    } finally {
+      setClearScoresBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
@@ -4212,7 +4246,7 @@ export default function AdminPage() {
           <p className="mt-2 text-sm text-zinc-400">
             Recalculate scores after updating eliminations or results.
           </p>
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-3">
             <button
               className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
               type="button"
@@ -4222,6 +4256,14 @@ export default function AdminPage() {
               disabled={recalcBusy}
             >
               {recalcBusy ? "Recalculating…" : "Recalculate scores"}
+            </button>
+            <button
+              className="inline-flex h-11 items-center justify-center rounded-full border border-red-500/70 px-6 text-sm font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-70"
+              type="button"
+              onClick={handleClearShowScores}
+              disabled={clearScoresBusy || !activeShow}
+            >
+              {clearScoresBusy ? "Clearing…" : "Clear picks & scores"}
             </button>
           </div>
         </section>
