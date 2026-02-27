@@ -287,20 +287,7 @@ export default function ScoreboardPicksPage() {
     entry.eliminated_at ? new Date(entry.eliminated_at).getTime() : Number.MAX_SAFE_INTEGER;
 
   const actualsByEvent = useMemo(() => {
-    const byEvent: Record<
-      string,
-      {
-        entrantSet: Set<string>;
-        confirmedSet: Set<string>;
-        finalFourSet: Set<string>;
-        winner: string | null;
-        entry1: string | null;
-        entry2: string | null;
-        entry30: string | null;
-        topElims: Set<string>;
-        hasData: boolean;
-      }
-    > = {};
+    const byEvent: Record<string, typeof emptyActuals> = {};
     events.forEach((event) => {
       const eventEntries = rumbleEntries.filter(
         (entry) => entry.event_id === event.id
