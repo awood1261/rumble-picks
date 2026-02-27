@@ -100,6 +100,7 @@ type MatchRow = {
   roster_gender: string | null;
   event_id: string | null;
   show_id: string | null;
+  order_index?: number | null;
 };
 
 type MatchSideRow = {
