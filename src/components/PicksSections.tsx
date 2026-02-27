@@ -2441,7 +2441,9 @@ export const KeyPicksEditor = ({
           {field.label}
           <select
             className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-            value={(eventPick as Record<string, string | null>)[field.key] ?? ""}
+            value={
+              (eventPick[field.key as keyof RumblePick] as string | null) ?? ""
+            }
             onChange={(eventChange) =>
               onPickChange(field.key, eventChange.target.value || null)
             }
