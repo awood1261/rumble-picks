@@ -1712,10 +1712,11 @@ export default function PicksPage() {
                           : null;
                       })
                       .filter(Boolean)
-                      .sort(
-                        (a, b) =>
-                          Number(a.split(".")[0]) - Number(b.split(".")[0]),
-                      )
+                      .sort((a, b) => {
+                        const aValue = a ? Number(a.split(".")[0]) : 0;
+                        const bValue = b ? Number(b.split(".")[0]) : 0;
+                        return aValue - bValue;
+                      })
                       .join(", ");
                     const eliminationOrder = entriesForEliminator
                       .map((entry) => {
@@ -1726,10 +1727,11 @@ export default function PicksPage() {
                           : null;
                       })
                       .filter(Boolean)
-                      .sort(
-                        (a, b) =>
-                          Number(a.split(".")[0]) - Number(b.split(".")[0]),
-                      )
+                      .sort((a, b) => {
+                        const aValue = a ? Number(a.split(".")[0]) : 0;
+                        const bValue = b ? Number(b.split(".")[0]) : 0;
+                        return aValue - bValue;
+                      })
                       .join(", ");
                     const mostElims = pick.most_eliminations
                       ? entrantByIdAll.get(pick.most_eliminations)?.name
