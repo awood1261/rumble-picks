@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
@@ -93,7 +93,7 @@ const emptyActuals: EventActuals = {
   mostElimsReady: false,
 };
 
-export default function PicksPage() {
+function PicksPageInner() {
   const searchParams = useSearchParams();
   const queryShowId = searchParams.get("show");
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
@@ -2048,5 +2048,46 @@ export default function PicksPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PicksPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-950 text-zinc-200">
+          <main className="mx-auto w-full max-w-6xl px-6 py-6 pb-28 sm:py-10 sm:pb-32">
+            <div className="animate-pulse">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="h-3 w-32 rounded-full bg-zinc-800/80" />
+                <div className="flex items-center justify-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-zinc-800/80" />
+                  <div className="h-7 w-48 rounded-full bg-zinc-800/80 sm:h-8" />
+                </div>
+                <div className="h-4 w-56 rounded-full bg-zinc-800/80" />
+              </div>
+              <div className="mt-6 space-y-4">
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                  <div className="h-4 w-28 rounded-full bg-zinc-800/80" />
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <div className="h-48 rounded-2xl bg-zinc-800/60 sm:h-60" />
+                    <div className="h-48 rounded-2xl bg-zinc-800/60 sm:h-60" />
+                  </div>
+                </div>
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                  <div className="h-4 w-36 rounded-full bg-zinc-800/80" />
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="h-9 rounded-2xl bg-zinc-800/60" />
+                    <div className="h-9 rounded-2xl bg-zinc-800/60" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      }
+    >
+      <PicksPageInner />
+    </Suspense>
   );
 }
