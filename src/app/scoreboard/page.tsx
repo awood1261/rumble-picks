@@ -356,7 +356,7 @@ export default function ScoreboardPage() {
 
   const computeRumbleScore = useCallback(
     (
-      pick: PickRow["payload"]["rumbles"][string] | undefined,
+      pick: PickRow["rumbles"][string] | undefined,
       entries: RumbleEntryRow[],
       ironOverride?: string | null
     ) => {
