@@ -1239,7 +1239,7 @@ export default function PicksPage() {
         active: true,
       })
       .select(
-        "id, name, promotion, gender, image_url, roster_year, event_id, is_custom",
+        "id, name, promotion, gender, image_url, roster_year, event_id, is_custom, created_by, status",
       )
       .single();
     if (error) {
