@@ -83,6 +83,7 @@ type RumbleEntryRow = {
   entry_number: number | null;
   eliminated_at: string | null;
   is_confirmed?: boolean;
+  eliminations_count?: number | null;
 };
 
 type EventEntrantRow = {
