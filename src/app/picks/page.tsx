@@ -31,6 +31,7 @@ import type {
   EliminatorEliminationRow,
   EliminatorEntryRow,
   EliminatorRow,
+  EliminatorPick,
   PicksPayload,
   PromotionRow,
   RankInfo,
@@ -62,7 +63,7 @@ const emptyPayload: PicksPayload = {
   match_interference_picks: {},
 };
 
-const emptyEliminatorPick = {
+const emptyEliminatorPick: EliminatorPick = {
   entry_order: {},
   elimination_order: {},
   elimination_type: {},
