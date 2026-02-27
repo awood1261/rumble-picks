@@ -15,6 +15,7 @@ type EventRow = {
   roster_year: number | null;
   show_id: string | null;
   iron_person_entrant_id?: string | null;
+  order_index?: number | null;
 };
 
 type EliminatorRow = {
@@ -25,6 +26,7 @@ type EliminatorRow = {
   roster_gender: string | null;
   entrant_limit: number;
   show_id: string | null;
+  order_index?: number | null;
 };
 
 type ShowRow = {
