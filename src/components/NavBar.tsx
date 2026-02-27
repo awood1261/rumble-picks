@@ -97,7 +97,7 @@ export const NavBar = () => {
         >
           <img
             className="h-8 w-auto sm:h-10"
-            src="/images/bp-logo-text-only.png"
+            src="/images/bp-logo-text-only.PNG"
             alt="BoutPick"
           />
         </Link>

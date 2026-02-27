@@ -7,7 +7,7 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-5xl flex-col items-center justify-center px-6 py-6 sm:py-12 text-center">
         <img
           className="w-52 sm:w-xl"
-          src="/images/bp-logo-text-tag.png"
+          src="/images/bp-logo-text-tag.PNG"
           alt="BoutPick. Make Your Call"
         />
         <h1 className="mt-6 text-balance text-4xl font-semibold leading-tight sm:text-5xl">

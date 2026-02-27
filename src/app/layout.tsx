@@ -20,8 +20,8 @@ export const metadata: Metadata = {
   },
   description: "BoutPick predictions and live scoreboard.",
   icons: {
-    icon: "/images/bp-logo.png",
-    apple: "/images/bp-logo.png",
+    icon: "/images/bp-logo.PNG",
+    apple: "/images/bp-logo.PNG",
   },
 };
 
