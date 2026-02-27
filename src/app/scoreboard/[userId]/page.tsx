@@ -672,7 +672,7 @@ export default function ScoreboardPicksPage() {
         .from("events")
         .select("id, name, show_id, rumble_gender, iron_person_entrant_id, order_index")
         .eq("show_id", validShowId)
-        .order("order_index", { ascending: true, nullsLast: true })
+        .order("order_index", { ascending: true, nullsFirst: false })
         .order("name", { ascending: true }),
       supabase
         .from("profiles")
@@ -685,13 +685,13 @@ export default function ScoreboardPicksPage() {
           "id, name, kind, order_index, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
         )
         .eq("show_id", validShowId)
-        .order("order_index", { ascending: true, nullsLast: true })
+        .order("order_index", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true }),
       supabase
         .from("eliminators")
         .select("id, name, show_id, entrant_limit, order_index")
         .eq("show_id", validShowId)
-        .order("order_index", { ascending: true, nullsLast: true })
+        .order("order_index", { ascending: true, nullsFirst: false })
         .order("name", { ascending: true }),
       supabase
         .from("picks")
