@@ -94,6 +94,7 @@ type EventEntrantRow = {
 
 type MatchRow = {
   id: string;
+  winner_entrant_id: string | null;
   winner_side_id: string | null;
   finish_method: string | null;
   finish_winner_entrant_id: string | null;
