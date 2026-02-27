@@ -8,3 +8,6 @@
 - Split static vs live data and only refresh live portions on polling cycles.
 - Minimize Supabase `select` columns in polling calls.
 - Improve image caching (CDN/cache headers) to avoid repeated image egress.
+
+## Deployment Guardrails
+- Add a local pre-deploy typecheck step (ex: `npm run build` or `npx tsc --noEmit`) before pushing to Vercel.
