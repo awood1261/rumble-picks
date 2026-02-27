@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
@@ -97,9 +98,12 @@ export default function PromotionShowsPage() {
           <div className="flex items-center gap-4">
             {promotion?.image_url ? (
               <div className="h-14 w-14 overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
-                <img
+                <Image
                   src={promotion.image_url}
                   alt={promotion?.name ?? "Promotion"}
+                  width={56}
+                  height={56}
+                  sizes="56px"
                   className="h-full w-full object-cover"
                 />
               </div>
@@ -134,9 +138,11 @@ export default function PromotionShowsPage() {
                     </p>
                   </div>
                   {show.image_url ? (
-                    <img
+                    <Image
                       src={show.image_url}
                       alt={show.name}
+                      fill
+                      sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 50vw"
                       className="absolute inset-0 h-full w-full object-cover opacity-30 transition-opacity duration-300 group-hover:opacity-45"
                     />
                   ) : (

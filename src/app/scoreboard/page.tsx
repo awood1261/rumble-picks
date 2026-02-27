@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
@@ -1032,9 +1033,11 @@ function ScoreboardPageInner() {
           <div className="flex items-center gap-3">
             {selectedPromotion?.image_url ? (
               <div className="h-11 w-11 overflow-hidden rounded-full border border-[color:var(--bp-gold-30)] bg-black/40">
-                <img
+                <Image
                   src={selectedPromotion.image_url}
                   alt={selectedPromotion.name ?? "Promotion"}
+                  width={44}
+                  height={44}
                   className="h-full w-full object-cover"
                 />
               </div>
@@ -1115,11 +1118,12 @@ function ScoreboardPageInner() {
                 </div>
                 <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-4">
-                    <img
+                    <Image
                       src={avatarSrcForKey(topThree[0]?.avatar_key ?? null)}
                       alt={topThree[0]?.display_name ?? "Leader"}
+                      width={64}
+                      height={64}
                       className="h-16 w-16 rounded-3xl border border-[color:var(--bp-gold-30)] bg-black/40"
-                      loading="lazy"
                     />
                     <div>
                       <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--bp-dim)]">
@@ -1184,11 +1188,12 @@ function ScoreboardPageInner() {
                               hasDelta ? "justify-between" : "justify-center"
                             }`}
                           >
-                            <img
+                            <Image
                               src={avatarSrcForKey(row.avatar_key)}
                               alt={row.display_name}
+                              width={40}
+                              height={40}
                               className="h-10 w-10 rounded-2xl border border-white/10 bg-black/40"
-                              loading="lazy"
                             />
                             {hasDelta ? <MovementPill delta={delta ?? null} /> : null}
                           </div>
@@ -1231,11 +1236,12 @@ function ScoreboardPageInner() {
                             {index + 4}
                           </span>
                           <div className="flex min-w-0 flex-1 items-center gap-3">
-                            <img
+                            <Image
                               src={avatarSrcForKey(row.avatar_key)}
                               alt={row.display_name}
+                              width={40}
+                              height={40}
                               className="h-10 w-10 shrink-0 rounded-2xl border border-white/10 bg-black/40"
-                              loading="lazy"
                             />
                             <div className="min-w-0">
                               <p className="truncate text-base font-semibold text-[color:var(--bp-text)]">

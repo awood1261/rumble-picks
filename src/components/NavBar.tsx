@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
@@ -95,10 +96,13 @@ export const NavBar = () => {
           href="/"
           aria-label="BoutPick"
         >
-          <img
+          <Image
             className="h-8 w-auto sm:h-10"
             src="/images/bp-logo-text-only.PNG"
             alt="BoutPick"
+            width={180}
+            height={40}
+            priority
           />
         </Link>
         <div className="flex flex-nowrap items-center gap-3 text-xs font-semibold uppercase tracking-wide text-zinc-300">
@@ -150,10 +154,13 @@ export const NavBar = () => {
                   setMenuOpen(false);
                 }}
               >
-                <img
+                <Image
                   src={avatarSrcForKey(avatarKey)}
                   alt="Profile avatar"
                   className="h-6 w-6"
+                  width={24}
+                  height={24}
+                  sizes="24px"
                 />
               </button>
               {profileMenuOpen && (

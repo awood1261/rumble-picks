@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
@@ -1575,9 +1576,11 @@ function PicksPageInner() {
             <div className="flex items-center justify-center gap-3">
               {selectedPromotionImageUrl ? (
                 <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
-                  <img
+                  <Image
                     src={selectedPromotionImageUrl}
                     alt={selectedShow?.name ?? "Promotion"}
+                    width={40}
+                    height={40}
                     className="h-full w-full object-cover"
                   />
                 </span>
@@ -1695,9 +1698,11 @@ function PicksPageInner() {
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-zinc-300">
                           <span>Winner:</span>
                           {winnerEntrant?.image_url ? (
-                            <img
+                            <Image
                               src={winnerEntrant.image_url}
                               alt={winnerEntrant.name}
+                              width={28}
+                              height={28}
                               className="h-7 w-7 rounded-full border border-zinc-700 object-cover"
                             />
                           ) : null}
@@ -1843,10 +1848,12 @@ function PicksPageInner() {
                           <div className="flex -space-x-2">
                             {winnerEntrants.map((entrant) =>
                               entrant.image_url ? (
-                                <img
+                                <Image
                                   key={entrant.id}
                                   src={entrant.image_url}
                                   alt={entrant.name}
+                                  width={28}
+                                  height={28}
                                   className="h-7 w-7 rounded-full border border-zinc-700 object-cover"
                                 />
                               ) : (

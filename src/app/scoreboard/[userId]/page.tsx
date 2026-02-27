@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabaseClient";
@@ -271,11 +272,12 @@ export default function ScoreboardPicksPage() {
               title={name}
             >
               {entrant?.image_url ? (
-                <img
+                <Image
                   src={entrant.image_url}
                   alt={name}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
+                  fill
+                  sizes="112px"
+                  className="object-cover"
                   onError={(event) => {
                     event.currentTarget.style.display = "none";
                   }}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabaseClient";
@@ -142,10 +143,13 @@ export default function ShowDetailPage() {
   return (
     <div className="relative min-h-screen text-zinc-100">
       {show?.image_url ? (
-        <img
+        <Image
           src={show.image_url}
           alt={show.name}
-          className="absolute inset-0 h-full w-full object-cover"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
         />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black" />
@@ -166,9 +170,11 @@ export default function ShowDetailPage() {
             <div className="flex items-center gap-4">
               {promotion?.image_url ? (
                 <div className="h-12 w-12 overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
-                  <img
+                  <Image
                     src={promotion.image_url}
                     alt={promotion?.name ?? show.name}
+                    width={48}
+                    height={48}
                     className="h-full w-full object-cover"
                   />
                 </div>
