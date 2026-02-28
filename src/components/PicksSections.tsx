@@ -1976,7 +1976,7 @@ export const MatchPicksSection = ({
               }`}
             >
               {isChampionship && match.championship_image_url ? (
-                <div className="pointer-events-none absolute left-1/2 top-0 z-0 h-36 w-xs -translate-x-1/2 -translate-y-1/2 relative sm:h-44">
+                <div className="pointer-events-none absolute left-1/2 top-4 z-0 h-36 w-xs -translate-x-1/2 -translate-y-1/2 relative sm:h-44 sm:top-6">
                   <Image
                     src={match.championship_image_url}
                     alt={`${match.championship_name ?? "Championship"} belt`}
@@ -1986,23 +1986,23 @@ export const MatchPicksSection = ({
                   />
                 </div>
               ) : null}
-              <div
+                <div
                 className={`relative z-10 ${
                   isChampionship
-                    ? "-m-4 rounded-2xl bg-zinc-950/95 p-4 pt-2"
+                    ? "-m-4 rounded-2xl bg-zinc-950/95 p-4 pt-0"
                     : ""
                 }`}
               >
                 <div className="flex flex-col gap-2">
                   <div>
                     {isChampionship && (
-                      <div className="mb-2 text-center">
+                      <div className="mb-1 text-center">
                         <span className="rounded-full border border-amber-300/40 bg-black px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.35em] text-amber-100">
                           {match.championship_name?.trim() || "Championship"}
                         </span>
                       </div>
                     )}
-                    <p className="mt-2 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs text-zinc-500">
                       Tap a side to select the winner.
                     </p>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-100">

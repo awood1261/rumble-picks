@@ -132,6 +132,7 @@ function PicksPageInner() {
   );
   const [stepIndex, setStepIndex] = useState(0);
   const hasAutoJumpedRef = useRef(false);
+  const hasRestoredStepRef = useRef(false);
   const lastLoadedShowIdRef = useRef<string | null>(null);
   const lastLoadedUserIdRef = useRef<string | null>(null);
   const picksLoadedForShowIdRef = useRef<string | null>(null);
@@ -886,7 +887,7 @@ function PicksPageInner() {
           supabase
             .from("picks")
             .select(
-              "rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+              "updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
             )
             .eq("show_id", selectedShowId)
             .eq("user_id", userId)
@@ -914,7 +915,7 @@ function PicksPageInner() {
         loadMatchPickStatsRef.current();
         loadRankRef.current();
 
-        const savedPayload = pickRows
+        let savedPayload = pickRows
           ? ({
               rumbles: pickRows.rumbles ?? {},
               eliminators: pickRows.eliminators ?? {},
@@ -924,6 +925,25 @@ function PicksPageInner() {
               match_interference_picks: pickRows.match_interference_picks ?? {},
             } as Partial<PicksPayload>)
           : null;
+        const savedUpdatedAt =
+          pickRows?.updated_at ? Date.parse(pickRows.updated_at) : 0;
+        if (draftKey && typeof window !== "undefined") {
+          try {
+            const draftRaw = window.localStorage.getItem(draftKey);
+            if (draftRaw) {
+              const parsed = JSON.parse(draftRaw) as {
+                payload?: Partial<PicksPayload>;
+                updatedAt?: number;
+              };
+              const draftUpdatedAt = parsed.updatedAt ?? 0;
+              if (!savedPayload || draftUpdatedAt > savedUpdatedAt) {
+                savedPayload = parsed.payload ?? null;
+              }
+            }
+          } catch (error) {
+            console.warn("Failed to restore draft picks", error);
+          }
+        }
         const nextRumbles: Record<string, RumblePick> = {};
         const existingRumbles = savedPayload?.rumbles ?? {};
         showEvents.forEach((event) => {
@@ -1004,8 +1024,9 @@ function PicksPageInner() {
 
   useEffect(() => {
     if (isHydratingPayloadRef.current) return;
+    if (isPicksLoading) return;
     hasLocalEditsRef.current = true;
-  }, [payload]);
+  }, [isPicksLoading, payload]);
 
   const loadRank = useCallback(async () => {
     if (!selectedShowId || !userId) return;
@@ -1356,10 +1377,47 @@ function PicksPageInner() {
   const loadingStepType: "event" | "match" | "eliminator" =
     currentStep?.type ?? "match";
 
+  const draftKey = useMemo(() => {
+    if (!selectedShowId || !userId) return null;
+    return `picks:draft:${selectedShowId}:${userId}`;
+  }, [selectedShowId, userId]);
+
+  const lastStepKey = useMemo(() => {
+    if (!selectedShowId || !userId) return null;
+    return `picks:lastStep:${selectedShowId}:${userId}`;
+  }, [selectedShowId, userId]);
+
   useEffect(() => {
-    setStepIndex(0);
     hasAutoJumpedRef.current = false;
+    hasRestoredStepRef.current = false;
   }, [selectedShowId, totalSteps]);
+
+  useEffect(() => {
+    if (!lastStepKey) return;
+    if (typeof window === "undefined") return;
+    if (stepIndex >= totalSteps) {
+      window.localStorage.setItem(lastStepKey, "complete");
+      return;
+    }
+    if (!currentStep) return;
+    window.localStorage.setItem(
+      lastStepKey,
+      `${currentStep.type}:${currentStep.id}`
+    );
+  }, [currentStep, lastStepKey, stepIndex, totalSteps]);
+
+  useEffect(() => {
+    if (!draftKey) return;
+    if (typeof window === "undefined") return;
+    if (isHydratingPayloadRef.current) return;
+    const timer = window.setTimeout(() => {
+      window.localStorage.setItem(
+        draftKey,
+        JSON.stringify({ payload, updatedAt: Date.now() })
+      );
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [draftKey, payload]);
 
   const scrollToTop = () => {
     if (typeof window === "undefined") return;
@@ -1413,6 +1471,31 @@ function PicksPageInner() {
       );
     });
   }, [payload.eliminators, payload.match_picks, payload.rumbles, selectedShowId, stepItems]);
+
+  useEffect(() => {
+    if (!lastStepKey || totalSteps === 0) return;
+    if (hasRestoredStepRef.current) return;
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(lastStepKey);
+    if (!saved) {
+      setStepIndex(0);
+      hasRestoredStepRef.current = true;
+      return;
+    }
+    if (saved === "complete") {
+      if (allStepsComplete) {
+        setStepIndex(totalSteps);
+      } else {
+        window.localStorage.removeItem(lastStepKey);
+        setStepIndex(0);
+      }
+      hasRestoredStepRef.current = true;
+      return;
+    }
+    const savedIndex = stepIndexById.get(saved);
+    setStepIndex(savedIndex ?? 0);
+    hasRestoredStepRef.current = true;
+  }, [allStepsComplete, lastStepKey, totalSteps, stepIndexById]);
 
   useEffect(() => {
     if (hasAutoJumpedRef.current) return;
