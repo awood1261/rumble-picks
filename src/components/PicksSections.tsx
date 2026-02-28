@@ -1078,6 +1078,7 @@ export const EliminatorPicksSection = ({
     entry_order: {},
     elimination_order: {},
     elimination_type: {},
+    eliminated_by: {},
     winner_id: null,
     most_eliminations: null,
   };
@@ -1133,13 +1134,25 @@ export const EliminatorPicksSection = ({
     });
     return chosen;
   }, [pick.elimination_order]);
+  const activeEntrants = useMemo(() => {
+    return entrants.filter((entrant) => {
+      if (pick.winner_id === entrant.id) {
+        return true;
+      }
+      return !pick.elimination_order?.[entrant.id];
+    });
+  }, [entrants, pick.elimination_order, pick.winner_id]);
   const firstIncomplete = useMemo(() => {
     for (const entry of orderedEntries) {
       const id = entry.entrant_id;
       const isWinner = pick.winner_id === id;
       if (!pick.entry_order?.[id]) return id;
       if (!isWinner) {
-        if (!pick.elimination_order?.[id] || !pick.elimination_type?.[id]) {
+        if (
+          !pick.elimination_order?.[id] ||
+          !pick.elimination_type?.[id] ||
+          !pick.eliminated_by?.[id]
+        ) {
           return id;
         }
       }
@@ -1150,18 +1163,21 @@ export const EliminatorPicksSection = ({
     pick.entry_order,
     pick.elimination_order,
     pick.elimination_type,
+    pick.eliminated_by,
     pick.winner_id,
   ]);
   const allEmpty = useMemo(() => {
     const hasAnyEntryOrder = Object.values(pick.entry_order ?? {}).some(Boolean);
     const hasAnyElimOrder = Object.values(pick.elimination_order ?? {}).some(Boolean);
     const hasAnyElimType = Object.values(pick.elimination_type ?? {}).some(Boolean);
+    const hasAnyElimBy = Object.values(pick.eliminated_by ?? {}).some(Boolean);
     const hasWinner = Boolean(pick.winner_id);
     const hasMostElims = Boolean(pick.most_eliminations);
     return (
       !hasAnyEntryOrder &&
       !hasAnyElimOrder &&
       !hasAnyElimType &&
+      !hasAnyElimBy &&
       !hasWinner &&
       !hasMostElims
     );
@@ -1169,6 +1185,7 @@ export const EliminatorPicksSection = ({
     pick.entry_order,
     pick.elimination_order,
     pick.elimination_type,
+    pick.eliminated_by,
     pick.winner_id,
     pick.most_eliminations,
   ]);
@@ -1176,18 +1193,21 @@ export const EliminatorPicksSection = ({
     const hasAnyEntryOrder = Object.values(pick.entry_order ?? {}).some(Boolean);
     const hasAnyElimOrder = Object.values(pick.elimination_order ?? {}).some(Boolean);
     const hasAnyElimType = Object.values(pick.elimination_type ?? {}).some(Boolean);
+    const hasAnyElimBy = Object.values(pick.eliminated_by ?? {}).some(Boolean);
     const hasMostElims = Boolean(pick.most_eliminations);
     return (
       Boolean(pick.winner_id) &&
       !hasAnyEntryOrder &&
       !hasAnyElimOrder &&
       !hasAnyElimType &&
+      !hasAnyElimBy &&
       !hasMostElims
     );
   }, [
     pick.entry_order,
     pick.elimination_order,
     pick.elimination_type,
+    pick.eliminated_by,
     pick.winner_id,
     pick.most_eliminations,
   ]);
@@ -1202,13 +1222,15 @@ export const EliminatorPicksSection = ({
         return true;
       }
       return Boolean(pick.elimination_order?.[id]) &&
-        Boolean(pick.elimination_type?.[id]);
+        Boolean(pick.elimination_type?.[id]) &&
+        Boolean(pick.eliminated_by?.[id]);
     });
   }, [
     orderedEntries,
     pick.entry_order,
     pick.elimination_order,
     pick.elimination_type,
+    pick.eliminated_by,
     pick.winner_id,
     pick.most_eliminations,
   ]);
@@ -1284,10 +1306,10 @@ export const EliminatorPicksSection = ({
         ) : (
           <>
             <label className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-              <span className="flex items-center justify-between gap-2">
+                <span className="flex items-center justify-between gap-2">
                 <span>Winner pick</span>
                 <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-400">
-                  +0 pts
+                  +{scoringRules.eliminator_winner} pts
                 </span>
               </span>
               <select
@@ -1304,9 +1326,11 @@ export const EliminatorPicksSection = ({
                     const nextEntryOrder = { ...(current.entry_order ?? {}) };
                     const nextElimOrder = { ...(current.elimination_order ?? {}) };
                     const nextElimType = { ...(current.elimination_type ?? {}) };
+                    const nextElimBy = { ...(current.eliminated_by ?? {}) };
                     if (nextWinner) {
                       nextElimOrder[nextWinner] = null;
                       nextElimType[nextWinner] = null;
+                      nextElimBy[nextWinner] = null;
                     }
                     return {
                       ...prev,
@@ -1317,6 +1341,7 @@ export const EliminatorPicksSection = ({
                           entry_order: nextEntryOrder,
                           elimination_order: nextElimOrder,
                           elimination_type: nextElimType,
+                          eliminated_by: nextElimBy,
                           winner_id: nextWinner,
                         },
                       },
@@ -1345,16 +1370,24 @@ export const EliminatorPicksSection = ({
               const hasElimType = Boolean(
                 pick.elimination_type?.[entry.entrant_id]
               );
+              const hasElimBy = Boolean(pick.eliminated_by?.[entry.entrant_id]);
               const hasAnyPick =
-                hasEntryOrder || hasElimOrder || hasElimType || isWinner;
+                hasEntryOrder ||
+                hasElimOrder ||
+                hasElimType ||
+                hasElimBy ||
+                isWinner;
               const isComplete = isWinner
                 ? hasEntryOrder && Boolean(pick.winner_id)
-                : hasEntryOrder && hasElimOrder && hasElimType;
+                : hasEntryOrder && hasElimOrder && hasElimType && hasElimBy;
               const statusText = !hasAnyPick
                 ? "No picks yet"
                 : isComplete
                   ? "Picks saved"
                   : "In progress";
+              const eliminationCandidates = activeEntrants.filter(
+                (activeEntrant) => activeEntrant.id !== entry.entrant_id
+              );
               return (
                 <div
                   key={entry.entrant_id}
@@ -1363,15 +1396,17 @@ export const EliminatorPicksSection = ({
                   {isOpen && (
                     <div className="pointer-events-none absolute inset-0">
                       {entrant?.image_url ? (
-                        <div className="absolute inset-y-0 right-0 w-2/5 relative">
-                          <Image
-                            src={entrant.image_url}
-                            alt=""
-                            fill
-                            sizes="40vw"
-                            className="object-cover object-top opacity-70"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-black/40 to-black/90" />
+                        <div className="absolute inset-y-0 right-0 w-2/5">
+                          <div className="relative h-full w-full">
+                            <Image
+                              src={entrant.image_url}
+                              alt=""
+                              fill
+                              sizes="40vw"
+                              className="object-cover object-top opacity-70"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-l from-transparent via-black/40 to-black/90" />
+                          </div>
                         </div>
                       ) : null}
                       <div className="absolute inset-0 bg-[linear-gradient(90deg,_rgba(255,255,255,0.03)_0%,_rgba(255,255,255,0.06)_20%,_rgba(255,255,255,0.02)_45%,_rgba(255,255,255,0.08)_60%,_rgba(255,255,255,0.03)_80%)] opacity-60" />
@@ -1542,6 +1577,50 @@ export const EliminatorPicksSection = ({
                               })}
                             </select>
                           </label>
+                        )}
+                        {!isWinner && (
+                        <label className="text-xs font-medium text-zinc-400">
+                          <span className="flex items-center justify-between gap-2">
+                            <span>Eliminated by</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-400">
+                              +{scoringRules.eliminator_eliminated_by} pts
+                            </span>
+                          </span>
+                          <select
+                            className="mt-2 h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100"
+                            value={
+                              pick.eliminated_by?.[entry.entrant_id] ?? ""
+                            }
+                            onChange={(event) =>
+                              setPayload((prev) => {
+                                const current =
+                                  prev.eliminators?.[eliminator.id] ?? pick;
+                                return {
+                                  ...prev,
+                                  eliminators: {
+                                    ...(prev.eliminators ?? {}),
+                                    [eliminator.id]: {
+                                      ...current,
+                                      eliminated_by: {
+                                        ...(current.eliminated_by ?? {}),
+                                        [entry.entrant_id]:
+                                          event.target.value || null,
+                                      },
+                                    },
+                                  },
+                                };
+                              })
+                            }
+                            disabled={isLocked}
+                          >
+                            <option value="">Select</option>
+                            {eliminationCandidates.map((candidate) => (
+                              <option key={candidate.id} value={candidate.id}>
+                                {candidate.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         )}
                         {!isWinner && (
                         <label className="text-xs font-medium text-zinc-400">

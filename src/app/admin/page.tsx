@@ -27,6 +27,7 @@ type EliminatorRow = {
   entrant_limit: number;
   show_id: string | null;
   order_index?: number | null;
+  winner_entrant_id?: string | null;
 };
 
 type ShowRow = {
@@ -744,7 +745,7 @@ export default function AdminPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("eliminators")
-          .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index")
+          .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index, winner_entrant_id")
           .order("order_index", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: false }),
         supabase
@@ -940,11 +941,11 @@ export default function AdminPage() {
             .select("id, name, image_url, status, rumble_gender, roster_year, show_id, iron_person_entrant_id, order_index")
             .order("order_index", { ascending: true, nullsFirst: false })
             .order("created_at", { ascending: false }),
-          supabase
-            .from("eliminators")
-            .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index")
-            .order("order_index", { ascending: true, nullsFirst: false })
-            .order("created_at", { ascending: false }),
+        supabase
+          .from("eliminators")
+          .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index, winner_entrant_id")
+          .order("order_index", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: false }),
           supabase
             .from("entrants")
             .select(
@@ -2093,8 +2094,38 @@ export default function AdminPage() {
       setMessage(elimError.message);
       return;
     }
+    const { error: winnerError } = await supabase
+      .from("eliminators")
+      .update({ winner_entrant_id: null })
+      .eq("id", eliminatorId);
+    if (winnerError) {
+      setMessage(winnerError.message);
+      return;
+    }
     setToastMessage("Eliminator results cleared.");
     refreshData();
+  };
+
+  const handleSetEliminatorWinner = async (
+    eliminatorId: string,
+    winnerId: string | null
+  ) => {
+    setMessage(null);
+    const { error } = await supabase
+      .from("eliminators")
+      .update({ winner_entrant_id: winnerId || null })
+      .eq("id", eliminatorId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setEliminators((prev) =>
+      prev.map((row) =>
+        row.id === eliminatorId
+          ? { ...row, winner_entrant_id: winnerId || null }
+          : row
+      )
+    );
   };
 
   useEffect(() => {
@@ -2348,12 +2379,14 @@ export default function AdminPage() {
 
     const eliminatorEntries: EliminatorEntryRow[] = [];
     const eliminatorEliminations: EliminatorEliminationRow[] = [];
+    const eliminatorList: { id: string; winner_entrant_id: string | null }[] = [];
     if (activeEvent.show_id) {
       const { data: eliminatorRows } = await supabase
         .from("eliminators")
-        .select("id")
+        .select("id, winner_entrant_id")
         .eq("show_id", activeEvent.show_id);
       const eliminatorIds = (eliminatorRows ?? []).map((row) => row.id);
+      eliminatorList.push(...((eliminatorRows ?? []) as { id: string; winner_entrant_id: string | null }[]));
       if (eliminatorIds.length > 0) {
         const [
           { data: eliminatorEntryRows },
@@ -2389,7 +2422,8 @@ export default function AdminPage() {
         matchSideList,
         { ironPersonId: activeEvent.iron_person_entrant_id ?? null },
         eliminatorEntries,
-        eliminatorEliminations
+        eliminatorEliminations,
+        eliminatorList
       );
       return {
         user_id: pick.user_id,
@@ -3026,6 +3060,32 @@ export default function AdminPage() {
                                   </button>
                                 </div>
                               ))}
+                            </div>
+                          )}
+                          {eliminatorEntriesList.length > 0 && (
+                            <div className="mt-4">
+                              <label className="text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+                                Winner
+                                <select
+                                  className="mt-2 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                                  value={eliminator.winner_entrant_id ?? ""}
+                                  onChange={(event) =>
+                                    handleSetEliminatorWinner(
+                                      eliminator.id,
+                                      event.target.value || null
+                                    )
+                                  }
+                                >
+                                  <option value="">Select winner</option>
+                                  {eliminatorEntriesList.map((entry) => (
+                                    <option key={entry.id} value={entry.entrant_id}>
+                                      {entrantOptions.find(
+                                        (entrant) => entrant.id === entry.entrant_id
+                                      )?.name ?? "Entrant"}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
                             </div>
                           )}
                           <div className="mt-4 grid gap-3 md:grid-cols-[2fr,2fr,1fr,1fr,auto]">

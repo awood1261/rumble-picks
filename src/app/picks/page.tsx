@@ -42,8 +42,6 @@ import type {
   ShowRow,
 } from "../../lib/picksTypes";
 
-const SCORING_POLL_INTERVAL_MS = 120000;
-
 const emptyRumblePick: RumblePick = {
   entrants: [],
   final_four: [],
@@ -68,6 +66,7 @@ const emptyEliminatorPick: EliminatorPick = {
   entry_order: {},
   elimination_order: {},
   elimination_type: {},
+  eliminated_by: {},
   winner_id: null,
   most_eliminations: null,
 };
@@ -134,9 +133,20 @@ function PicksPageInner() {
   const [stepIndex, setStepIndex] = useState(0);
   const hasAutoJumpedRef = useRef(false);
   const lastLoadedShowIdRef = useRef<string | null>(null);
+  const lastLoadedUserIdRef = useRef<string | null>(null);
   const picksLoadedForShowIdRef = useRef<string | null>(null);
   const isHydratingPayloadRef = useRef(false);
   const hasLocalEditsRef = useRef(false);
+  const loadRumbleEntriesRef = useRef<() => void>(() => {});
+  const loadMatchesRef = useRef<() => void>(() => {});
+  const loadEliminatorsRef = useRef<() => Promise<EliminatorRow[] | void>>(
+    async () => {}
+  );
+  const loadEliminatorEliminationsRef = useRef<
+    (ids?: string[]) => void
+  >(() => {});
+  const loadMatchPickStatsRef = useRef<() => void>(() => {});
+  const loadRankRef = useRef<() => void>(() => {});
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [editSection, setEditSection] = useState<EditSection>(null);
@@ -795,13 +805,13 @@ function PicksPageInner() {
     return eliminatorList;
   }, [selectedShowId]);
 
-  const loadEliminatorEliminations = useCallback(async () => {
+  const loadEliminatorEliminations = useCallback(async (ids?: string[]) => {
     if (!selectedShowId) return;
-    if (eliminators.length === 0) {
+    const eliminatorIds = ids ?? eliminators.map((row) => row.id);
+    if (eliminatorIds.length === 0) {
       setEliminatorEliminations([]);
       return;
     }
-    const eliminatorIds = eliminators.map((row) => row.id);
     const { data: elimRows, error: elimError } = await supabase
       .from("eliminator_eliminations")
       .select(
@@ -849,7 +859,13 @@ function PicksPageInner() {
   useEffect(() => {
     if (!selectedShowId || !userId) return;
     const showChanged = lastLoadedShowIdRef.current !== selectedShowId;
+    const userChanged = lastLoadedUserIdRef.current !== userId;
+    const hasLoadedForShow = picksLoadedForShowIdRef.current === selectedShowId;
+    if (!showChanged && !userChanged && hasLoadedForShow) {
+      return;
+    }
     lastLoadedShowIdRef.current = selectedShowId;
+    lastLoadedUserIdRef.current = userId;
     const needsSkeleton = picksLoadedForShowIdRef.current !== selectedShowId;
     setMessage(null);
     if (showChanged) {
@@ -889,11 +905,14 @@ function PicksPageInner() {
         }
 
         setEntrants(entrantRows ?? []);
-        await loadRumbleEntries();
-        const eliminatorList = (await loadEliminators()) ?? [];
-        await loadEliminatorEliminations();
-        await loadMatches();
-        await loadMatchPickStats();
+        loadRumbleEntriesRef.current();
+        const eliminatorList = (await loadEliminatorsRef.current()) ?? [];
+        loadEliminatorEliminationsRef.current(
+          eliminatorList.map((item) => item.id)
+        );
+        await loadMatchesRef.current();
+        loadMatchPickStatsRef.current();
+        loadRankRef.current();
 
         const savedPayload = pickRows
           ? ({
@@ -981,12 +1000,6 @@ function PicksPageInner() {
   }, [
     selectedShowId,
     userId,
-    loadMatches,
-    loadRumbleEntries,
-    loadEliminators,
-    loadEliminatorEliminations,
-    loadMatchPickStats,
-    showEvents,
   ]);
 
   useEffect(() => {
@@ -1018,44 +1031,28 @@ function PicksPageInner() {
   }, [loadRank]);
 
   useEffect(() => {
-    if (!selectedShowId || !userId) return;
-    if (typeof document !== "undefined" && document.hidden) return;
-    const interval = setInterval(() => {
-      loadRank();
-      loadRumbleEntries();
-      loadEliminatorEliminations();
-      loadMatchPickStats();
-    }, SCORING_POLL_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [
-    loadRank,
-    loadRumbleEntries,
-    loadEliminatorEliminations,
-    loadMatchPickStats,
-    selectedShowId,
-    userId,
-  ]);
+    loadRumbleEntriesRef.current = loadRumbleEntries;
+  }, [loadRumbleEntries]);
 
   useEffect(() => {
-    if (!selectedShowId || !userId) return;
-    const handleVisibility = () => {
-      if (document.hidden) return;
-      loadRank();
-      loadRumbleEntries();
-      loadEliminatorEliminations();
-      loadMatchPickStats();
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [
-    loadRank,
-    loadRumbleEntries,
-    loadEliminatorEliminations,
-    loadMatchPickStats,
-    selectedShowId,
-    userId,
-  ]);
+    loadMatchesRef.current = loadMatches;
+  }, [loadMatches]);
+
+  useEffect(() => {
+    loadEliminatorsRef.current = loadEliminators;
+  }, [loadEliminators]);
+
+  useEffect(() => {
+    loadEliminatorEliminationsRef.current = loadEliminatorEliminations;
+  }, [loadEliminatorEliminations]);
+
+  useEffect(() => {
+    loadMatchPickStatsRef.current = loadMatchPickStats;
+  }, [loadMatchPickStats]);
+
+  useEffect(() => {
+    loadRankRef.current = loadRank;
+  }, [loadRank]);
 
   useEffect(() => {
     setPayload((prev) => {
@@ -1755,6 +1752,9 @@ function PicksPageInner() {
                     const mostElims = pick.most_eliminations
                       ? entrantByIdAll.get(pick.most_eliminations)?.name
                       : null;
+                    const winnerPick = pick.winner_id
+                      ? entrantByIdAll.get(pick.winner_id)?.name
+                      : null;
                     return (
                       <div
                         key={`eliminator:${eliminator.id}`}
@@ -1790,6 +1790,12 @@ function PicksPageInner() {
                             Elimination order:
                           </span>{" "}
                           {eliminationOrder || "Not set"}
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-300">
+                          <span className="font-semibold text-zinc-100">
+                            Winner pick:
+                          </span>{" "}
+                          {winnerPick || "Not set"}
                         </p>
                         <p className="mt-1 text-sm text-zinc-300">
                           <span className="font-semibold text-zinc-100">
@@ -1995,7 +2001,7 @@ function PicksPageInner() {
                   .map((match) => (
                     <div
                       key={match.id}
-                      className={match.is_championship ? "mt-[50px]" : "mt-3"}
+                      className="mt-3"
                     >
                       <MatchPicksSection
                         matches={[match]}

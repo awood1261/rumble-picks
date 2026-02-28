@@ -141,6 +141,7 @@ const emptyEliminatorPick = {
   entry_order: {},
   elimination_order: {},
   elimination_type: {},
+  eliminated_by: {},
   winner_id: null,
   most_eliminations: null,
 };
@@ -497,6 +498,7 @@ export default function ScoreboardPicksPage() {
         eliminationOrder: number;
         eliminationType: number;
         mostElims: number;
+        winner: number;
         total: number;
       }
     > = {};
@@ -515,6 +517,7 @@ export default function ScoreboardPicksPage() {
       let eliminationOrder = 0;
       let eliminationType = 0;
       let mostElims = 0;
+      let winner = 0;
       if (pick && entryReady) {
         const orderMap = pick.entry_order ?? {};
         entries.forEach((entry) => {
@@ -550,12 +553,18 @@ export default function ScoreboardPicksPage() {
           }
         }
       }
+      if (pick?.winner_id && eliminator.winner_entrant_id) {
+        if (pick.winner_id === eliminator.winner_entrant_id) {
+          winner = scoringRules.eliminator_winner;
+        }
+      }
       map[eliminator.id] = {
         entryOrder,
         eliminationOrder,
         eliminationType,
         mostElims,
-        total: entryOrder + eliminationOrder + eliminationType + mostElims,
+        winner,
+        total: entryOrder + eliminationOrder + eliminationType + mostElims + winner,
       };
     });
     return map;
@@ -692,7 +701,7 @@ export default function ScoreboardPicksPage() {
         .order("created_at", { ascending: true }),
       supabase
         .from("eliminators")
-        .select("id, name, show_id, entrant_limit, order_index")
+        .select("id, name, show_id, entrant_limit, order_index, winner_entrant_id")
         .eq("show_id", validShowId)
         .order("order_index", { ascending: true, nullsFirst: false })
         .order("name", { ascending: true }),
@@ -1532,6 +1541,7 @@ export default function ScoreboardPicksPage() {
                   eliminationOrder: 0,
                   eliminationType: 0,
                   mostElims: 0,
+                  winner: 0,
                   total: 0,
                 };
                 const entryOrderText = renderEliminatorOrder(
@@ -1629,6 +1639,9 @@ export default function ScoreboardPicksPage() {
                             </span>
                             <span className="text-sm text-zinc-300">
                               {winnerName}
+                            </span>
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                              {points.winner} pts
                             </span>
                           </div>
                           <div className="flex items-center justify-between text-sm text-zinc-200">

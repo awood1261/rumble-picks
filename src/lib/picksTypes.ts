@@ -18,6 +18,7 @@ export type EliminatorRow = {
   entrant_limit: number;
   show_id: string | null;
   order_index?: number | null;
+  winner_entrant_id?: string | null;
 };
 
 export type ShowRow = {
@@ -65,6 +66,7 @@ export type EliminatorPick = {
   entry_order: Record<string, number | null>;
   elimination_order: Record<string, number | null>;
   elimination_type: Record<string, "pinfall" | "submission" | null>;
+  eliminated_by: Record<string, string | null>;
   winner_id: string | null;
   most_eliminations: string | null;
 };
