@@ -82,6 +82,7 @@ type EliminatorRow = {
   show_id: string | null;
   entrant_limit: number;
   order_index?: number | null;
+  winner_entrant_id?: string | null;
 };
 
 type EliminatorEntryRow = {
