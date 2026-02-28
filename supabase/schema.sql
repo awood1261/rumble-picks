@@ -88,10 +88,14 @@ create table if not exists public.eliminators (
   roster_year integer,
   roster_gender text,
   entrant_limit integer not null default 6,
+  winner_entrant_id uuid references public.entrants(id) on delete set null,
   order_index integer,
   created_at timestamptz not null default now(),
   constraint eliminators_entrant_limit_chk check (entrant_limit between 6 and 10)
 );
+
+alter table public.eliminators
+  add column if not exists winner_entrant_id uuid references public.entrants(id) on delete set null;
 
 create table if not exists public.eliminator_entries (
   id uuid primary key default gen_random_uuid(),
