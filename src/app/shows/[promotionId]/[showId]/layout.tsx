@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 type LayoutProps = {
   children: React.ReactNode;
-  params: { showId: string; promotionId: string };
+  params: Promise<{ showId: string; promotionId: string }>;
 };
 
 type ShowRow = {
@@ -61,7 +61,8 @@ const fetchPromotion = async (promotionId: string | null) => {
 export async function generateMetadata({
   params,
 }: LayoutProps): Promise<Metadata> {
-  const show = await fetchShow(params.showId);
+  const resolvedParams = await params;
+  const show = await fetchShow(resolvedParams.showId);
   const promotion = await fetchPromotion(show?.promotion_id ?? null);
   const title = show
     ? `${show.name}${promotion ? ` · ${promotion.name}` : ""}`
@@ -79,7 +80,7 @@ export async function generateMetadata({
       title,
       description,
       type: "website",
-      url: `${baseUrl}/shows/${params.promotionId}/${params.showId}`,
+      url: `${baseUrl}/shows/${resolvedParams.promotionId}/${resolvedParams.showId}`,
       images: [
         {
           url: imageUrl,
