@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BoutPick (rumble-picks)
 
-## Getting Started
+BoutPick is a fan prediction platform for pro-wrestling shows. It lets fans create a profile, make picks for matches, rumbles, and eliminators, then see live standings as results are entered.
 
-First, run the development server:
+## What it does
+
+- **Shows**: Each show has a splash page, lock countdown, and a list of matches/events/eliminators in show order.
+- **Picks flow**: Fans step through each item, select winners and bonus picks, and can return to edit before the show locks.
+- **Eliminators**: Multi-entrant matches where users pick entry order, elimination order/type, and the winner.
+- **Scoring**: Points are calculated per pick type and roll up into a show scoreboard.
+- **Public picks**: Anyone can view a user’s picks and results.
+- **Admin tools**: Create shows, matches, events, and eliminators; set order; enter results; recalculate scores.
+
+## Stack
+
+- **Frontend**: Next.js (App Router), React, Tailwind CSS
+- **Backend**: Supabase (Postgres + Auth + Storage)
+
+## Local development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Configuration
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Set Supabase env vars for local and deploy environments:
 
-## Learn More
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
-To learn more about Next.js, take a look at the following resources:
+## Notes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Image assets for shows, promotions, belts, and entrants live in Supabase Storage and are served via the app UI.
