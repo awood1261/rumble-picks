@@ -19,9 +19,31 @@ export const metadata: Metadata = {
     template: "BoutPick: %s",
   },
   description: "BoutPick predictions and live scoreboard.",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL || "https://boutpick.com"
+  ),
   icons: {
     icon: "/images/bp-logo.PNG",
     apple: "/images/bp-logo.PNG",
+  },
+  openGraph: {
+    title: "BoutPick",
+    description: "BoutPick predictions and live scoreboard.",
+    type: "website",
+    images: [
+      {
+        url: "/images/boutpick-og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "BoutPick",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "BoutPick",
+    description: "BoutPick predictions and live scoreboard.",
+    images: ["/images/boutpick-og-image.png"],
   },
 };
 
