@@ -944,7 +944,7 @@ export default function ScoreboardPicksPage() {
 
     const { data: entrantRows, error: entrantError } = await supabase
       .from("entrants")
-      .select("id, name, promotion, image_url")
+      .select("id, name, promotion, image_url, logo_url")
       .in("id", uniqueIds);
 
     if (entrantError) {

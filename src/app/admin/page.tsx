@@ -54,6 +54,7 @@ type EntrantRow = {
   gender: string | null;
   active: boolean;
   image_url: string | null;
+  logo_url?: string | null;
   roster_year: number | null;
   event_id: string | null;
   is_custom: boolean;
@@ -751,7 +752,7 @@ export default function AdminPage() {
         supabase
           .from("entrants")
           .select(
-            "id, name, promotion, gender, active, image_url, roster_year, event_id, is_custom, created_by, status"
+            "id, name, promotion, gender, active, image_url, logo_url, roster_year, event_id, is_custom, created_by, status"
           )
           .order("name", { ascending: true }),
         (() => {
@@ -949,7 +950,7 @@ export default function AdminPage() {
           supabase
             .from("entrants")
             .select(
-              "id, name, promotion, gender, active, image_url, roster_year, event_id, is_custom, created_by, status"
+              "id, name, promotion, gender, active, image_url, logo_url, roster_year, event_id, is_custom, created_by, status"
             )
             .order("name", { ascending: true }),
           supabase

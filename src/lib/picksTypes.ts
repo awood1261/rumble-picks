@@ -44,6 +44,7 @@ export type EntrantRow = {
   promotion: string | null;
   gender: string | null;
   image_url: string | null;
+  logo_url: string | null;
   roster_year: number | null;
   event_id: string | null;
   is_custom: boolean;
