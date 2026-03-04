@@ -126,6 +126,7 @@ create table if not exists public.entrants (
   promotion text,
   gender text,
   image_url text,
+  logo_url text,
   roster_year integer,
   event_id uuid references public.events(id) on delete cascade,
   is_custom boolean not null default false,
@@ -243,6 +244,9 @@ create table if not exists public.scores (
 alter table public.entrants
   add constraint if not exists entrants_gender_check
   check (gender is null or gender in ('men', 'women'));
+
+alter table public.entrants
+  add column if not exists logo_url text;
 
 alter table public.events
   add constraint if not exists events_rumble_gender_check

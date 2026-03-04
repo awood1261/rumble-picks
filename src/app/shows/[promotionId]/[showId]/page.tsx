@@ -169,7 +169,7 @@ export default function ShowDetailPage() {
           <div className="max-w-2xl">
             <div className="flex items-center gap-4">
               {promotion?.image_url ? (
-                <div className="h-12 w-12 overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+                <div className="h-12 w-12 min-h-12 min-w-12 shrink-0 aspect-square overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
                   <Image
                     src={promotion.image_url}
                     alt={promotion?.name ?? show.name}

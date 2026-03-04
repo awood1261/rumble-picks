@@ -895,7 +895,7 @@ function PicksPageInner() {
             supabase
               .from("entrants")
               .select(
-                "id, name, promotion, gender, image_url, roster_year, event_id, is_custom, created_by, status",
+                "id, name, promotion, gender, image_url, logo_url, roster_year, event_id, is_custom, created_by, status",
               )
               .order("name", { ascending: true }),
           ]);
@@ -1272,7 +1272,7 @@ function PicksPageInner() {
         active: true,
       })
       .select(
-        "id, name, promotion, gender, image_url, roster_year, event_id, is_custom, created_by, status",
+        "id, name, promotion, gender, image_url, logo_url, roster_year, event_id, is_custom, created_by, status",
       )
       .single();
     if (error) {
@@ -1655,7 +1655,7 @@ function PicksPageInner() {
             ) : null}
             <div className="flex items-center justify-center gap-3">
               {selectedPromotionImageUrl ? (
-                <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+                <span className="flex h-10 w-10 min-h-10 min-w-10 shrink-0 aspect-square items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
                   <Image
                     src={selectedPromotionImageUrl}
                     alt={selectedShow?.name ?? "Promotion"}

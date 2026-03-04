@@ -117,7 +117,7 @@ export const ShowSelector = ({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           {promotionImageUrl ? (
-            <div className="h-12 w-12 overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
+            <div className="h-12 w-12 min-h-12 min-w-12 shrink-0 aspect-square overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
               <Image
                 src={promotionImageUrl}
                 alt={selectedShow?.name ?? "Promotion"}
@@ -2100,10 +2100,24 @@ export const MatchPicksSection = ({
                                             <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
                                           )}
                                           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                                          <div className="absolute inset-x-0 bottom-0 z-10 p-2 text-center">
-                                            <span className="mx-auto block max-w-[9rem] text-[13px] font-semibold uppercase leading-[0.95] tracking-[0.18em] text-zinc-100 drop-shadow">
-                                              {entrant.name}
-                                            </span>
+                                          <div className="absolute inset-x-0 bottom-0 z-10 p-2 text-center translate-y-8">
+                                            <div className="mx-auto flex max-w-[9rem] flex-col items-center gap-1 pt-12">
+                                              {entrant.logo_url ? (
+                                                <span className="relative inline-flex h-32 w-32 items-center justify-center rounded-full p-3 drop-shadow">
+                                                  <Image
+                                                    src={entrant.logo_url}
+                                                    alt={`${entrant.name} logo`}
+                                                    width={128}
+                                                    height={128}
+                                                    className="h-32 w-32 object-contain"
+                                                  />
+                                                </span>
+                                              ) : (
+                                                <span className="block text-[13px] font-semibold uppercase leading-[0.95] tracking-[0.18em] text-zinc-100 drop-shadow">
+                                                  {entrant.name}
+                                                </span>
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
                                       ))
