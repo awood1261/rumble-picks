@@ -1976,14 +1976,16 @@ export const MatchPicksSection = ({
               }`}
             >
               {isChampionship && match.championship_image_url ? (
-                <div className="pointer-events-none absolute left-1/2 top-4 z-0 h-36 w-xs -translate-x-1/2 -translate-y-1/2 relative sm:h-44 sm:top-6">
-                  <Image
-                    src={match.championship_image_url}
-                    alt={`${match.championship_name ?? "Championship"} belt`}
-                    fill
-                    sizes="20rem"
-                    className="object-cover object-center opacity-80 drop-shadow-[0_0_38px_rgba(198,162,74,0.5)]"
-                  />
+                <div className="pointer-events-none absolute left-1/2 top-4 z-0 h-36 w-xs -translate-x-1/2 -translate-y-1/2 sm:h-44 sm:top-6">
+                  <div className="relative h-full w-full">
+                    <Image
+                      src={match.championship_image_url}
+                      alt={`${match.championship_name ?? "Championship"} belt`}
+                      fill
+                      sizes="20rem"
+                      className="object-cover object-center opacity-80 drop-shadow-[0_0_38px_rgba(198,162,74,0.5)]"
+                    />
+                  </div>
                 </div>
               ) : null}
                 <div
