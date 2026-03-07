@@ -138,6 +138,30 @@ type ProfileRow = {
 };
 
 type ScoreboardRow = ScoreRow & { display_name: string; avatar_key: string | null };
+type LoadedMatches = {
+  matches: MatchRow[];
+  matchSides: MatchSideRow[];
+  matchEntrants: MatchEntrantRow[];
+};
+type LoadedRumbleData = {
+  rumbleEntries: RumbleEntryRow[];
+  eventEntrants: EventEntrantRow[];
+};
+type LoadedEliminatorData = {
+  eliminatorIds: string[];
+  eliminators: { id: string; winner_entrant_id: string | null }[];
+  eliminatorEntries: EliminatorEntryRow[];
+};
+type ScoreDataOverrides = {
+  showEvents?: EventRow[];
+  rumbleEntries?: RumbleEntryRow[];
+  matches?: MatchRow[];
+  matchSides?: MatchSideRow[];
+  matchEntrants?: MatchEntrantRow[];
+  eliminatorEntries?: EliminatorEntryRow[];
+  eliminatorEliminations?: EliminatorEliminationRow[];
+  eliminators?: { id: string; winner_entrant_id: string | null }[];
+};
 
 const MovementPill = ({ delta }: { delta: number | null }) => {
   if (typeof delta !== "number" || delta === 0) return null;
@@ -202,8 +226,13 @@ function ScoreboardPageInner() {
   const [lastUpdateAt, setLastUpdateAt] = useState(Date.now());
   const [now, setNow] = useState(() => Date.now());
   const [progressOpen, setProgressOpen] = useState(false);
-  const loadScoresRef = useRef<() => void>(() => {});
-  const loadRumbleEntriesRef = useRef<() => void>(() => {});
+  const loadScoresRef = useRef<(overrides?: ScoreDataOverrides) => Promise<void>>(
+    async () => {}
+  );
+  const loadRumbleEntriesRef = useRef<() => Promise<LoadedRumbleData>>(
+    async () => ({ rumbleEntries: [], eventEntrants: [] })
+  );
+  const initialLoadByShowRef = useRef<string | null>(null);
   const queryShowIdRef = useRef<string | null>(null);
 
   const selectedShow = useMemo(
@@ -503,7 +532,7 @@ function ScoreboardPageInner() {
     []
   );
 
-  const loadScores = useCallback(async () => {
+  const loadScores = useCallback(async (overrides?: ScoreDataOverrides) => {
     setMessage(null);
     if (!selectedShowId) {
       setScores([]);
@@ -541,7 +570,17 @@ function ScoreboardPageInner() {
       setMessage(profileErrorFresh.message);
     }
 
-    const eventEntriesById = rumbleEntries.reduce((map, entry) => {
+    const effectiveShowEvents = overrides?.showEvents ?? showEvents;
+    const effectiveRumbleEntries = overrides?.rumbleEntries ?? rumbleEntries;
+    const effectiveMatches = overrides?.matches ?? matches;
+    const effectiveMatchEntrants = overrides?.matchEntrants ?? matchEntrants;
+    const effectiveMatchSides = overrides?.matchSides ?? matchSides;
+    const effectiveEliminatorEntries = overrides?.eliminatorEntries ?? eliminatorEntries;
+    const effectiveEliminatorEliminations =
+      overrides?.eliminatorEliminations ?? eliminatorEliminations;
+    const effectiveEliminators = overrides?.eliminators ?? eliminators;
+
+    const eventEntriesById = effectiveRumbleEntries.reduce((map, entry) => {
       if (!map[entry.event_id]) map[entry.event_id] = [];
       map[entry.event_id].push(entry);
       return map;
@@ -551,7 +590,7 @@ function ScoreboardPageInner() {
       let points = 0;
       const breakdown: Record<string, number> = {};
       const rumbles = pick.rumbles ?? {};
-      showEvents.forEach((event) => {
+      effectiveShowEvents.forEach((event) => {
         const entries = eventEntriesById[event.id] ?? [];
         const rumblePick = rumbles[event.id];
         const rumbleScore = computeRumbleScore(
@@ -576,13 +615,13 @@ function ScoreboardPageInner() {
         matchPayload,
         [],
         scoringRules,
-        matches,
-        matchEntrants,
-        matchSides,
+        effectiveMatches,
+        effectiveMatchEntrants,
+        effectiveMatchSides,
         undefined,
-        eliminatorEntries,
-        eliminatorEliminations,
-        eliminators
+        effectiveEliminatorEntries,
+        effectiveEliminatorEliminations,
+        effectiveEliminators
       );
       points += matchScore.points;
       breakdown.matches = matchScore.breakdown.matches ?? 0;
@@ -634,13 +673,16 @@ function ScoreboardPageInner() {
     rumbleEntries,
     selectedShowId,
     showEvents,
+    eliminatorEliminations,
+    eliminatorEntries,
+    eliminators,
   ]);
 
-  const loadRumbleEntries = useCallback(async () => {
+  const loadRumbleEntries = useCallback(async (): Promise<LoadedRumbleData> => {
     if (!selectedShowId || showEvents.length === 0) {
       setRumbleEntries((prev) => (prev.length === 0 ? prev : []));
       setEventEntrants((prev) => (prev.length === 0 ? prev : []));
-      return;
+      return { rumbleEntries: [], eventEntrants: [] };
     }
     const eventIds = showEvents.map((event) => event.id);
       const { data: entryRows, error } = await supabase
@@ -649,7 +691,7 @@ function ScoreboardPageInner() {
       .in("event_id", eventIds);
     if (error) {
       setMessage(error.message);
-      return;
+      return { rumbleEntries: [], eventEntrants: [] };
     }
     const nextEntries = (entryRows ?? []) as RumbleEntryRow[];
     setRumbleEntries((prev) => {
@@ -680,7 +722,7 @@ function ScoreboardPageInner() {
     );
     if (entrantIds.length === 0) {
       setEventEntrants([]);
-      return;
+      return { rumbleEntries: nextEntries, eventEntrants: [] };
     }
 
     const { data: entrantRows, error: entrantError } = await supabase
@@ -690,10 +732,11 @@ function ScoreboardPageInner() {
       .order("name", { ascending: true });
     if (entrantError) {
       setMessage(entrantError.message);
-      return;
+      return { rumbleEntries: nextEntries, eventEntrants: [] };
     }
+    const nextEventEntrants = (entrantRows ?? []) as EventEntrantRow[];
     setEventEntrants((prev) => {
-      const next = entrantRows ?? [];
+      const next = nextEventEntrants;
       if (prev.length === next.length) {
         const prevKey = prev.map((entrant) => entrant.id).sort().join("|");
         const nextKey = next.map((entrant) => entrant.id).sort().join("|");
@@ -703,6 +746,7 @@ function ScoreboardPageInner() {
       }
       return next;
     });
+    return { rumbleEntries: nextEntries, eventEntrants: nextEventEntrants };
   }, [selectedShowId, showEvents]);
 
   useEffect(() => {
@@ -802,12 +846,12 @@ function ScoreboardPageInner() {
     return () => clearInterval(interval);
   }, [selectedShow?.starts_at]);
 
-  const loadEliminatorEntries = useCallback(async () => {
+  const loadEliminatorEntries = useCallback(async (): Promise<LoadedEliminatorData> => {
     if (!selectedShowId) {
       setEliminatorEntries([]);
       setEliminatorEliminations([]);
       setEliminatorIds([]);
-      return;
+      return { eliminatorIds: [], eliminators: [], eliminatorEntries: [] };
     }
     const { data: eliminatorRows, error } = await supabase
       .from("eliminators")
@@ -816,15 +860,14 @@ function ScoreboardPageInner() {
       .order("order_index", { ascending: true, nullsFirst: false });
     if (error) {
       setMessage(error.message);
-      return;
+      return { eliminatorIds: [], eliminators: [], eliminatorEntries: [] };
     }
     const ids = (eliminatorRows ?? []).map((row) => row.id);
-    setEliminators(
-      (eliminatorRows ?? []).map((row) => ({
-        id: row.id,
-        winner_entrant_id: row.winner_entrant_id ?? null,
-      }))
-    );
+    const nextEliminators = (eliminatorRows ?? []).map((row) => ({
+      id: row.id,
+      winner_entrant_id: row.winner_entrant_id ?? null,
+    }));
+    setEliminators(nextEliminators);
     const prevIds = eliminatorIdsRef.current;
     const idsUnchanged =
       prevIds.length === ids.length &&
@@ -835,7 +878,7 @@ function ScoreboardPageInner() {
     if (ids.length === 0) {
       setEliminatorEntries([]);
       setEliminatorEliminations([]);
-      return;
+      return { eliminatorIds: ids, eliminators: nextEliminators, eliminatorEntries: [] };
     }
     const { data: entryRows, error: entryError } = await supabase
       .from("eliminator_entries")
@@ -843,52 +886,50 @@ function ScoreboardPageInner() {
       .in("eliminator_id", ids);
     if (entryError) {
       setMessage(entryError.message);
-      return;
+      return { eliminatorIds: ids, eliminators: nextEliminators, eliminatorEntries: [] };
     }
-    setEliminatorEntries((entryRows ?? []) as EliminatorEntryRow[]);
+    const nextEliminatorEntries = (entryRows ?? []) as EliminatorEntryRow[];
+    setEliminatorEntries(nextEliminatorEntries);
+    return {
+      eliminatorIds: ids,
+      eliminators: nextEliminators,
+      eliminatorEntries: nextEliminatorEntries,
+    };
   }, [selectedShowId]);
 
-  const loadEliminatorEliminations = useCallback(async () => {
-    if (!selectedShowId) return;
-    if (eliminatorIds.length === 0) {
+  const loadEliminatorEliminations = useCallback(
+    async (idsOverride?: string[]): Promise<EliminatorEliminationRow[]> => {
+    if (!selectedShowId) return [];
+    const targetIds = idsOverride ?? eliminatorIds;
+    if (targetIds.length === 0) {
       setEliminatorEliminations([]);
-      return;
+      return [];
     }
     const { data: elimRows, error: elimError } = await supabase
       .from("eliminator_eliminations")
       .select(
         "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
       )
-      .in("eliminator_id", eliminatorIds);
+      .in("eliminator_id", targetIds);
     if (elimError) {
       setMessage(elimError.message);
-      return;
+      return [];
     }
-    setEliminatorEliminations((elimRows ?? []) as EliminatorEliminationRow[]);
+    const nextEliminatorEliminations = (elimRows ?? []) as EliminatorEliminationRow[];
+    setEliminatorEliminations(nextEliminatorEliminations);
+    return nextEliminatorEliminations;
   }, [eliminatorIds, selectedShowId]);
-
-  useEffect(() => {
-    if (!selectedShowId) {
-      return;
-    }
-
-    loadRumbleEntriesRef.current();
-    loadScoresRef.current();
-    loadEliminatorEntries();
-    loadEliminatorEliminations();
-    setLastUpdateAt(Date.now());
-  }, [selectedShowId, showEvents, loadEliminatorEliminations, loadEliminatorEntries]);
 
   useEffect(() => {
     eliminatorIdsRef.current = eliminatorIds;
   }, [eliminatorIds]);
 
-  const loadMatches = useCallback(async () => {
+  const loadMatches = useCallback(async (): Promise<LoadedMatches> => {
     if (!selectedShowId) {
       setMatches([]);
       setMatchSides([]);
       setMatchEntrants([]);
-      return;
+      return { matches: [], matchSides: [], matchEntrants: [] };
     }
     const { data: matchRows, error } = await supabase
       .from("matches")
@@ -900,14 +941,14 @@ function ScoreboardPageInner() {
       .order("created_at", { ascending: true });
     if (error) {
       setMessage(error.message);
-      return;
+      return { matches: [], matchSides: [], matchEntrants: [] };
     }
     const matchList = (matchRows ?? []) as MatchRow[];
     setMatches(matchList);
     if (matchList.length === 0) {
       setMatchSides([]);
       setMatchEntrants([]);
-      return;
+      return { matches: matchList, matchSides: [], matchEntrants: [] };
     }
     const matchIds = matchList.map((match) => match.id);
     const [
@@ -919,27 +960,79 @@ function ScoreboardPageInner() {
     ]);
     if (sideError) {
       setMessage(sideError.message);
-      return;
+      return { matches: matchList, matchSides: [], matchEntrants: [] };
     }
     if (entrantError) {
       setMessage(entrantError.message);
-      return;
+      return { matches: matchList, matchSides: [], matchEntrants: [] };
     }
-    setMatchSides((sideRows ?? []) as MatchSideRow[]);
-    setMatchEntrants((entrantRows ?? []) as MatchEntrantRow[]);
+    const nextMatchSides = (sideRows ?? []) as MatchSideRow[];
+    const nextMatchEntrants = (entrantRows ?? []) as MatchEntrantRow[];
+    setMatchSides(nextMatchSides);
+    setMatchEntrants(nextMatchEntrants);
+    return {
+      matches: matchList,
+      matchSides: nextMatchSides,
+      matchEntrants: nextMatchEntrants,
+    };
   }, [selectedShowId]);
 
   useEffect(() => {
-    loadMatches();
-  }, [loadMatches]);
+    if (!selectedShowId) {
+      initialLoadByShowRef.current = null;
+      return;
+    }
+    if (initialLoadByShowRef.current === selectedShowId) {
+      return;
+    }
+    initialLoadByShowRef.current = selectedShowId;
 
-  const handleRefreshScores = useCallback(() => {
+    const runInitialLoad = async () => {
+      const [matchData, rumbleData, eliminatorData] = await Promise.all([
+        loadMatches(),
+        loadRumbleEntriesRef.current(),
+        loadEliminatorEntries(),
+      ]);
+      const eliminations = await loadEliminatorEliminations(eliminatorData.eliminatorIds);
+      await loadScoresRef.current({
+        showEvents,
+        matches: matchData.matches,
+        matchSides: matchData.matchSides,
+        matchEntrants: matchData.matchEntrants,
+        rumbleEntries: rumbleData.rumbleEntries,
+        eliminatorEntries: eliminatorData.eliminatorEntries,
+        eliminatorEliminations: eliminations,
+        eliminators: eliminatorData.eliminators,
+      });
+      setLastUpdateAt(Date.now());
+    };
+    runInitialLoad();
+  }, [
+    selectedShowId,
+    showEvents,
+    loadEliminatorEliminations,
+    loadEliminatorEntries,
+    loadMatches,
+  ]);
+
+  const handleRefreshScores = useCallback(async () => {
+    const [matchData, rumbleData, eliminatorData] = await Promise.all([
+      loadMatches(),
+      loadRumbleEntriesRef.current(),
+      loadEliminatorEntries(),
+    ]);
+    const eliminations = await loadEliminatorEliminations(eliminatorData.eliminatorIds);
+    await loadScoresRef.current({
+      showEvents,
+      matches: matchData.matches,
+      matchSides: matchData.matchSides,
+      matchEntrants: matchData.matchEntrants,
+      rumbleEntries: rumbleData.rumbleEntries,
+      eliminatorEntries: eliminatorData.eliminatorEntries,
+      eliminatorEliminations: eliminations,
+      eliminators: eliminatorData.eliminators,
+    });
     setLastUpdateAt(Date.now());
-    loadMatches();
-    loadScoresRef.current();
-    loadRumbleEntriesRef.current();
-    loadEliminatorEntries();
-    loadEliminatorEliminations();
   }, [loadEliminatorEliminations, loadEliminatorEntries, loadMatches]);
 
   return (
