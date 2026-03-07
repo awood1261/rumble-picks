@@ -1998,7 +1998,7 @@ export const MatchPicksSection = ({
                 <div className="flex flex-col gap-2">
                   <div>
                     {isChampionship && (
-                      <div className="mb-1 text-center">
+                      <div className="mb-5 mt-2 text-center">
                         <span className="rounded-full border border-amber-300/40 bg-black px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.35em] text-amber-100">
                           {match.championship_name?.trim() || "Championship"}
                         </span>
