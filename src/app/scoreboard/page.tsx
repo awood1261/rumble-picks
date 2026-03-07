@@ -1171,13 +1171,10 @@ function ScoreboardPageInner() {
       )}
       <main className="relative mx-auto w-full max-w-5xl pb-16 pt-12">
         <header className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs uppercase tracking-[0.35em] text-[color:var(--bp-muted)]">
+          <div className="flex items-center justify-center">
+            <p className="text-center text-xs uppercase tracking-[0.35em] text-[color:var(--bp-muted)]">
               Scoreboard
             </p>
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-[color:var(--bp-gold)]">
-              Manual refresh
-            </div>
           </div>
           <div className="flex items-center gap-3">
             {selectedPromotion?.image_url ? (
@@ -1195,13 +1192,41 @@ function ScoreboardPageInner() {
               {selectedShow?.name ?? "Show"}
             </h1>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-center">
             <button
-              className="inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--bp-gold-30)] px-4 text-xs font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)] transition hover:border-[color:var(--bp-gold)]"
+              className="group relative inline-flex h-11 items-center justify-center gap-2 overflow-hidden rounded-full border border-amber-300/60 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-5 text-xs font-extrabold uppercase tracking-[0.24em] text-black shadow-[0_0_0_1px_rgba(0,0,0,0.25),0_8px_26px_rgba(245,194,66,0.45)] transition hover:scale-[1.02] hover:brightness-105 active:scale-[0.99]"
               type="button"
               onClick={handleRefreshScores}
             >
-              Get latest scores
+              <svg
+                className="h-4 w-4 transition group-hover:rotate-180"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M20 6V10H16"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M4 18V14H8"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M7.5 10a6 6 0 0 1 10-2.5L20 10M4 14l2.5 2.5A6 6 0 0 0 16.5 14"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span>Get latest scores</span>
             </button>
             <span className="text-xs text-[color:var(--bp-muted)]">
               Updates run only when you tap refresh.
