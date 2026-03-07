@@ -25,6 +25,18 @@ export default function PromotionShowsPage() {
     });
   };
 
+  const sortedShows = [...shows].sort((a, b) => {
+    const aTime = a.starts_at ? new Date(a.starts_at).getTime() : Number.MAX_SAFE_INTEGER;
+    const bTime = b.starts_at ? new Date(b.starts_at).getTime() : Number.MAX_SAFE_INTEGER;
+    const now = Date.now();
+    const aLocked = aTime <= now;
+    const bLocked = bTime <= now;
+    if (aLocked !== bLocked) {
+      return aLocked ? 1 : -1;
+    }
+    return aTime - bTime;
+  });
+
   useEffect(() => {
     let ignore = false;
     if (!promotionId) return;
@@ -119,36 +131,38 @@ export default function PromotionShowsPage() {
         {shows.length === 0 ? (
           <p className="mt-8 text-sm text-zinc-400">No shows yet.</p>
         ) : (
-          <div className="mt-8 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
-            {shows.map((show) => (
-              <div key={show.id} className="flex flex-col gap-3">
+          <div className="mt-8 space-y-6">
+            {sortedShows.map((show) => (
+              <div key={show.id} className="space-y-3">
                 <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
                   {formatShowDate(show.starts_at)}
                 </p>
                 <Link
                   href={`/shows/${promotionId}/${show.id}`}
-                  className="group relative aspect-[3/4] overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 p-4 transition hover:border-amber-400/60"
+                  className="group relative flex w-full flex-col overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 transition hover:border-amber-400/60"
                 >
-                  <div className="relative z-10">
-                    <h2 className="mt-2 text-lg font-semibold text-amber-100">
-                      {show.name}
-                    </h2>
-                    <p className="mt-2 text-xs text-zinc-400">
-                      Tap to view picks & scores
-                    </p>
-                  </div>
                   {show.image_url ? (
                     <Image
                       src={show.image_url}
                       alt={show.name}
                       fill
-                      sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 50vw"
-                      className="absolute inset-0 h-full w-full object-cover opacity-30 transition-opacity duration-300 group-hover:opacity-45"
+                      sizes="100vw"
+                      className="absolute inset-0 h-full w-full object-cover"
                     />
                   ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-zinc-800/60 via-zinc-950 to-black" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/40 to-transparent" />
+                  <div className="absolute inset-0 bg-black/65" />
+                  <div className="relative z-10 flex min-h-[220px] flex-col justify-end gap-3 px-6 py-5 sm:min-h-[200px]">
+                    <div>
+                      <h2 className="text-2xl font-semibold text-amber-100 sm:text-3xl">
+                        {show.name}
+                      </h2>
+                      <p className="mt-2 text-xs text-zinc-300">
+                        Tap to view picks & scores
+                      </p>
+                    </div>
+                  </div>
                 </Link>
               </div>
             ))}
