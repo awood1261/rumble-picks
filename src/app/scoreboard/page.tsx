@@ -1195,8 +1195,8 @@ function ScoreboardPageInner() {
             </h1>
           </div>
           {isShowOver ? (
-            <div className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.32em] text-[color:var(--bp-gold)]">
-              The show has ended
+            <div className="mt-3 overflow-hidden rounded-2xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.32em] text-[color:var(--bp-gold)]">
+              <span>The show has ended</span>
             </div>
           ) : (
             <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-center">
@@ -1379,22 +1379,23 @@ function ScoreboardPageInner() {
             <>
               <div className="relative overflow-hidden rounded-3xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-6 py-4 shadow-[0_12px_36px_rgba(0,0,0,0.45),0_0_24px_rgba(198,162,74,0.35)]">
                 {isShowOver ? (
-                  <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                  <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
                     {Array.from({ length: 24 }).map((_, index) => (
                       <span
                         key={`confetti-${index}`}
-                        className={`absolute h-2 w-2 rounded-sm ${
+                        className={`absolute block h-3 w-2 rounded-[2px] shadow-[0_0_8px_rgba(255,255,255,0.35)] ${
                           index % 3 === 0
                             ? "bg-amber-300"
                             : index % 3 === 1
                               ? "bg-zinc-100"
                               : "bg-emerald-300"
-                        } ${index % 2 === 0 ? "animate-bounce" : "animate-pulse"}`}
+                        }`}
                         style={{
                           left: `${(index * 13) % 100}%`,
-                          top: `${(index * 29) % 85}%`,
-                          animationDelay: `${(index % 8) * 80}ms`,
-                          opacity: 0.85,
+                          top: "-18px",
+                          animation: `bp-confetti-fall ${2.6 + (index % 5) * 0.35}s linear infinite`,
+                          animationDelay: `${(index % 10) * 150}ms`,
+                          opacity: 0.95,
                         }}
                       />
                     ))}
