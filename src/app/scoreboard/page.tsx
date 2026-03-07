@@ -62,6 +62,7 @@ type ShowRow = {
   tagline?: string | null;
   promotion_id: string | null;
   starts_at?: string | null;
+  is_over?: boolean | null;
 };
 
 type PromotionRow = {
@@ -384,6 +385,7 @@ function ScoreboardPageInner() {
   }, [now, selectedShow?.starts_at]);
 
   const showPreview = !loading && Boolean(selectedShowId) && !hasAnyResults;
+  const isShowOver = Boolean(selectedShow?.is_over);
 
   const entrantMap = useMemo(() => {
     return new Map(eventEntrants.map((entrant) => [entrant.id, entrant]));
@@ -779,7 +781,7 @@ function ScoreboardPageInner() {
       ] = await Promise.all([
         supabase
           .from("shows")
-          .select("id, name, image_url, promotion_id, status, starts_at")
+          .select("id, name, image_url, promotion_id, status, starts_at, is_over")
           .order("starts_at", { ascending: true }),
         supabase
           .from("promotions")
@@ -1192,46 +1194,52 @@ function ScoreboardPageInner() {
               {selectedShow?.name ?? "Show"}
             </h1>
           </div>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-center">
-            <button
-              className="group relative inline-flex h-11 items-center justify-center gap-2 overflow-hidden rounded-full border border-amber-300/60 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-5 text-xs font-extrabold uppercase tracking-[0.24em] text-black shadow-[0_0_0_1px_rgba(0,0,0,0.25),0_8px_26px_rgba(245,194,66,0.45)] transition hover:scale-[1.02] hover:brightness-105 active:scale-[0.99]"
-              type="button"
-              onClick={handleRefreshScores}
-            >
-              <svg
-                className="h-4 w-4 transition group-hover:rotate-180"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
+          {isShowOver ? (
+            <div className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.32em] text-[color:var(--bp-gold)]">
+              The show has ended
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-center">
+              <button
+                className="group relative inline-flex h-11 items-center justify-center gap-2 overflow-hidden rounded-full border border-amber-300/60 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-5 text-xs font-extrabold uppercase tracking-[0.24em] text-black shadow-[0_0_0_1px_rgba(0,0,0,0.25),0_8px_26px_rgba(245,194,66,0.45)] transition hover:scale-[1.02] hover:brightness-105 active:scale-[0.99]"
+                type="button"
+                onClick={handleRefreshScores}
               >
-                <path
-                  d="M20 6V10H16"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M4 18V14H8"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M7.5 10a6 6 0 0 1 10-2.5L20 10M4 14l2.5 2.5A6 6 0 0 0 16.5 14"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span>Get latest scores</span>
-            </button>
-            <span className="text-xs text-[color:var(--bp-muted)]">
-              Updates run only when you tap refresh.
-            </span>
-          </div>
+                <svg
+                  className="h-4 w-4 transition group-hover:rotate-180"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 6V10H16"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M4 18V14H8"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M7.5 10a6 6 0 0 1 10-2.5L20 10M4 14l2.5 2.5A6 6 0 0 0 16.5 14"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span>Get latest scores</span>
+              </button>
+              <span className="text-xs text-[color:var(--bp-muted)]">
+                Updates run only when you tap refresh.
+              </span>
+            </div>
+          )}
         </header>
 
         {showPreview ? (
@@ -1369,9 +1377,31 @@ function ScoreboardPageInner() {
             )
           ) : (
             <>
-              <div className="rounded-3xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-6 py-4 shadow-[0_12px_36px_rgba(0,0,0,0.45),0_0_24px_rgba(198,162,74,0.35)]">
+              <div className="relative overflow-hidden rounded-3xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-6 py-4 shadow-[0_12px_36px_rgba(0,0,0,0.45),0_0_24px_rgba(198,162,74,0.35)]">
+                {isShowOver ? (
+                  <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                    {Array.from({ length: 24 }).map((_, index) => (
+                      <span
+                        key={`confetti-${index}`}
+                        className={`absolute h-2 w-2 rounded-sm ${
+                          index % 3 === 0
+                            ? "bg-amber-300"
+                            : index % 3 === 1
+                              ? "bg-zinc-100"
+                              : "bg-emerald-300"
+                        } ${index % 2 === 0 ? "animate-bounce" : "animate-pulse"}`}
+                        style={{
+                          left: `${(index * 13) % 100}%`,
+                          top: `${(index * 29) % 85}%`,
+                          animationDelay: `${(index % 8) * 80}ms`,
+                          opacity: 0.85,
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.35em] text-[color:var(--bp-gold)]">
-                  <span>Current leader</span>
+                  <span>{isShowOver ? "Winner" : "Current leader"}</span>
                   <span className="text-lg font-semibold text-[color:var(--bp-gold)]">
                     {topThree[0]?.points ?? 0} pts
                   </span>
@@ -1387,7 +1417,7 @@ function ScoreboardPageInner() {
                     />
                     <div>
                       <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--bp-dim)]">
-                        Leader
+                        {isShowOver ? "Winner" : "Leader"}
                       </p>
                       <p className="text-2xl font-semibold text-[color:var(--bp-text)] sm:text-3xl">
                         {topThree[0]?.display_name ?? "TBD"}
