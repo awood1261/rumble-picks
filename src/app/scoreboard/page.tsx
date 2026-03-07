@@ -1088,7 +1088,7 @@ function ScoreboardPageInner() {
           </div>
           <div className="flex items-center gap-3">
             {selectedPromotion?.image_url ? (
-              <div className="h-11 w-11 overflow-hidden rounded-full border border-[color:var(--bp-gold-30)] bg-black/40">
+              <div className="h-11 w-11 min-h-11 min-w-11 shrink-0 aspect-square overflow-hidden rounded-full border border-[color:var(--bp-gold-30)] bg-black/40">
                 <Image
                   src={selectedPromotion.image_url}
                   alt={selectedPromotion.name ?? "Promotion"}

@@ -1444,33 +1444,87 @@ function PicksPageInner() {
   const allStepsComplete = useMemo(() => {
     if (!selectedShowId) return false;
     if (stepItems.length === 0) return false;
+    const isEventComplete = (eventId: string) => {
+      const pick = payload.rumbles[eventId] ?? emptyRumblePick;
+      return (
+        pick.entrants.length >= 30 &&
+        pick.final_four.length === 4 &&
+        Boolean(pick.winner) &&
+        Boolean(pick.entry_1) &&
+        Boolean(pick.entry_2) &&
+        Boolean(pick.entry_30) &&
+        Boolean(pick.iron_person) &&
+        Boolean(pick.most_eliminations)
+      );
+    };
+    const isEliminatorComplete = (eliminatorId: string) => {
+      const pick = payload.eliminators?.[eliminatorId] ?? emptyEliminatorPick;
+      if (!pick.winner_id || !pick.most_eliminations) return false;
+      const entriesForEliminator = eliminatorEntries.filter(
+        (entry) => entry.eliminator_id === eliminatorId
+      );
+      if (entriesForEliminator.length === 0) return false;
+      return entriesForEliminator.every((entry) => {
+        const id = entry.entrant_id;
+        if (!pick.entry_order?.[id]) return false;
+        if (pick.winner_id === id) return true;
+        return (
+          Boolean(pick.elimination_order?.[id]) &&
+          Boolean(pick.elimination_type?.[id]) &&
+          Boolean(pick.eliminated_by?.[id])
+        );
+      });
+    };
+    const isMatchComplete = (matchId: string) => {
+      const match = matches.find((item) => item.id === matchId);
+      const hasWinnerPick = Boolean(payload.match_picks[matchId]);
+      if (!hasWinnerPick) return false;
+      const finishPick = payload.match_finish_picks[matchId] ?? {
+        method: null,
+        winner: null,
+        loser: null,
+      };
+      const lengthPick = payload.match_length_picks?.[matchId] ?? null;
+      const interferencePick = payload.match_interference_picks?.[matchId] ?? null;
+      const matchType = match?.match_type ?? "singles";
+      const isSingles = matchType === "singles";
+      const isTripleOrFatal =
+        matchType === "triple_threat" || matchType === "fatal_4_way";
+      const showFinishWinner = !isSingles && !isTripleOrFatal;
+      const showFinishLoser = !isSingles;
+      const finishRequiresEntrants =
+        finishPick.method === "pinfall" || finishPick.method === "submission";
+      const hasFinishWinner =
+        !finishRequiresEntrants || !showFinishWinner || Boolean(finishPick.winner);
+      const hasFinishLoser =
+        !finishRequiresEntrants || !showFinishLoser || Boolean(finishPick.loser);
+      return Boolean(finishPick.method) &&
+        Boolean(lengthPick) &&
+        Boolean(interferencePick) &&
+        hasFinishWinner &&
+        hasFinishLoser;
+    };
     return stepItems.every((item) => {
       if (item.type === "match") {
-        return Boolean(payload.match_picks[item.id]);
+        return isMatchComplete(item.id);
       }
       if (item.type === "event") {
-        const pick = payload.rumbles[item.id] ?? emptyRumblePick;
-        return Boolean(
-          pick.entrants.length ||
-            pick.final_four.length ||
-            pick.winner ||
-            pick.entry_1 ||
-            pick.entry_2 ||
-            pick.entry_30 ||
-            pick.iron_person ||
-            pick.most_eliminations
-        );
+        return isEventComplete(item.id);
       }
-      const pick = payload.eliminators?.[item.id] ?? emptyEliminatorPick;
-      return Boolean(
-        pick.winner_id ||
-          pick.most_eliminations ||
-          Object.values(pick.entry_order ?? {}).some(Boolean) ||
-          Object.values(pick.elimination_order ?? {}).some(Boolean) ||
-          Object.values(pick.elimination_type ?? {}).some(Boolean)
-      );
+      return isEliminatorComplete(item.id);
     });
-  }, [payload.eliminators, payload.match_picks, payload.rumbles, selectedShowId, stepItems]);
+  }, [
+    eliminatorEntries,
+    matches,
+    payload.eliminators,
+    payload.match_finish_picks,
+    payload.match_interference_picks,
+    payload.match_length_picks,
+    payload.match_picks,
+    payload.rumbles,
+    selectedShowId,
+    stepItems,
+  ]);
 
   useEffect(() => {
     if (!lastStepKey || totalSteps === 0) return;

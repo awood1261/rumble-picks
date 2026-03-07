@@ -199,7 +199,7 @@ export default function ShowDetailPage() {
                 {show.tagline}
               </p>
             ) : null}
-            {authChecked && !isSignedIn ? (
+            {authChecked && !isSignedIn && lockStatusText !== "Show is locked" ? (
               <div className="mt-6 space-y-3">
                 <p className="text-sm text-zinc-200">
                   {show?.requires_email_registration
@@ -217,7 +217,7 @@ export default function ShowDetailPage() {
               </div>
             ) : null}
             <div className="mt-6 flex flex-wrap gap-3">
-              {isSignedIn ? (
+              {lockStatusText !== "Show is locked" && isSignedIn ? (
                 <Link
                   href={`/picks?show=${show.id}`}
                   className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
