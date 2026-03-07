@@ -36,3 +36,21 @@ body {
 .clip-shield {
   clip-path: polygon(12% 0%, 88% 0%, 100% 20%, 100% 62%, 50% 100%, 0% 62%, 0% 20%);
 }
+
+@keyframes bp-confetti-fall {
+  0% {
+    transform: translate3d(0, -32px, 0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  55% {
+    transform: translate3d(16px, 130px, 0) rotate(210deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(-10px, 300px, 0) rotate(420deg);
+    opacity: 0;
+  }
+}
