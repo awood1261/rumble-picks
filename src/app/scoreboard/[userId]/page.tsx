@@ -103,6 +103,7 @@ type MatchRow = {
   id: string;
   name: string;
   kind: string;
+  champion_side_id?: string | null;
   winner_entrant_id: string | null;
   winner_side_id: string | null;
   finish_method: string | null;
@@ -695,7 +696,7 @@ export default function ScoreboardPicksPage() {
       supabase
         .from("matches")
         .select(
-          "id, name, kind, order_index, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
+          "id, name, kind, order_index, champion_side_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
         )
         .eq("show_id", validShowId)
         .order("order_index", { ascending: true, nullsFirst: false })
@@ -1511,13 +1512,20 @@ export default function ScoreboardPicksPage() {
                     .filter((row) => row.side_id === side.id)
                     .map((row) => entrantMap.get(row.entrant_id))
                     .filter(Boolean);
+                  const championSuffix =
+                    match.champion_side_id && match.champion_side_id === side.id
+                      ? " (C)"
+                      : "";
+                  const entrantLabel = entrantsForSide
+                    .map((entrant) => entrant?.name)
+                    .filter(Boolean)
+                    .join(" • ");
                   const label =
                     side.label?.trim() && entrantsForSide.length > 1
-                      ? side.label.trim()
-                      : entrantsForSide
-                          .map((entrant) => entrant?.name)
-                          .filter(Boolean)
-                          .join(" • ") || `Side ${index + 1}`;
+                      ? `${side.label.trim()}${championSuffix}`
+                      : entrantLabel
+                        ? `${entrantLabel}${championSuffix}`
+                        : `Side ${index + 1}${championSuffix}`;
                   return {
                     id: side.id,
                     label,
@@ -1527,7 +1535,11 @@ export default function ScoreboardPicksPage() {
                 const pickSide = sides.find((side) => side.id === pick) ?? null;
                 const pickSideLabel =
                   pickSide?.label?.trim() && pickEntrants.length > 1
-                    ? pickSide.label.trim()
+                    ? `${pickSide.label.trim()}${
+                        match.champion_side_id && match.champion_side_id === pickSide.id
+                          ? " (C)"
+                          : ""
+                      }`
                     : null;
                 const pickEntrantIds = pickEntrants
                   .map((entrant) => entrant?.id)

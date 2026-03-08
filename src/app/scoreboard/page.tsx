@@ -983,6 +983,30 @@ function ScoreboardPageInner() {
     };
   }, [selectedShowId]);
 
+  const refreshSelectedShowStatus = useCallback(async () => {
+    if (!selectedShowId) return;
+    const { data, error } = await supabase
+      .from("shows")
+      .select("id, name, image_url, promotion_id, status, starts_at, is_over")
+      .eq("id", selectedShowId)
+      .single();
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    if (!data) return;
+    setShows((prev) => {
+      const next = [...prev];
+      const index = next.findIndex((show) => show.id === data.id);
+      if (index === -1) {
+        next.push(data as ShowRow);
+      } else {
+        next[index] = { ...next[index], ...(data as ShowRow) };
+      }
+      return next;
+    });
+  }, [selectedShowId]);
+
   useEffect(() => {
     if (!eventsLoaded) {
       return;
@@ -1045,6 +1069,7 @@ function ScoreboardPageInner() {
         eliminatorEliminations: eliminations,
         eliminators: eliminatorData.eliminators,
       });
+      await refreshSelectedShowStatus();
       setLastUpdateAt(Date.now());
     } finally {
       setRefreshingScores(false);
@@ -1055,6 +1080,7 @@ function ScoreboardPageInner() {
     loadEliminatorEliminations,
     loadEliminatorEntries,
     loadMatches,
+    refreshSelectedShowStatus,
   ]);
 
   return (
@@ -1210,7 +1236,7 @@ function ScoreboardPageInner() {
                 />
               </div>
             ) : null}
-            <h1 className="text-3xl font-semibold text-[color:var(--bp-text)] sm:text-4xl">
+            <h1 className="bg-gradient-to-b from-white via-amber-100 to-amber-200 bg-clip-text text-3xl font-semibold text-transparent drop-shadow-[0_0_12px_rgba(251,196,0,0.35)] sm:text-4xl">
               {selectedShow?.name ?? "Show"}
             </h1>
           </div>

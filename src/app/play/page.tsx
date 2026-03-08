@@ -176,7 +176,7 @@ export default function PlayPage() {
                   <div className="relative flex h-full flex-col justify-between gap-4 p-5">
                     <div className="flex items-center gap-3">
                       {promotion?.image_url ? (
-                        <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/50">
+                        <span className="flex h-10 w-10 min-h-10 min-w-10 shrink-0 aspect-square items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-black/50">
                           <img
                             src={promotion.image_url}
                             alt={promotion.name ?? "Promotion"}

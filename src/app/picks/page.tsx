@@ -132,6 +132,7 @@ function PicksPageInner() {
   );
   const [stepIndex, setStepIndex] = useState(0);
   const hasRestoredStepRef = useRef(false);
+  const hasAutoRoutedToCompleteRef = useRef(false);
   const lastLoadedShowIdRef = useRef<string | null>(null);
   const lastLoadedUserIdRef = useRef<string | null>(null);
   const picksLoadedForShowIdRef = useRef<string | null>(null);
@@ -728,7 +729,7 @@ function PicksPageInner() {
     const { data: matchRows, error: matchError } = await supabase
       .from("matches")
       .select(
-        "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference",
+        "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, champion_side_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference",
       )
       .eq("show_id", selectedShowId)
       .order("order_index", { ascending: true, nullsFirst: false })
@@ -1389,6 +1390,7 @@ function PicksPageInner() {
 
   useEffect(() => {
     hasRestoredStepRef.current = false;
+    hasAutoRoutedToCompleteRef.current = false;
   }, [selectedShowId, totalSteps]);
 
   useEffect(() => {
@@ -1441,90 +1443,12 @@ function PicksPageInner() {
     currentStep?.type !== "match" ||
     Boolean(payload.match_picks[currentStep.id]);
 
-  const allStepsComplete = useMemo(() => {
-    if (!selectedShowId) return false;
-    if (stepItems.length === 0) return false;
-    const isEventComplete = (eventId: string) => {
-      const pick = payload.rumbles[eventId] ?? emptyRumblePick;
-      return (
-        pick.entrants.length >= 30 &&
-        pick.final_four.length === 4 &&
-        Boolean(pick.winner) &&
-        Boolean(pick.entry_1) &&
-        Boolean(pick.entry_2) &&
-        Boolean(pick.entry_30) &&
-        Boolean(pick.iron_person) &&
-        Boolean(pick.most_eliminations)
-      );
-    };
-    const isEliminatorComplete = (eliminatorId: string) => {
-      const pick = payload.eliminators?.[eliminatorId] ?? emptyEliminatorPick;
-      if (!pick.winner_id || !pick.most_eliminations) return false;
-      const entriesForEliminator = eliminatorEntries.filter(
-        (entry) => entry.eliminator_id === eliminatorId
-      );
-      if (entriesForEliminator.length === 0) return false;
-      return entriesForEliminator.every((entry) => {
-        const id = entry.entrant_id;
-        if (!pick.entry_order?.[id]) return false;
-        if (pick.winner_id === id) return true;
-        return (
-          Boolean(pick.elimination_order?.[id]) &&
-          Boolean(pick.elimination_type?.[id]) &&
-          Boolean(pick.eliminated_by?.[id])
-        );
-      });
-    };
-    const isMatchComplete = (matchId: string) => {
-      const match = matches.find((item) => item.id === matchId);
-      const hasWinnerPick = Boolean(payload.match_picks[matchId]);
-      if (!hasWinnerPick) return false;
-      const finishPick = payload.match_finish_picks[matchId] ?? {
-        method: null,
-        winner: null,
-        loser: null,
-      };
-      const lengthPick = payload.match_length_picks?.[matchId] ?? null;
-      const interferencePick = payload.match_interference_picks?.[matchId] ?? null;
-      const matchType = match?.match_type ?? "singles";
-      const isSingles = matchType === "singles";
-      const isTripleOrFatal =
-        matchType === "triple_threat" || matchType === "fatal_4_way";
-      const showFinishWinner = !isSingles && !isTripleOrFatal;
-      const showFinishLoser = !isSingles;
-      const finishRequiresEntrants =
-        finishPick.method === "pinfall" || finishPick.method === "submission";
-      const hasFinishWinner =
-        !finishRequiresEntrants || !showFinishWinner || Boolean(finishPick.winner);
-      const hasFinishLoser =
-        !finishRequiresEntrants || !showFinishLoser || Boolean(finishPick.loser);
-      return Boolean(finishPick.method) &&
-        Boolean(lengthPick) &&
-        Boolean(interferencePick) &&
-        hasFinishWinner &&
-        hasFinishLoser;
-    };
-    return stepItems.every((item) => {
-      if (item.type === "match") {
-        return isMatchComplete(item.id);
-      }
-      if (item.type === "event") {
-        return isEventComplete(item.id);
-      }
-      return isEliminatorComplete(item.id);
-    });
-  }, [
-    eliminatorEntries,
-    matches,
-    payload.eliminators,
-    payload.match_finish_picks,
-    payload.match_interference_picks,
-    payload.match_length_picks,
-    payload.match_picks,
-    payload.rumbles,
-    selectedShowId,
-    stepItems,
-  ]);
+  const allMatchWinnersPicked = useMemo(() => {
+    if (!selectedShowId || stepItems.length === 0) return false;
+    const matchSteps = stepItems.filter((item) => item.type === "match");
+    if (matchSteps.length === 0) return false;
+    return matchSteps.every((item) => Boolean(payload.match_picks[item.id]));
+  }, [payload.match_picks, selectedShowId, stepItems]);
 
   useEffect(() => {
     if (!lastStepKey || totalSteps === 0) return;
@@ -1537,7 +1461,7 @@ function PicksPageInner() {
       return;
     }
     if (saved === "complete") {
-      if (allStepsComplete) {
+      if (allMatchWinnersPicked) {
         setStepIndex(totalSteps);
       } else {
         window.localStorage.removeItem(lastStepKey);
@@ -1549,7 +1473,31 @@ function PicksPageInner() {
     const savedIndex = stepIndexById.get(saved);
     setStepIndex(savedIndex ?? 0);
     hasRestoredStepRef.current = true;
-  }, [allStepsComplete, lastStepKey, totalSteps, stepIndexById]);
+  }, [allMatchWinnersPicked, lastStepKey, totalSteps, stepIndexById]);
+
+  useEffect(() => {
+    if (hasAutoRoutedToCompleteRef.current) return;
+    if (!hasRestoredStepRef.current) return;
+    if (totalSteps === 0) return;
+    if (stepIndex >= totalSteps) {
+      hasAutoRoutedToCompleteRef.current = true;
+      return;
+    }
+    if (!allMatchWinnersPicked) {
+      hasAutoRoutedToCompleteRef.current = true;
+      return;
+    }
+    if (!lastStepKey || typeof window === "undefined") {
+      hasAutoRoutedToCompleteRef.current = true;
+      return;
+    }
+    const saved = window.localStorage.getItem(lastStepKey);
+    if (!saved || saved === "complete") {
+      setStepIndex(totalSteps);
+      window.localStorage.setItem(lastStepKey, "complete");
+    }
+    hasAutoRoutedToCompleteRef.current = true;
+  }, [allMatchWinnersPicked, lastStepKey, stepIndex, totalSteps]);
 
   const renderStepSkeleton = (type: "event" | "match" | "eliminator") => {
     if (type === "event") {
