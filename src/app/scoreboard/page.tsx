@@ -228,6 +228,7 @@ function ScoreboardPageInner() {
   const [lastUpdateAt, setLastUpdateAt] = useState(Date.now());
   const [now, setNow] = useState(() => Date.now());
   const [progressOpen, setProgressOpen] = useState(false);
+  const [refreshingScores, setRefreshingScores] = useState(false);
   const loadScoresRef = useRef<(overrides?: ScoreDataOverrides) => Promise<void>>(
     async () => {}
   );
@@ -1025,24 +1026,36 @@ function ScoreboardPageInner() {
   ]);
 
   const handleRefreshScores = useCallback(async () => {
-    const [matchData, rumbleData, eliminatorData] = await Promise.all([
-      loadMatches(),
-      loadRumbleEntriesRef.current(),
-      loadEliminatorEntries(),
-    ]);
-    const eliminations = await loadEliminatorEliminations(eliminatorData.eliminatorIds);
-    await loadScoresRef.current({
-      showEvents,
-      matches: matchData.matches,
-      matchSides: matchData.matchSides,
-      matchEntrants: matchData.matchEntrants,
-      rumbleEntries: rumbleData.rumbleEntries,
-      eliminatorEntries: eliminatorData.eliminatorEntries,
-      eliminatorEliminations: eliminations,
-      eliminators: eliminatorData.eliminators,
-    });
-    setLastUpdateAt(Date.now());
-  }, [loadEliminatorEliminations, loadEliminatorEntries, loadMatches]);
+    if (refreshingScores) return;
+    setRefreshingScores(true);
+    try {
+      const [matchData, rumbleData, eliminatorData] = await Promise.all([
+        loadMatches(),
+        loadRumbleEntriesRef.current(),
+        loadEliminatorEntries(),
+      ]);
+      const eliminations = await loadEliminatorEliminations(eliminatorData.eliminatorIds);
+      await loadScoresRef.current({
+        showEvents,
+        matches: matchData.matches,
+        matchSides: matchData.matchSides,
+        matchEntrants: matchData.matchEntrants,
+        rumbleEntries: rumbleData.rumbleEntries,
+        eliminatorEntries: eliminatorData.eliminatorEntries,
+        eliminatorEliminations: eliminations,
+        eliminators: eliminatorData.eliminators,
+      });
+      setLastUpdateAt(Date.now());
+    } finally {
+      setRefreshingScores(false);
+    }
+  }, [
+    refreshingScores,
+    showEvents,
+    loadEliminatorEliminations,
+    loadEliminatorEntries,
+    loadMatches,
+  ]);
 
   return (
     <div
@@ -1208,12 +1221,19 @@ function ScoreboardPageInner() {
           ) : (
             <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-center">
               <button
-                className="group relative inline-flex h-11 items-center justify-center gap-2 overflow-hidden rounded-full border border-amber-300/60 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 px-5 text-xs font-extrabold uppercase tracking-[0.24em] text-black shadow-[0_0_0_1px_rgba(0,0,0,0.25),0_8px_26px_rgba(245,194,66,0.45)] transition hover:scale-[1.02] hover:brightness-105 active:scale-[0.99]"
+                className={`group relative inline-flex h-11 items-center justify-center gap-2 overflow-hidden rounded-full border px-5 text-xs font-extrabold uppercase tracking-[0.24em] shadow-[0_0_0_1px_rgba(0,0,0,0.25),0_8px_26px_rgba(245,194,66,0.45)] transition active:scale-[0.99] ${
+                  refreshingScores
+                    ? "cursor-wait border-amber-200/80 bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 text-zinc-900 brightness-95 animate-[bp-refresh-glow_1.6s_ease-in-out_infinite]"
+                    : "border-amber-300/60 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 text-black hover:scale-[1.02] hover:brightness-105"
+                }`}
                 type="button"
                 onClick={handleRefreshScores}
+                disabled={refreshingScores}
               >
                 <svg
-                  className="h-4 w-4 transition group-hover:rotate-180"
+                  className={`h-4 w-4 transition ${
+                    refreshingScores ? "animate-spin" : "group-hover:rotate-180"
+                  }`}
                   viewBox="0 0 24 24"
                   fill="none"
                   aria-hidden="true"
@@ -1240,7 +1260,7 @@ function ScoreboardPageInner() {
                     strokeLinejoin="round"
                   />
                 </svg>
-                <span>Get latest scores</span>
+                <span>{refreshingScores ? "Calculating scores" : "Get latest scores"}</span>
               </button>
               <span className="text-xs text-[color:var(--bp-muted)]">
                 Updates run only when you tap refresh.
@@ -1384,7 +1404,13 @@ function ScoreboardPageInner() {
             )
           ) : (
             <>
-              <div className="relative overflow-hidden rounded-3xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-6 py-4 shadow-[0_12px_36px_rgba(0,0,0,0.45),0_0_24px_rgba(198,162,74,0.35)]">
+              <div
+                className={`relative overflow-hidden rounded-3xl border bg-[color:var(--bp-surface-2)] px-6 py-4 shadow-[0_12px_36px_rgba(0,0,0,0.45),0_0_24px_rgba(198,162,74,0.35)] ${
+                  currentUserId && topThree[0]?.user_id === currentUserId
+                    ? "border-[color:var(--bp-gold)] bg-[color:var(--bp-gold-15)] ring-1 ring-[color:var(--bp-gold-30)]"
+                    : "border-[color:var(--bp-gold-30)]"
+                }`}
+              >
                 {isShowOver ? (
                   <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
                     {Array.from({ length: 24 }).map((_, index) => (
@@ -1431,6 +1457,11 @@ function ScoreboardPageInner() {
                         {topThree[0]?.display_name ?? "TBD"}
                       </p>
                       {currentUserId && topThree[0]?.user_id === currentUserId ? (
+                        <span className="mt-2 inline-flex items-center rounded-full border border-[color:var(--bp-gold-30)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)]">
+                          You
+                        </span>
+                      ) : null}
+                      {currentUserId && topThree[0]?.user_id === currentUserId ? (
                         <p className="mt-1 text-sm text-[color:var(--bp-muted)]">
                           You are in the lead.
                         </p>
@@ -1445,6 +1476,7 @@ function ScoreboardPageInner() {
                   .filter((index) => index < topThree.length)
                   .map((rankIndex) => {
                     const row = topThree[rankIndex];
+                    const isCurrentUserPodium = currentUserId === row.user_id;
                     const delta = rankDelta[row.user_id];
                     const hasDelta = delta !== null && delta !== undefined && delta !== 0;
                     const borderColor =
@@ -1472,7 +1504,11 @@ function ScoreboardPageInner() {
                             : rankIndex === 2
                             ? "-ml-6 sm:-ml-8 md:-ml-10"
                             : ""
-                        } ${rankIndex === 0 ? "rounded-3xl" : "rounded-none"} max-w-[10rem] sm:max-w-[11.5rem] md:max-w-[13.5rem]`}
+                        } ${rankIndex === 0 ? "rounded-3xl" : "rounded-none"} max-w-[10rem] sm:max-w-[11.5rem] md:max-w-[13.5rem] ${
+                          isCurrentUserPodium
+                            ? "border-[color:var(--bp-gold)] bg-[color:var(--bp-gold-15)] ring-1 ring-[color:var(--bp-gold-30)]"
+                            : ""
+                        }`}
                         href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
                       >
                         <div className="flex flex-col items-center text-center">
@@ -1500,6 +1536,11 @@ function ScoreboardPageInner() {
                           <p className="truncate text-base font-semibold text-[color:var(--bp-text)]">
                             {row.display_name}
                           </p>
+                          {isCurrentUserPodium ? (
+                            <span className="mt-1 inline-flex items-center rounded-full border border-[color:var(--bp-gold-30)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)]">
+                              You
+                            </span>
+                          ) : null}
                           <p className="text-sm text-[color:var(--bp-muted)]">
                             {row.points} pts
                           </p>
