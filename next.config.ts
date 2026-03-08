@@ -7,6 +7,14 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "fqfufzrebrxubrechdal.supabase.co",
       },
+      {
+        protocol: "https",
+        hostname: "www.thesmackdownhotel.com",
+      },
+      {
+        protocol: "https",
+        hostname: "thesmackdownhotel.com",
+      },
     ],
   },
 };

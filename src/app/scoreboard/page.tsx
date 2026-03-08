@@ -200,6 +200,7 @@ function ScoreboardPageInner() {
   const [shows, setShows] = useState<ShowRow[]>([]);
   const [promotions, setPromotions] = useState<PromotionRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -822,9 +823,11 @@ function ScoreboardPageInner() {
         .order("name", { ascending: true });
       if (error) {
         setMessage(error.message);
+        setEventsLoaded(true);
         return;
       }
       setEvents(eventRows ?? []);
+      setEventsLoaded(true);
     };
 
     loadShows();
@@ -980,6 +983,9 @@ function ScoreboardPageInner() {
   }, [selectedShowId]);
 
   useEffect(() => {
+    if (!eventsLoaded) {
+      return;
+    }
     if (!selectedShowId) {
       initialLoadByShowRef.current = null;
       return;
@@ -1010,6 +1016,7 @@ function ScoreboardPageInner() {
     };
     runInitialLoad();
   }, [
+    eventsLoaded,
     selectedShowId,
     showEvents,
     loadEliminatorEliminations,
