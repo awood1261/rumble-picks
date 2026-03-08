@@ -131,7 +131,6 @@ function PicksPageInner() {
     null,
   );
   const [stepIndex, setStepIndex] = useState(0);
-  const hasAutoJumpedRef = useRef(false);
   const hasRestoredStepRef = useRef(false);
   const lastLoadedShowIdRef = useRef<string | null>(null);
   const lastLoadedUserIdRef = useRef<string | null>(null);
@@ -1303,10 +1302,10 @@ function PicksPageInner() {
   };
 
   const handleSave = async () => {
-    if (!userId || !selectedShowId) return;
+    if (!userId || !selectedShowId) return false;
     if (isLocked) {
       setMessage("Picks are locked for this show.");
-      return;
+      return false;
     }
     setSaving(true);
     setMessage(null);
@@ -1321,12 +1320,13 @@ function PicksPageInner() {
     if (error) {
       setMessage(error.message);
       setSaving(false);
-      return;
+      return false;
     }
     setHasSaved(true);
     setEditSection(null);
     setFocusedEventId("");
     setSaving(false);
+    return true;
   };
 
   const handleEditEventSection = (
@@ -1388,7 +1388,6 @@ function PicksPageInner() {
   }, [selectedShowId, userId]);
 
   useEffect(() => {
-    hasAutoJumpedRef.current = false;
     hasRestoredStepRef.current = false;
   }, [selectedShowId, totalSteps]);
 
@@ -1432,7 +1431,8 @@ function PicksPageInner() {
   };
 
   const handleStepContinue = async () => {
-    await handleSave();
+    const didSave = await handleSave();
+    if (!didSave) return;
     setStepIndex((prev) => Math.min(prev + 1, totalSteps));
     scrollToTop();
   };
@@ -1550,13 +1550,6 @@ function PicksPageInner() {
     setStepIndex(savedIndex ?? 0);
     hasRestoredStepRef.current = true;
   }, [allStepsComplete, lastStepKey, totalSteps, stepIndexById]);
-
-  useEffect(() => {
-    if (hasAutoJumpedRef.current) return;
-    if (!allStepsComplete) return;
-    setStepIndex(totalSteps);
-    hasAutoJumpedRef.current = true;
-  }, [allStepsComplete, totalSteps]);
 
   const renderStepSkeleton = (type: "event" | "match" | "eliminator") => {
     if (type === "event") {

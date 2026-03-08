@@ -62,6 +62,7 @@ type ShowRow = {
   tagline?: string | null;
   promotion_id: string | null;
   starts_at?: string | null;
+  is_over?: boolean | null;
 };
 
 type PromotionRow = {
@@ -138,6 +139,30 @@ type ProfileRow = {
 };
 
 type ScoreboardRow = ScoreRow & { display_name: string; avatar_key: string | null };
+type LoadedMatches = {
+  matches: MatchRow[];
+  matchSides: MatchSideRow[];
+  matchEntrants: MatchEntrantRow[];
+};
+type LoadedRumbleData = {
+  rumbleEntries: RumbleEntryRow[];
+  eventEntrants: EventEntrantRow[];
+};
+type LoadedEliminatorData = {
+  eliminatorIds: string[];
+  eliminators: { id: string; winner_entrant_id: string | null }[];
+  eliminatorEntries: EliminatorEntryRow[];
+};
+type ScoreDataOverrides = {
+  showEvents?: EventRow[];
+  rumbleEntries?: RumbleEntryRow[];
+  matches?: MatchRow[];
+  matchSides?: MatchSideRow[];
+  matchEntrants?: MatchEntrantRow[];
+  eliminatorEntries?: EliminatorEntryRow[];
+  eliminatorEliminations?: EliminatorEliminationRow[];
+  eliminators?: { id: string; winner_entrant_id: string | null }[];
+};
 
 const MovementPill = ({ delta }: { delta: number | null }) => {
   if (typeof delta !== "number" || delta === 0) return null;
@@ -175,6 +200,7 @@ function ScoreboardPageInner() {
   const [shows, setShows] = useState<ShowRow[]>([]);
   const [promotions, setPromotions] = useState<PromotionRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -202,8 +228,14 @@ function ScoreboardPageInner() {
   const [lastUpdateAt, setLastUpdateAt] = useState(Date.now());
   const [now, setNow] = useState(() => Date.now());
   const [progressOpen, setProgressOpen] = useState(false);
-  const loadScoresRef = useRef<() => void>(() => {});
-  const loadRumbleEntriesRef = useRef<() => void>(() => {});
+  const [refreshingScores, setRefreshingScores] = useState(false);
+  const loadScoresRef = useRef<(overrides?: ScoreDataOverrides) => Promise<void>>(
+    async () => {}
+  );
+  const loadRumbleEntriesRef = useRef<() => Promise<LoadedRumbleData>>(
+    async () => ({ rumbleEntries: [], eventEntrants: [] })
+  );
+  const initialLoadByShowRef = useRef<string | null>(null);
   const queryShowIdRef = useRef<string | null>(null);
 
   const selectedShow = useMemo(
@@ -355,6 +387,7 @@ function ScoreboardPageInner() {
   }, [now, selectedShow?.starts_at]);
 
   const showPreview = !loading && Boolean(selectedShowId) && !hasAnyResults;
+  const isShowOver = Boolean(selectedShow?.is_over);
 
   const entrantMap = useMemo(() => {
     return new Map(eventEntrants.map((entrant) => [entrant.id, entrant]));
@@ -503,7 +536,7 @@ function ScoreboardPageInner() {
     []
   );
 
-  const loadScores = useCallback(async () => {
+  const loadScores = useCallback(async (overrides?: ScoreDataOverrides) => {
     setMessage(null);
     if (!selectedShowId) {
       setScores([]);
@@ -541,7 +574,17 @@ function ScoreboardPageInner() {
       setMessage(profileErrorFresh.message);
     }
 
-    const eventEntriesById = rumbleEntries.reduce((map, entry) => {
+    const effectiveShowEvents = overrides?.showEvents ?? showEvents;
+    const effectiveRumbleEntries = overrides?.rumbleEntries ?? rumbleEntries;
+    const effectiveMatches = overrides?.matches ?? matches;
+    const effectiveMatchEntrants = overrides?.matchEntrants ?? matchEntrants;
+    const effectiveMatchSides = overrides?.matchSides ?? matchSides;
+    const effectiveEliminatorEntries = overrides?.eliminatorEntries ?? eliminatorEntries;
+    const effectiveEliminatorEliminations =
+      overrides?.eliminatorEliminations ?? eliminatorEliminations;
+    const effectiveEliminators = overrides?.eliminators ?? eliminators;
+
+    const eventEntriesById = effectiveRumbleEntries.reduce((map, entry) => {
       if (!map[entry.event_id]) map[entry.event_id] = [];
       map[entry.event_id].push(entry);
       return map;
@@ -551,7 +594,7 @@ function ScoreboardPageInner() {
       let points = 0;
       const breakdown: Record<string, number> = {};
       const rumbles = pick.rumbles ?? {};
-      showEvents.forEach((event) => {
+      effectiveShowEvents.forEach((event) => {
         const entries = eventEntriesById[event.id] ?? [];
         const rumblePick = rumbles[event.id];
         const rumbleScore = computeRumbleScore(
@@ -576,13 +619,13 @@ function ScoreboardPageInner() {
         matchPayload,
         [],
         scoringRules,
-        matches,
-        matchEntrants,
-        matchSides,
+        effectiveMatches,
+        effectiveMatchEntrants,
+        effectiveMatchSides,
         undefined,
-        eliminatorEntries,
-        eliminatorEliminations,
-        eliminators
+        effectiveEliminatorEntries,
+        effectiveEliminatorEliminations,
+        effectiveEliminators
       );
       points += matchScore.points;
       breakdown.matches = matchScore.breakdown.matches ?? 0;
@@ -634,13 +677,16 @@ function ScoreboardPageInner() {
     rumbleEntries,
     selectedShowId,
     showEvents,
+    eliminatorEliminations,
+    eliminatorEntries,
+    eliminators,
   ]);
 
-  const loadRumbleEntries = useCallback(async () => {
+  const loadRumbleEntries = useCallback(async (): Promise<LoadedRumbleData> => {
     if (!selectedShowId || showEvents.length === 0) {
       setRumbleEntries((prev) => (prev.length === 0 ? prev : []));
       setEventEntrants((prev) => (prev.length === 0 ? prev : []));
-      return;
+      return { rumbleEntries: [], eventEntrants: [] };
     }
     const eventIds = showEvents.map((event) => event.id);
       const { data: entryRows, error } = await supabase
@@ -649,7 +695,7 @@ function ScoreboardPageInner() {
       .in("event_id", eventIds);
     if (error) {
       setMessage(error.message);
-      return;
+      return { rumbleEntries: [], eventEntrants: [] };
     }
     const nextEntries = (entryRows ?? []) as RumbleEntryRow[];
     setRumbleEntries((prev) => {
@@ -680,7 +726,7 @@ function ScoreboardPageInner() {
     );
     if (entrantIds.length === 0) {
       setEventEntrants([]);
-      return;
+      return { rumbleEntries: nextEntries, eventEntrants: [] };
     }
 
     const { data: entrantRows, error: entrantError } = await supabase
@@ -690,10 +736,11 @@ function ScoreboardPageInner() {
       .order("name", { ascending: true });
     if (entrantError) {
       setMessage(entrantError.message);
-      return;
+      return { rumbleEntries: nextEntries, eventEntrants: [] };
     }
+    const nextEventEntrants = (entrantRows ?? []) as EventEntrantRow[];
     setEventEntrants((prev) => {
-      const next = entrantRows ?? [];
+      const next = nextEventEntrants;
       if (prev.length === next.length) {
         const prevKey = prev.map((entrant) => entrant.id).sort().join("|");
         const nextKey = next.map((entrant) => entrant.id).sort().join("|");
@@ -703,6 +750,7 @@ function ScoreboardPageInner() {
       }
       return next;
     });
+    return { rumbleEntries: nextEntries, eventEntrants: nextEventEntrants };
   }, [selectedShowId, showEvents]);
 
   useEffect(() => {
@@ -735,7 +783,7 @@ function ScoreboardPageInner() {
       ] = await Promise.all([
         supabase
           .from("shows")
-          .select("id, name, image_url, promotion_id, status, starts_at")
+          .select("id, name, image_url, promotion_id, status, starts_at, is_over")
           .order("starts_at", { ascending: true }),
         supabase
           .from("promotions")
@@ -776,9 +824,11 @@ function ScoreboardPageInner() {
         .order("name", { ascending: true });
       if (error) {
         setMessage(error.message);
+        setEventsLoaded(true);
         return;
       }
       setEvents(eventRows ?? []);
+      setEventsLoaded(true);
     };
 
     loadShows();
@@ -802,12 +852,12 @@ function ScoreboardPageInner() {
     return () => clearInterval(interval);
   }, [selectedShow?.starts_at]);
 
-  const loadEliminatorEntries = useCallback(async () => {
+  const loadEliminatorEntries = useCallback(async (): Promise<LoadedEliminatorData> => {
     if (!selectedShowId) {
       setEliminatorEntries([]);
       setEliminatorEliminations([]);
       setEliminatorIds([]);
-      return;
+      return { eliminatorIds: [], eliminators: [], eliminatorEntries: [] };
     }
     const { data: eliminatorRows, error } = await supabase
       .from("eliminators")
@@ -816,15 +866,14 @@ function ScoreboardPageInner() {
       .order("order_index", { ascending: true, nullsFirst: false });
     if (error) {
       setMessage(error.message);
-      return;
+      return { eliminatorIds: [], eliminators: [], eliminatorEntries: [] };
     }
     const ids = (eliminatorRows ?? []).map((row) => row.id);
-    setEliminators(
-      (eliminatorRows ?? []).map((row) => ({
-        id: row.id,
-        winner_entrant_id: row.winner_entrant_id ?? null,
-      }))
-    );
+    const nextEliminators = (eliminatorRows ?? []).map((row) => ({
+      id: row.id,
+      winner_entrant_id: row.winner_entrant_id ?? null,
+    }));
+    setEliminators(nextEliminators);
     const prevIds = eliminatorIdsRef.current;
     const idsUnchanged =
       prevIds.length === ids.length &&
@@ -835,7 +884,7 @@ function ScoreboardPageInner() {
     if (ids.length === 0) {
       setEliminatorEntries([]);
       setEliminatorEliminations([]);
-      return;
+      return { eliminatorIds: ids, eliminators: nextEliminators, eliminatorEntries: [] };
     }
     const { data: entryRows, error: entryError } = await supabase
       .from("eliminator_entries")
@@ -843,52 +892,50 @@ function ScoreboardPageInner() {
       .in("eliminator_id", ids);
     if (entryError) {
       setMessage(entryError.message);
-      return;
+      return { eliminatorIds: ids, eliminators: nextEliminators, eliminatorEntries: [] };
     }
-    setEliminatorEntries((entryRows ?? []) as EliminatorEntryRow[]);
+    const nextEliminatorEntries = (entryRows ?? []) as EliminatorEntryRow[];
+    setEliminatorEntries(nextEliminatorEntries);
+    return {
+      eliminatorIds: ids,
+      eliminators: nextEliminators,
+      eliminatorEntries: nextEliminatorEntries,
+    };
   }, [selectedShowId]);
 
-  const loadEliminatorEliminations = useCallback(async () => {
-    if (!selectedShowId) return;
-    if (eliminatorIds.length === 0) {
+  const loadEliminatorEliminations = useCallback(
+    async (idsOverride?: string[]): Promise<EliminatorEliminationRow[]> => {
+    if (!selectedShowId) return [];
+    const targetIds = idsOverride ?? eliminatorIds;
+    if (targetIds.length === 0) {
       setEliminatorEliminations([]);
-      return;
+      return [];
     }
     const { data: elimRows, error: elimError } = await supabase
       .from("eliminator_eliminations")
       .select(
         "eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
       )
-      .in("eliminator_id", eliminatorIds);
+      .in("eliminator_id", targetIds);
     if (elimError) {
       setMessage(elimError.message);
-      return;
+      return [];
     }
-    setEliminatorEliminations((elimRows ?? []) as EliminatorEliminationRow[]);
+    const nextEliminatorEliminations = (elimRows ?? []) as EliminatorEliminationRow[];
+    setEliminatorEliminations(nextEliminatorEliminations);
+    return nextEliminatorEliminations;
   }, [eliminatorIds, selectedShowId]);
-
-  useEffect(() => {
-    if (!selectedShowId) {
-      return;
-    }
-
-    loadRumbleEntriesRef.current();
-    loadScoresRef.current();
-    loadEliminatorEntries();
-    loadEliminatorEliminations();
-    setLastUpdateAt(Date.now());
-  }, [selectedShowId, showEvents, loadEliminatorEliminations, loadEliminatorEntries]);
 
   useEffect(() => {
     eliminatorIdsRef.current = eliminatorIds;
   }, [eliminatorIds]);
 
-  const loadMatches = useCallback(async () => {
+  const loadMatches = useCallback(async (): Promise<LoadedMatches> => {
     if (!selectedShowId) {
       setMatches([]);
       setMatchSides([]);
       setMatchEntrants([]);
-      return;
+      return { matches: [], matchSides: [], matchEntrants: [] };
     }
     const { data: matchRows, error } = await supabase
       .from("matches")
@@ -900,14 +947,14 @@ function ScoreboardPageInner() {
       .order("created_at", { ascending: true });
     if (error) {
       setMessage(error.message);
-      return;
+      return { matches: [], matchSides: [], matchEntrants: [] };
     }
     const matchList = (matchRows ?? []) as MatchRow[];
     setMatches(matchList);
     if (matchList.length === 0) {
       setMatchSides([]);
       setMatchEntrants([]);
-      return;
+      return { matches: matchList, matchSides: [], matchEntrants: [] };
     }
     const matchIds = matchList.map((match) => match.id);
     const [
@@ -919,28 +966,96 @@ function ScoreboardPageInner() {
     ]);
     if (sideError) {
       setMessage(sideError.message);
-      return;
+      return { matches: matchList, matchSides: [], matchEntrants: [] };
     }
     if (entrantError) {
       setMessage(entrantError.message);
-      return;
+      return { matches: matchList, matchSides: [], matchEntrants: [] };
     }
-    setMatchSides((sideRows ?? []) as MatchSideRow[]);
-    setMatchEntrants((entrantRows ?? []) as MatchEntrantRow[]);
+    const nextMatchSides = (sideRows ?? []) as MatchSideRow[];
+    const nextMatchEntrants = (entrantRows ?? []) as MatchEntrantRow[];
+    setMatchSides(nextMatchSides);
+    setMatchEntrants(nextMatchEntrants);
+    return {
+      matches: matchList,
+      matchSides: nextMatchSides,
+      matchEntrants: nextMatchEntrants,
+    };
   }, [selectedShowId]);
 
   useEffect(() => {
-    loadMatches();
-  }, [loadMatches]);
+    if (!eventsLoaded) {
+      return;
+    }
+    if (!selectedShowId) {
+      initialLoadByShowRef.current = null;
+      return;
+    }
+    if (initialLoadByShowRef.current === selectedShowId) {
+      return;
+    }
+    initialLoadByShowRef.current = selectedShowId;
 
-  const handleRefreshScores = useCallback(() => {
-    setLastUpdateAt(Date.now());
-    loadMatches();
-    loadScoresRef.current();
-    loadRumbleEntriesRef.current();
-    loadEliminatorEntries();
-    loadEliminatorEliminations();
-  }, [loadEliminatorEliminations, loadEliminatorEntries, loadMatches]);
+    const runInitialLoad = async () => {
+      const [matchData, rumbleData, eliminatorData] = await Promise.all([
+        loadMatches(),
+        loadRumbleEntriesRef.current(),
+        loadEliminatorEntries(),
+      ]);
+      const eliminations = await loadEliminatorEliminations(eliminatorData.eliminatorIds);
+      await loadScoresRef.current({
+        showEvents,
+        matches: matchData.matches,
+        matchSides: matchData.matchSides,
+        matchEntrants: matchData.matchEntrants,
+        rumbleEntries: rumbleData.rumbleEntries,
+        eliminatorEntries: eliminatorData.eliminatorEntries,
+        eliminatorEliminations: eliminations,
+        eliminators: eliminatorData.eliminators,
+      });
+      setLastUpdateAt(Date.now());
+    };
+    runInitialLoad();
+  }, [
+    eventsLoaded,
+    selectedShowId,
+    showEvents,
+    loadEliminatorEliminations,
+    loadEliminatorEntries,
+    loadMatches,
+  ]);
+
+  const handleRefreshScores = useCallback(async () => {
+    if (refreshingScores) return;
+    setRefreshingScores(true);
+    try {
+      const [matchData, rumbleData, eliminatorData] = await Promise.all([
+        loadMatches(),
+        loadRumbleEntriesRef.current(),
+        loadEliminatorEntries(),
+      ]);
+      const eliminations = await loadEliminatorEliminations(eliminatorData.eliminatorIds);
+      await loadScoresRef.current({
+        showEvents,
+        matches: matchData.matches,
+        matchSides: matchData.matchSides,
+        matchEntrants: matchData.matchEntrants,
+        rumbleEntries: rumbleData.rumbleEntries,
+        eliminatorEntries: eliminatorData.eliminatorEntries,
+        eliminatorEliminations: eliminations,
+        eliminators: eliminatorData.eliminators,
+      });
+      setLastUpdateAt(Date.now());
+    } finally {
+      setRefreshingScores(false);
+    }
+  }, [
+    refreshingScores,
+    showEvents,
+    loadEliminatorEliminations,
+    loadEliminatorEntries,
+    loadMatches,
+  ]);
 
   return (
     <div
@@ -1078,13 +1193,10 @@ function ScoreboardPageInner() {
       )}
       <main className="relative mx-auto w-full max-w-5xl pb-16 pt-12">
         <header className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs uppercase tracking-[0.35em] text-[color:var(--bp-muted)]">
+          <div className="flex items-center justify-center">
+            <p className="text-center text-xs uppercase tracking-[0.35em] text-[color:var(--bp-muted)]">
               Scoreboard
             </p>
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-[color:var(--bp-gold)]">
-              Manual refresh
-            </div>
           </div>
           <div className="flex items-center gap-3">
             {selectedPromotion?.image_url ? (
@@ -1102,18 +1214,59 @@ function ScoreboardPageInner() {
               {selectedShow?.name ?? "Show"}
             </h1>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <button
-              className="inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--bp-gold-30)] px-4 text-xs font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)] transition hover:border-[color:var(--bp-gold)]"
-              type="button"
-              onClick={handleRefreshScores}
-            >
-              Get latest scores
-            </button>
-            <span className="text-xs text-[color:var(--bp-muted)]">
-              Updates run only when you tap refresh.
-            </span>
-          </div>
+          {isShowOver ? (
+            <div className="mt-3 overflow-hidden rounded-2xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.32em] text-[color:var(--bp-gold)]">
+              <span>The show has ended</span>
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-center">
+              <button
+                className={`group relative inline-flex h-11 items-center justify-center gap-2 overflow-hidden rounded-full border px-5 text-xs font-extrabold uppercase tracking-[0.24em] shadow-[0_0_0_1px_rgba(0,0,0,0.25),0_8px_26px_rgba(245,194,66,0.45)] transition active:scale-[0.99] ${
+                  refreshingScores
+                    ? "cursor-wait border-amber-200/80 bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-300 text-zinc-900 brightness-95 animate-[bp-refresh-glow_1.6s_ease-in-out_infinite]"
+                    : "border-amber-300/60 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 text-black hover:scale-[1.02] hover:brightness-105"
+                }`}
+                type="button"
+                onClick={handleRefreshScores}
+                disabled={refreshingScores}
+              >
+                <svg
+                  className={`h-4 w-4 transition ${
+                    refreshingScores ? "animate-spin" : "group-hover:rotate-180"
+                  }`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 6V10H16"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M4 18V14H8"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M7.5 10a6 6 0 0 1 10-2.5L20 10M4 14l2.5 2.5A6 6 0 0 0 16.5 14"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span>{refreshingScores ? "Calculating scores" : "Get latest scores"}</span>
+              </button>
+              <span className="text-xs text-[color:var(--bp-muted)]">
+                Updates run only when you tap refresh.
+              </span>
+            </div>
+          )}
         </header>
 
         {showPreview ? (
@@ -1251,9 +1404,38 @@ function ScoreboardPageInner() {
             )
           ) : (
             <>
-              <div className="rounded-3xl border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-surface-2)] px-6 py-4 shadow-[0_12px_36px_rgba(0,0,0,0.45),0_0_24px_rgba(198,162,74,0.35)]">
+              <div
+                className={`relative overflow-hidden rounded-3xl border bg-[color:var(--bp-surface-2)] px-6 py-4 shadow-[0_12px_36px_rgba(0,0,0,0.45),0_0_24px_rgba(198,162,74,0.35)] ${
+                  currentUserId && topThree[0]?.user_id === currentUserId
+                    ? "border-[color:var(--bp-gold)] bg-[color:var(--bp-gold-15)] ring-1 ring-[color:var(--bp-gold-30)]"
+                    : "border-[color:var(--bp-gold-30)]"
+                }`}
+              >
+                {isShowOver ? (
+                  <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
+                    {Array.from({ length: 24 }).map((_, index) => (
+                      <span
+                        key={`confetti-${index}`}
+                        className={`absolute block h-3 w-2 rounded-[2px] shadow-[0_0_8px_rgba(255,255,255,0.35)] ${
+                          index % 3 === 0
+                            ? "bg-amber-300"
+                            : index % 3 === 1
+                              ? "bg-zinc-100"
+                              : "bg-emerald-300"
+                        }`}
+                        style={{
+                          left: `${(index * 13) % 100}%`,
+                          top: "-18px",
+                          animation: `bp-confetti-fall ${2.6 + (index % 5) * 0.35}s linear infinite`,
+                          animationDelay: `${(index % 10) * 150}ms`,
+                          opacity: 0.95,
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.35em] text-[color:var(--bp-gold)]">
-                  <span>Current leader</span>
+                  <span>{isShowOver ? "Winner" : "Current leader"}</span>
                   <span className="text-lg font-semibold text-[color:var(--bp-gold)]">
                     {topThree[0]?.points ?? 0} pts
                   </span>
@@ -1269,11 +1451,16 @@ function ScoreboardPageInner() {
                     />
                     <div>
                       <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--bp-dim)]">
-                        Leader
+                        {isShowOver ? "Winner" : "Leader"}
                       </p>
                       <p className="text-2xl font-semibold text-[color:var(--bp-text)] sm:text-3xl">
                         {topThree[0]?.display_name ?? "TBD"}
                       </p>
+                      {currentUserId && topThree[0]?.user_id === currentUserId ? (
+                        <span className="mt-2 inline-flex items-center rounded-full border border-[color:var(--bp-gold-30)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)]">
+                          You
+                        </span>
+                      ) : null}
                       {currentUserId && topThree[0]?.user_id === currentUserId ? (
                         <p className="mt-1 text-sm text-[color:var(--bp-muted)]">
                           You are in the lead.
@@ -1289,6 +1476,7 @@ function ScoreboardPageInner() {
                   .filter((index) => index < topThree.length)
                   .map((rankIndex) => {
                     const row = topThree[rankIndex];
+                    const isCurrentUserPodium = currentUserId === row.user_id;
                     const delta = rankDelta[row.user_id];
                     const hasDelta = delta !== null && delta !== undefined && delta !== 0;
                     const borderColor =
@@ -1316,7 +1504,11 @@ function ScoreboardPageInner() {
                             : rankIndex === 2
                             ? "-ml-6 sm:-ml-8 md:-ml-10"
                             : ""
-                        } ${rankIndex === 0 ? "rounded-3xl" : "rounded-none"} max-w-[10rem] sm:max-w-[11.5rem] md:max-w-[13.5rem]`}
+                        } ${rankIndex === 0 ? "rounded-3xl" : "rounded-none"} max-w-[10rem] sm:max-w-[11.5rem] md:max-w-[13.5rem] ${
+                          isCurrentUserPodium
+                            ? "border-[color:var(--bp-gold)] bg-[color:var(--bp-gold-15)] ring-1 ring-[color:var(--bp-gold-30)]"
+                            : ""
+                        }`}
                         href={`/scoreboard/${row.user_id}?show=${row.show_id}`}
                       >
                         <div className="flex flex-col items-center text-center">
@@ -1344,6 +1536,11 @@ function ScoreboardPageInner() {
                           <p className="truncate text-base font-semibold text-[color:var(--bp-text)]">
                             {row.display_name}
                           </p>
+                          {isCurrentUserPodium ? (
+                            <span className="mt-1 inline-flex items-center rounded-full border border-[color:var(--bp-gold-30)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)]">
+                              You
+                            </span>
+                          ) : null}
                           <p className="text-sm text-[color:var(--bp-muted)]">
                             {row.points} pts
                           </p>
