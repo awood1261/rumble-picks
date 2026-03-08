@@ -153,6 +153,7 @@ create table if not exists public.matches (
   status text not null default 'scheduled',
   winner_entrant_id uuid references public.entrants(id),
   winner_side_id uuid,
+  champion_side_id uuid,
   finish_method text,
   finish_winner_entrant_id uuid references public.entrants(id),
   finish_loser_entrant_id uuid references public.entrants(id),
@@ -197,6 +198,9 @@ alter table public.matches
 
 alter table public.matches
   add column if not exists championship_image_url text;
+
+alter table public.matches
+  add column if not exists champion_side_id uuid;
 
 create table if not exists public.rumble_entries (
   id uuid primary key default gen_random_uuid(),

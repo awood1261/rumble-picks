@@ -92,6 +92,7 @@ type MatchRow = {
   is_championship?: boolean | null;
   championship_name?: string | null;
   championship_image_url?: string | null;
+  champion_side_id?: string | null;
   winner_entrant_id: string | null;
   winner_side_id: string | null;
   finish_method: string | null;
@@ -246,6 +247,9 @@ export default function AdminPage() {
     Record<string, string>
   >({});
   const [matchChampionshipImageEdits, setMatchChampionshipImageEdits] = useState<
+    Record<string, string>
+  >({});
+  const [matchChampionSideEdits, setMatchChampionSideEdits] = useState<
     Record<string, string>
   >({});
   const [matchSideLabelEdits, setMatchSideLabelEdits] = useState<Record<string, string>>({});
@@ -765,7 +769,7 @@ export default function AdminPage() {
           const query = supabase
             .from("matches")
             .select(
-              "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
+              "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, champion_side_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
             )
             .order("order_index", { ascending: true, nullsFirst: false })
             .order("created_at", { ascending: true });
@@ -891,6 +895,15 @@ export default function AdminPage() {
         });
         return next;
       });
+      setMatchChampionSideEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = match.champion_side_id ?? "";
+          }
+        });
+        return next;
+      });
       setMatchSideLabelEdits((prev) => {
         const next = { ...prev };
         matchSideList.forEach((side) => {
@@ -970,7 +983,7 @@ export default function AdminPage() {
             const query = supabase
               .from("matches")
               .select(
-                "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
+                "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, champion_side_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
               )
               .order("order_index", { ascending: true, nullsFirst: false })
               .order("created_at", { ascending: true });
@@ -1691,6 +1704,7 @@ export default function AdminPage() {
         championship_image_url: matchIsChampionship
           ? matchChampionshipImageUrl.trim() || null
           : null,
+        champion_side_id: null,
       })
       .select("id")
       .single();
@@ -1976,6 +1990,9 @@ export default function AdminPage() {
     const isChampionship = matchChampionshipEdits[matchId] ?? false;
     const beltName = matchChampionshipNameEdits[matchId] ?? "";
     const beltImageUrl = matchChampionshipImageEdits[matchId] ?? "";
+    const currentMatch = matches.find((row) => row.id === matchId);
+    const championSideId =
+      matchChampionSideEdits[matchId] ?? currentMatch?.champion_side_id ?? "";
     const { error } = await supabase
       .from("matches")
       .update({
@@ -1983,6 +2000,7 @@ export default function AdminPage() {
         is_championship: isChampionship,
         championship_name: isChampionship ? beltName.trim() || null : null,
         championship_image_url: isChampionship ? beltImageUrl.trim() || null : null,
+        champion_side_id: isChampionship ? championSideId || null : null,
       })
       .eq("id", matchId);
     if (error) {
@@ -3610,6 +3628,10 @@ export default function AdminPage() {
                   matchChampionshipImageEdits[match.id] ??
                   match.championship_image_url ??
                   "";
+                const championSideEdit =
+                  matchChampionSideEdits[match.id] ??
+                  match.champion_side_id ??
+                  "";
                 const winningSideEntrants =
                   sideEntries.find((side) => side.side.id === winnerSideId)?.entrants ??
                   [];
@@ -3763,6 +3785,26 @@ export default function AdminPage() {
                               }))
                             }
                           />
+                          <select
+                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 md:col-span-2"
+                            value={championSideEdit}
+                            onChange={(event) =>
+                              setMatchChampionSideEdits((prev) => ({
+                                ...prev,
+                                [match.id]: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">Select current champion side</option>
+                            {sideEntries.map(({ side, label, entrants }) => (
+                              <option key={side.id} value={side.id}>
+                                {label}
+                                {entrants.length > 0
+                                  ? ` — ${entrants.map((entrant) => entrant.name).join(", ")}`
+                                  : ""}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       )}
                     </div>

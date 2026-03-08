@@ -118,6 +118,7 @@ export type MatchRow = {
   is_championship?: boolean | null;
   championship_name?: string | null;
   championship_image_url?: string | null;
+  champion_side_id?: string | null;
   winner_entrant_id: string | null;
   winner_side_id: string | null;
   finish_method: string | null;

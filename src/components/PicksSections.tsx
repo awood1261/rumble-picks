@@ -1916,15 +1916,21 @@ export const MatchPicksSection = ({
             matchType === "triple_threat"
               ? sideEntries.slice(0, 3)
               : sideEntries.slice(0, 2);
-          const matchupSideTitles = matchupSides.map(({ label, entrants }, index) => {
+          const matchupSideTitles = matchupSides.map(({ side, label, entrants }, index) => {
             const trimmedLabel = label?.trim();
+            const championSuffix =
+              Boolean(match.is_championship) &&
+              Boolean(match.champion_side_id) &&
+              match.champion_side_id === side.id
+                ? " (C)"
+                : "";
             if (trimmedLabel && entrants.length > 1) {
-              return trimmedLabel;
+              return `${trimmedLabel}${championSuffix}`;
             }
             if (entrants.length > 0) {
-              return entrants.map((entrant) => entrant.name).join(" • ");
+              return `${entrants.map((entrant) => entrant.name).join(" • ")}${championSuffix}`;
             }
-            return `Side ${index + 1}`;
+            return `Side ${index + 1}${championSuffix}`;
           });
           const isMainEvent = Boolean(match.is_main_event);
           const isChampionship = Boolean(match.is_championship);
@@ -2086,6 +2092,9 @@ export const MatchPicksSection = ({
                                   <div className={`grid h-full w-full ${sideGridClass}`}>
                                     {entrants.length > 0 ? (
                                       entrants.map((entrant) => (
+                                        (() => {
+                                          const hasLogo = Boolean(entrant.logo_url);
+                                          return (
                                         <div
                                           key={`${match.id}-${index}-${entrant.id}`}
                                           className="relative h-full w-full overflow-hidden"
@@ -2102,8 +2111,16 @@ export const MatchPicksSection = ({
                                             <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
                                           )}
                                           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                                          <div className="absolute inset-x-0 bottom-0 z-10 p-2 text-center translate-y-8">
-                                            <div className="mx-auto flex max-w-[9rem] flex-col items-center gap-1 pt-12">
+                                          <div
+                                            className={`absolute inset-x-0 bottom-0 z-10 p-2 text-center ${
+                                              hasLogo ? "translate-y-8" : "translate-y-1"
+                                            }`}
+                                          >
+                                            <div
+                                              className={`mx-auto flex max-w-[9rem] flex-col items-center gap-1 ${
+                                                hasLogo ? "pt-12" : "pt-0"
+                                              }`}
+                                            >
                                               {entrant.logo_url ? (
                                                 <span className="relative inline-flex h-32 w-32 items-center justify-center rounded-full p-3 drop-shadow">
                                                   <Image
@@ -2122,6 +2139,8 @@ export const MatchPicksSection = ({
                                             </div>
                                           </div>
                                         </div>
+                                          );
+                                        })()
                                       ))
                                     ) : (
                                       <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
