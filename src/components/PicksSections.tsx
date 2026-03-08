@@ -1893,6 +1893,7 @@ export const MatchPicksSection = ({
           const isTripleOrFatal =
             matchType === "triple_threat" || matchType === "fatal_4_way";
           const isTag = matchType === "tag" || matchType === "tag_3";
+          const isThreeTag = matchType === "tag_3";
           const winningSideId = payload.match_picks[match.id] ?? null;
           const winningSideEntrants =
             sideEntries.find((side) => side.side.id === winningSideId)?.entrants ??
@@ -1971,6 +1972,28 @@ export const MatchPicksSection = ({
             (showFinishWinner ? scoringRules.match_finish_winner : 0) +
             (showFinishLoser ? scoringRules.match_finish_loser : 0);
           const bonusSectionId = `bonus-picks-${match.id}`;
+          const handleSelectWinner = (sideId: string | null) => {
+            if (!sideId) return;
+            setPayload((prev) => ({
+              ...prev,
+              match_picks: {
+                ...prev.match_picks,
+                [match.id]: sideId,
+              },
+            }));
+            if (bonusPointsTotal > 0) {
+              requestAnimationFrame(() => {
+                const el =
+                  typeof document !== "undefined"
+                    ? document.getElementById(bonusSectionId)
+                    : null;
+                el?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              });
+            }
+          };
 
           return (
             <div
@@ -2025,7 +2048,81 @@ export const MatchPicksSection = ({
                 )}
                 {sideEntries.length > 0 && (
                   <div className="mt-3 space-y-3">
-                    {hasMatchup && (
+                    {isThreeTag && hasMatchup && (
+                      <div className="space-y-4">
+                        {matchupSides.slice(0, 2).map((sideEntry, index) => {
+                          const isSelected =
+                            payload.match_picks[match.id] === sideEntry.side.id;
+                          const hasSelection = Boolean(payload.match_picks[match.id]);
+                          const isDimmed = hasSelection && !isSelected;
+                          return (
+                            <div key={`${match.id}-team-${sideEntry.side.id}`} className="space-y-2">
+                              <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                                {matchupSideTitles[index]}
+                              </p>
+                              <button
+                                type="button"
+                                disabled={isLocked}
+                                onClick={() => handleSelectWinner(sideEntry.side.id)}
+                                className={`w-full overflow-hidden rounded-2xl border transition ${
+                                  isSelected
+                                    ? "border-amber-300 shadow-[0_0_22px_rgba(251,196,0,0.28)]"
+                                    : "border-zinc-700 hover:border-amber-400/60"
+                                } ${isDimmed ? "opacity-60" : "opacity-100"}`}
+                                aria-label={`Select ${sideEntry.label ?? `Side ${index + 1}`} as winner`}
+                              >
+                                <div className="grid grid-cols-3 gap-px bg-zinc-800">
+                                  {(sideEntry.entrants ?? []).slice(0, 3).map((entrant) => (
+                                    <div
+                                      key={`${match.id}-team-card-${entrant.id}`}
+                                      className="relative h-56 bg-zinc-900 sm:h-64"
+                                    >
+                                      {entrant.image_url ? (
+                                        <Image
+                                          src={entrant.image_url}
+                                          alt={entrant.name}
+                                          fill
+                                          sizes="(max-width: 640px) 33vw, 180px"
+                                          className="object-cover"
+                                        />
+                                      ) : (
+                                        <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
+                                      )}
+                                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                                      <div className="absolute inset-x-0 bottom-0 z-10 p-1 text-center">
+                                        {entrant.logo_url ? (
+                                          <Image
+                                            src={entrant.logo_url}
+                                            alt={`${entrant.name} logo`}
+                                            width={220}
+                                            height={72}
+                                            className="mx-auto h-16 w-auto object-contain"
+                                          />
+                                        ) : (
+                                          <span className="line-clamp-2 text-[9px] font-semibold uppercase tracking-[0.13em] text-zinc-100">
+                                            {entrant.name}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </button>
+                              {index === 0 ? (
+                                <div className="flex items-center justify-center gap-3 py-1">
+                                  <span className="h-px w-14 bg-amber-300/45" />
+                                  <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200">
+                                    VS
+                                  </span>
+                                  <span className="h-px w-14 bg-amber-300/45" />
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {!isThreeTag && hasMatchup && (
                       <div>
                         <div
                           className={`mb-2 grid gap-3 ${
@@ -2268,29 +2365,9 @@ export const MatchPicksSection = ({
                                       : "hover:bg-white/5"
                                   }`}
                                   onClick={() =>
-                                    {
-                                      setPayload((prev) => ({
-                                        ...prev,
-                                        match_picks: {
-                                          ...prev.match_picks,
-                                          [match.id]: sideEntry.side.id,
-                                        },
-                                      }));
-                                      if (bonusPointsTotal > 0) {
-                                        requestAnimationFrame(() => {
-                                          const el =
-                                            typeof document !== "undefined"
-                                              ? document.getElementById(
-                                                  bonusSectionId,
-                                                )
-                                              : null;
-                                          el?.scrollIntoView({
-                                            behavior: "smooth",
-                                            block: "start",
-                                          });
-                                        });
-                                      }
-                                    }
+                                    sideEntry.side.id
+                                      ? handleSelectWinner(sideEntry.side.id)
+                                      : undefined
                                   }
                                   aria-label={`Select ${sideEntry.label ?? `Side ${index + 1}`} as winner`}
                                 />
