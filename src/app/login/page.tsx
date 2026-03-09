@@ -291,17 +291,19 @@ function LoginPageInner() {
                       );
                     })}
                   </div>
-                  <label className="flex items-start gap-3 text-xs text-zinc-400">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
-                      checked={marketingOptIn}
-                      onChange={(event) => setMarketingOptIn(event.target.checked)}
-                    />
-                    <span>
-                      I want to receive updates about future shows and promotion news.
-                    </span>
-                  </label>
+                  {requiresEmailRegistration && (
+                    <label className="flex items-start gap-3 text-xs text-zinc-400">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                        checked={marketingOptIn}
+                        onChange={(event) => setMarketingOptIn(event.target.checked)}
+                      />
+                      <span>
+                        I want to receive updates about future shows and promotion news.
+                      </span>
+                    </label>
+                  )}
                 </div>
               )}
               {(mode === "sign-in" || requiresEmailRegistration) && (

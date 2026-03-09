@@ -2068,21 +2068,27 @@ export const MatchPicksSection = ({
                                   isSelected
                                     ? "border-amber-300 shadow-[0_0_22px_rgba(251,196,0,0.28)]"
                                     : "border-zinc-700 hover:border-amber-400/60"
-                                } ${isDimmed ? "opacity-60" : "opacity-100"}`}
+                                } ${isDimmed ? "opacity-35" : "opacity-100"}`}
                                 aria-label={`Select ${sideEntry.label ?? `Side ${index + 1}`} as winner`}
                               >
-                                <div className="grid grid-cols-3 gap-px bg-zinc-800">
-                                  {(sideEntry.entrants ?? []).slice(0, 3).map((entrant) => (
+                                <div className="relative flex h-56 items-end justify-center overflow-hidden bg-zinc-900 sm:h-64">
+                                  {(sideEntry.entrants ?? []).slice(0, 3).map((entrant, entrantIndex) => (
                                     <div
                                       key={`${match.id}-team-card-${entrant.id}`}
-                                      className="relative h-56 bg-zinc-900 sm:h-64"
+                                      className={`relative h-full w-[40%] shrink-0 bg-zinc-900 ${
+                                        entrantIndex === 1
+                                          ? "z-20"
+                                          : entrantIndex === 0
+                                            ? "z-10 -mr-7"
+                                            : "z-10 -ml-7"
+                                      }`}
                                     >
                                       {entrant.image_url ? (
                                         <Image
                                           src={entrant.image_url}
                                           alt={entrant.name}
                                           fill
-                                          sizes="(max-width: 640px) 33vw, 180px"
+                                          sizes="(max-width: 640px) 42vw, 200px"
                                           className="object-cover"
                                         />
                                       ) : (
@@ -2166,6 +2172,8 @@ export const MatchPicksSection = ({
                               const isSelected =
                                 payload.match_picks[match.id] ===
                                 sideEntry.side.id;
+                              const isDimmed =
+                                hasWinnerPick && !isSelected;
                               return (
                                 <div
                                   key={`${match.id}-matchup-${index}`}
@@ -2173,7 +2181,7 @@ export const MatchPicksSection = ({
                                     isSelected
                                       ? "ring-2 ring-amber-300 shadow-[0_0_22px_rgba(251,196,0,0.3)]"
                                       : ""
-                                  }`}
+                                  } ${isDimmed ? "opacity-35" : "opacity-100"}`}
                                 >
                                   <div className="absolute left-2 top-2 z-20 flex items-center gap-2 rounded-full border border-amber-400/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200 shadow-[0_0_18px_rgba(198,162,74,0.35)]">
                                     <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/20 text-[11px]">
