@@ -10,6 +10,9 @@ import { ScoreboardCountdown } from "../../components/ScoreboardCountdown";
 import { scoringRules } from "../../lib/scoringRules";
 import { calculateScore } from "../../lib/scoring";
 
+const BOUTPICK_BELT_URL =
+  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/boutpick-belt.png";
+
 type ScoreRow = {
   id: string;
   user_id: string;
@@ -1458,6 +1461,18 @@ function ScoreboardPageInner() {
                         }}
                       />
                     ))}
+                  </div>
+                ) : null}
+                {isShowOver ? (
+                  <div className="pointer-events-none absolute -bottom-6 -right-10 z-20 rotate-[-16deg] sm:-bottom-8 sm:-right-14">
+                    <Image
+                      src={BOUTPICK_BELT_URL}
+                      alt="BoutPick champion belt"
+                      width={320}
+                      height={128}
+                      sizes="(max-width: 640px) 220px, 320px"
+                      className="h-auto w-[220px] object-contain opacity-95 drop-shadow-[0_0_28px_rgba(198,162,74,0.55)] sm:w-[320px]"
+                    />
                   </div>
                 ) : null}
                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.35em] text-[color:var(--bp-gold)]">
