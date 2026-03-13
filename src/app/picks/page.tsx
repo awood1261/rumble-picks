@@ -26,6 +26,7 @@ import type {
   EntrantRow,
   EventActuals,
   EventRow,
+  ShowQuestionRow,
   MatchEntrantRow,
   MatchRow,
   MatchSideRow,
@@ -56,6 +57,7 @@ const emptyRumblePick: RumblePick = {
 const emptyPayload: PicksPayload = {
   rumbles: {},
   eliminators: {},
+  question_picks: {},
   match_picks: {},
   match_finish_picks: {},
   match_length_picks: {},
@@ -104,6 +106,7 @@ function PicksPageInner() {
   const [shows, setShows] = useState<ShowRow[]>([]);
   const [promotions, setPromotions] = useState<PromotionRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [showQuestions, setShowQuestions] = useState<ShowQuestionRow[]>([]);
   const [eliminators, setEliminators] = useState<EliminatorRow[]>([]);
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
@@ -167,6 +170,15 @@ function PicksPageInner() {
           a.name.localeCompare(b.name)
       );
   }, [events, selectedShowId]);
+  const questionsForShow = useMemo(() => {
+    return showQuestions
+      .filter((question) => question.show_id === selectedShowId)
+      .sort(
+        (a, b) =>
+          (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
+          (a.created_at ?? "").localeCompare(b.created_at ?? "")
+      );
+  }, [selectedShowId, showQuestions]);
   const selectedPromotionImageUrl = useMemo(() => {
     if (!selectedShow?.promotion_id) return null;
     return (
@@ -646,7 +658,12 @@ function PicksPageInner() {
         )
         .order("order_index", { ascending: true, nullsFirst: false })
         .order("name", { ascending: true }),
-    ]).then(([showsResult, promotionsResult, eventsResult]) => {
+      supabase
+        .from("show_questions")
+        .select("id, show_id, image_url, question, answers, order_index, created_at")
+        .order("order_index", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true }),
+    ]).then(([showsResult, promotionsResult, eventsResult, questionsResult]) => {
       if (showsResult.error) {
         setMessage(showsResult.error.message);
         return;
@@ -659,10 +676,15 @@ function PicksPageInner() {
         setMessage(eventsResult.error.message);
         return;
       }
+      if (questionsResult.error) {
+        setMessage(questionsResult.error.message);
+        return;
+      }
       const showRows = showsResult.data ?? [];
       setShows(showRows);
       setPromotions(promotionsResult.data ?? []);
       setEvents(eventsResult.data ?? []);
+      setShowQuestions((questionsResult.data ?? []) as ShowQuestionRow[]);
       if (showRows.length > 0) {
         const storedShowId =
           typeof window !== "undefined"
@@ -887,7 +909,7 @@ function PicksPageInner() {
           supabase
             .from("picks")
             .select(
-              "updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+              "updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
             )
             .eq("show_id", selectedShowId)
             .eq("user_id", userId)
@@ -919,6 +941,7 @@ function PicksPageInner() {
           ? ({
               rumbles: pickRows.rumbles ?? {},
               eliminators: pickRows.eliminators ?? {},
+              question_picks: pickRows.question_picks ?? {},
               match_picks: pickRows.match_picks ?? {},
               match_finish_picks: pickRows.match_finish_picks ?? {},
               match_length_picks: pickRows.match_length_picks ?? {},
@@ -973,6 +996,8 @@ function PicksPageInner() {
           setPayload({
             rumbles: nextRumbles,
             eliminators: nextEliminators,
+            question_picks:
+              (savedPayload.question_picks as Record<string, string | null>) ?? {},
             match_picks:
               (savedPayload.match_picks as Record<string, string | null>) ?? {},
             match_finish_picks:
@@ -1003,6 +1028,7 @@ function PicksPageInner() {
           setPayload({
             rumbles: nextRumbles,
             eliminators: nextEliminators,
+            question_picks: {},
             match_picks: {},
             match_finish_picks: {},
             match_length_picks: {},
@@ -1079,6 +1105,7 @@ function PicksPageInner() {
     setPayload((prev) => {
       const matchIdSet = new Set(matches.map((match) => match.id));
       const eliminatorIdSet = new Set(eliminators.map((item) => item.id));
+      const questionIdSet = new Set(questionsForShow.map((item) => item.id));
       const matchPicks = Object.fromEntries(
         Object.entries(prev.match_picks ?? {}).filter(([matchId]) =>
           matchIdSet.has(matchId),
@@ -1103,6 +1130,11 @@ function PicksPageInner() {
         Object.entries(prev.eliminators ?? {}).filter(([eliminatorId]) =>
           eliminatorIdSet.has(eliminatorId),
         ),
+      );
+      const questionPicks = Object.fromEntries(
+        Object.entries(prev.question_picks ?? {}).filter(([questionId]) =>
+          questionIdSet.has(questionId)
+        )
       );
 
       const nextRumbles: Record<string, RumblePick> = {};
@@ -1150,13 +1182,14 @@ function PicksPageInner() {
         ...prev,
         rumbles: nextRumbles,
         eliminators: eliminatorPicks,
+        question_picks: questionPicks,
         match_picks: matchPicks,
         match_finish_picks: matchFinishPicks,
         match_length_picks: matchLengthPicks,
         match_interference_picks: matchInterferencePicks,
       };
     });
-  }, [matches, showEvents, confirmedEntrantsByEvent, eliminators]);
+  }, [matches, showEvents, confirmedEntrantsByEvent, eliminators, questionsForShow]);
 
   useEffect(() => {
     if (editSection !== "key_picks") return;
@@ -1351,18 +1384,24 @@ function PicksPageInner() {
       order_index: eliminator.order_index ?? null,
       name: eliminator.name,
     }));
+    const questionItems = questionsForShow.map((question) => ({
+      type: "question" as const,
+      id: question.id,
+      order_index: question.order_index ?? null,
+      name: question.question,
+    }));
     const matchItems = matches.map((match) => ({
       type: "match" as const,
       id: match.id,
       order_index: match.order_index ?? null,
       name: match.name,
     }));
-    return [...eventItems, ...eliminatorItems, ...matchItems].sort(
+    return [...eventItems, ...eliminatorItems, ...questionItems, ...matchItems].sort(
       (a, b) =>
         (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
         a.name.localeCompare(b.name)
     );
-  }, [matches, showEvents, eliminators]);
+  }, [matches, showEvents, eliminators, questionsForShow]);
   const stepIndexById = useMemo(() => {
     const map = new Map<string, number>();
     stepItems.forEach((item, index) => {
@@ -1375,7 +1414,7 @@ function PicksPageInner() {
     stepItems[Math.min(stepIndex, Math.max(totalSteps - 1, 0))];
   const progressPercent =
     totalSteps > 0 ? Math.round(((stepIndex + 1) / totalSteps) * 100) : 0;
-  const loadingStepType: "event" | "match" | "eliminator" =
+  const loadingStepType: "event" | "match" | "eliminator" | "question" =
     currentStep?.type ?? "match";
 
   const draftKey = useMemo(() => {
@@ -1499,7 +1538,24 @@ function PicksPageInner() {
     hasAutoRoutedToCompleteRef.current = true;
   }, [allMatchWinnersPicked, lastStepKey, stepIndex, totalSteps]);
 
-  const renderStepSkeleton = (type: "event" | "match" | "eliminator") => {
+  const renderStepSkeleton = (
+    type: "event" | "match" | "eliminator" | "question"
+  ) => {
+    if (type === "question") {
+      return (
+        <div className="mt-6 space-y-4">
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <div className="h-44 w-full rounded-2xl bg-zinc-800/60" />
+            <div className="mt-4 h-4 w-3/4 rounded-full bg-zinc-800/80" />
+            <div className="mt-4 space-y-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-10 rounded-2xl bg-zinc-800/60" />
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
     if (type === "event") {
       return (
         <div className="mt-6 space-y-6">
@@ -1707,16 +1763,18 @@ function PicksPageInner() {
               You can edit your picks until the show starts.
             </p>
             <div className="mt-6 space-y-4">
-              {[...showEvents, ...eliminators, ...matches]
+              {[...showEvents, ...eliminators, ...questionsForShow, ...matches]
                 .map((item) => ({
                   type: ("match_type" in item
                     ? "match"
+                    : "question" in item
+                      ? "question"
                     : "entrant_limit" in item
                       ? "eliminator"
-                      : "event") as "event" | "match" | "eliminator",
+                      : "event") as "event" | "match" | "eliminator" | "question",
                   id: item.id,
                   order_index: item.order_index ?? null,
-                  name: item.name,
+                  name: "question" in item ? item.question : item.name,
                 }))
                 .sort(
                   (a, b) =>
@@ -1880,6 +1938,39 @@ function PicksPageInner() {
                             Most eliminations:
                           </span>{" "}
                           {mostElims || "Not set"}
+                        </p>
+                      </div>
+                    );
+                  }
+                  if (item.type === "question") {
+                    const question = questionsForShow.find((row) => row.id === item.id);
+                    if (!question) return null;
+                    const picked = payload.question_picks?.[question.id] ?? null;
+                    return (
+                      <div
+                        key={`question:${question.id}`}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                            Question
+                          </p>
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
+                            onClick={() =>
+                              setStepIndex(
+                                stepIndexById.get(`question:${question.id}`) ?? 0
+                              )
+                            }
+                            aria-label={`Edit ${question.question}`}
+                          >
+                            ✎
+                          </button>
+                        </div>
+                        <p className="mt-2 text-sm text-zinc-100">{question.question}</p>
+                        <p className="mt-2 text-sm text-zinc-300">
+                          Your answer: {picked ?? "Not set"}
                         </p>
                       </div>
                     );
@@ -2071,6 +2162,65 @@ function PicksPageInner() {
                       isLocked={isLocked}
                     />
                   ))}
+              </div>
+            ) : currentStep?.type === "question" ? (
+              <div className="mt-3">
+                {questionsForShow
+                  .filter((question) => question.id === currentStep.id)
+                  .map((question) => {
+                    const selectedAnswer =
+                      payload.question_picks?.[question.id] ?? null;
+                    return (
+                      <section
+                        key={question.id}
+                        className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6"
+                      >
+                        {question.image_url ? (
+                          <div className="relative h-72 w-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 sm:h-80 md:h-[28rem]">
+                            <Image
+                              src={question.image_url}
+                              alt={question.question}
+                              fill
+                              sizes="(max-width: 768px) 100vw, 700px"
+                              className="object-cover object-top"
+                            />
+                          </div>
+                        ) : null}
+                        <h3 className="mt-4 text-lg font-semibold text-zinc-100">
+                          {question.question}
+                        </h3>
+                        <div className="mt-4 space-y-2">
+                          {(question.answers ?? []).map((answer) => {
+                            const isSelected = selectedAnswer === answer;
+                            return (
+                              <button
+                                key={`${question.id}-${answer}`}
+                                type="button"
+                                disabled={isLocked}
+                                onClick={() =>
+                                  setPayload((prev) => ({
+                                    ...prev,
+                                    question_picks: {
+                                      ...(prev.question_picks ?? {}),
+                                      [question.id]: answer,
+                                    },
+                                  }))
+                                }
+                                className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                                  isSelected
+                                    ? "border-amber-300 bg-amber-400/10 text-amber-100"
+                                    : "border-zinc-700 bg-zinc-950 text-zinc-200 hover:border-amber-400/60"
+                                }`}
+                              >
+                                <span>{answer}</span>
+                                {isSelected ? <span>✓</span> : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    );
+                  })}
               </div>
             ) : (
               <>

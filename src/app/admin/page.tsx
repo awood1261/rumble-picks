@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { EntrantCard } from "../../components/EntrantCard";
 import { ShowEditor } from "../../components/ShowEditor";
@@ -136,6 +137,16 @@ type EliminatorEliminationRow = {
   elimination_order: number;
 };
 
+type ShowQuestionRow = {
+  id: string;
+  show_id: string | null;
+  image_url: string | null;
+  question: string;
+  answers: string[];
+  order_index?: number | null;
+  created_at?: string;
+};
+
 type PickRow = {
   id: string;
   user_id: string;
@@ -162,6 +173,7 @@ export default function AdminPage() {
   const [eliminatorEntries, setEliminatorEntries] = useState<
     EliminatorEntryRow[]
   >([]);
+  const [showQuestions, setShowQuestions] = useState<ShowQuestionRow[]>([]);
   const [eliminatorEliminations, setEliminatorEliminations] = useState<
     EliminatorEliminationRow[]
   >([]);
@@ -210,8 +222,12 @@ export default function AdminPage() {
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [adminTab, setAdminTab] = useState<
-    "events" | "matches" | "eliminators"
+    "events" | "matches" | "eliminators" | "questions"
   >("events");
+  const [newQuestionImageUrl, setNewQuestionImageUrl] = useState("");
+  const [newQuestionText, setNewQuestionText] = useState("");
+  const [newQuestionAnswerInput, setNewQuestionAnswerInput] = useState("");
+  const [newQuestionAnswers, setNewQuestionAnswers] = useState<string[]>([]);
   const [focusedEventId, setFocusedEventId] = useState<string>("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
@@ -272,6 +288,15 @@ export default function AdminPage() {
     null
   );
   const eliminatorRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const normalizeQuestionAnswer = (value: string) => value.trim();
+
+  const appendQuestionAnswer = (value: string) => {
+    const answer = normalizeQuestionAnswer(value);
+    if (!answer) return;
+    setNewQuestionAnswers((prev) =>
+      prev.includes(answer) ? prev : [...prev, answer]
+    );
+  };
 
   const formatLocalDateTime = (value: string | null) => {
     if (!value) return "";
@@ -379,7 +404,16 @@ export default function AdminPage() {
         eliminator.roster_year ?? "any"
       } • ${eliminator.entrant_limit} entrants`,
     }));
-    return [...eventItems, ...matchItems, ...eliminatorItems].sort(
+    const questionItems = showQuestions.map((question) => ({
+      id: question.id,
+      name: question.question,
+      type: "question" as const,
+      order_index: question.order_index ?? null,
+      detail: `${question.answers.length} answers${
+        question.image_url ? " • image" : ""
+      }`,
+    }));
+    return [...eventItems, ...matchItems, ...eliminatorItems, ...questionItems].sort(
       (a, b) =>
         (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
         a.name.localeCompare(b.name)
@@ -388,6 +422,7 @@ export default function AdminPage() {
     showEvents,
     orderedShowMatches,
     orderedShowEliminators,
+    showQuestions,
     eventNameById,
   ]);
   useEffect(() => {
@@ -450,6 +485,26 @@ export default function AdminPage() {
       setFocusedEventId("");
     }
   }, [focusedEventId, showEvents]);
+  const loadShowQuestions = useCallback(async () => {
+    if (!selectedShowId) {
+      setShowQuestions([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("show_questions")
+      .select("id, show_id, image_url, question, answers, order_index, created_at")
+      .eq("show_id", selectedShowId)
+      .order("order_index", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setShowQuestions((data ?? []) as ShowQuestionRow[]);
+  }, [selectedShowId]);
+  useEffect(() => {
+    loadShowQuestions();
+  }, [loadShowQuestions]);
   useEffect(() => {
     if (!eventLogOpen || !activeEvent) return;
     loadEventLogs();
@@ -1141,6 +1196,65 @@ export default function AdminPage() {
     refreshData();
   };
 
+  const handleCreateShowQuestion = async () => {
+    setMessage(null);
+    if (!selectedShowId) {
+      setMessage("Select a show before creating a question.");
+      return;
+    }
+    const question = newQuestionText.trim();
+    if (!question) {
+      setMessage("Question text is required.");
+      return;
+    }
+    const pendingAnswer = normalizeQuestionAnswer(newQuestionAnswerInput);
+    const answers = pendingAnswer
+      ? Array.from(new Set([...newQuestionAnswers, pendingAnswer]))
+      : newQuestionAnswers;
+    if (answers.length < 2) {
+      setMessage("Add at least two possible answers.");
+      return;
+    }
+    const highestOrder = Math.max(
+      0,
+      ...showEvents.map((item, index) => item.order_index ?? index + 1),
+      ...orderedShowMatches.map((item, index) => item.order_index ?? index + 1),
+      ...orderedShowEliminators.map((item, index) => item.order_index ?? index + 1),
+      ...showQuestions.map((item, index) => item.order_index ?? index + 1)
+    );
+    const { error } = await supabase.from("show_questions").insert({
+      show_id: selectedShowId,
+      image_url: newQuestionImageUrl.trim() || null,
+      question,
+      answers,
+      order_index: highestOrder + 1,
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setNewQuestionImageUrl("");
+    setNewQuestionText("");
+    setNewQuestionAnswerInput("");
+    setNewQuestionAnswers([]);
+    loadShowQuestions();
+    setToastMessage("Question added.");
+  };
+
+  const handleDeleteShowQuestion = async (questionId: string) => {
+    setMessage(null);
+    const { error } = await supabase
+      .from("show_questions")
+      .delete()
+      .eq("id", questionId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    loadShowQuestions();
+    setToastMessage("Question removed.");
+  };
+
   const handleMoveEventOrder = async (eventId: string, direction: "up" | "down") => {
     const ordered = showEvents;
     const index = ordered.findIndex((event) => event.id === eventId);
@@ -1212,7 +1326,7 @@ export default function AdminPage() {
 
   const handleUpdateShowOrder = async (item: {
     id: string;
-    type: "event" | "match" | "eliminator";
+    type: "event" | "match" | "eliminator" | "question";
   }) => {
     const key = `${item.type}:${item.id}`;
     const rawValue = orderIndexEdits[key];
@@ -1248,7 +1362,9 @@ export default function AdminPage() {
           ? "events"
           : row.type === "match"
             ? "matches"
-            : "eliminators";
+            : row.type === "eliminator"
+              ? "eliminators"
+              : "show_questions";
       return supabase
         .from(table)
         .update({ order_index: row.nextOrder })
@@ -2751,6 +2867,10 @@ export default function AdminPage() {
                               setScrollMatchId(item.id);
                               return;
                             }
+                            if (item.type === "question") {
+                              setAdminTab("questions");
+                              return;
+                            }
                             setAdminTab("eliminators");
                             setScrollEliminatorId(item.id);
                           }}
@@ -2818,6 +2938,17 @@ export default function AdminPage() {
               onClick={() => setAdminTab("eliminators")}
             >
               Eliminators
+            </button>
+            <button
+              className={`h-11 flex-1 rounded-2xl px-4 text-xs font-semibold uppercase tracking-[0.2em] transition sm:flex-none ${
+                adminTab === "questions"
+                  ? "bg-amber-400 text-zinc-900"
+                  : "border border-zinc-800 text-zinc-300 hover:border-amber-300 hover:text-amber-200"
+              }`}
+              type="button"
+              onClick={() => setAdminTab("questions")}
+            >
+              Questions
             </button>
           </div>
         </div>
@@ -3368,6 +3499,146 @@ export default function AdminPage() {
               </>
             )}
           </div>
+          )}
+          {adminTab === "questions" && (
+            <div className="lg:col-span-2 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <h2 className="text-lg font-semibold">Show questions</h2>
+              <p className="mt-2 text-sm text-zinc-400">
+                Add prediction questions for this show. Each question becomes its
+                own step for users.
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 md:col-span-2"
+                  placeholder="Image URL (optional)"
+                  value={newQuestionImageUrl}
+                  onChange={(event) => setNewQuestionImageUrl(event.target.value)}
+                />
+                {newQuestionImageUrl.trim() ? (
+                  <div className="relative h-48 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 md:col-span-2">
+                    <Image
+                      src={newQuestionImageUrl.trim()}
+                      alt="Question preview"
+                      fill
+                      sizes="(max-width: 768px) 100vw, 800px"
+                      className="object-cover"
+                    />
+                  </div>
+                ) : null}
+                <textarea
+                  className="min-h-[88px] w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 md:col-span-2"
+                  placeholder="Question text"
+                  value={newQuestionText}
+                  onChange={(event) => setNewQuestionText(event.target.value)}
+                />
+                <div className="md:col-span-2">
+                  <p className="mb-2 text-xs uppercase tracking-[0.25em] text-zinc-500">
+                    Answers
+                  </p>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <input
+                      className="h-11 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                      placeholder="Add an answer option"
+                      value={newQuestionAnswerInput}
+                      onChange={(event) =>
+                        setNewQuestionAnswerInput(event.target.value)
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          appendQuestionAnswer(newQuestionAnswerInput);
+                          setNewQuestionAnswerInput("");
+                        }
+                      }}
+                    />
+                    <button
+                      className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-100 transition hover:border-amber-300 hover:text-amber-200"
+                      type="button"
+                      onClick={() => {
+                        appendQuestionAnswer(newQuestionAnswerInput);
+                        setNewQuestionAnswerInput("");
+                      }}
+                    >
+                      Add answer
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {newQuestionAnswers.length === 0 ? (
+                      <p className="text-sm text-zinc-500">
+                        Add at least two answers.
+                      </p>
+                    ) : (
+                      newQuestionAnswers.map((answer) => (
+                        <button
+                          key={answer}
+                          className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-zinc-100 transition hover:border-red-400 hover:text-red-200"
+                          type="button"
+                          onClick={() =>
+                            setNewQuestionAnswers((prev) =>
+                              prev.filter((item) => item !== answer)
+                            )
+                          }
+                        >
+                          <span>{answer}</span>
+                          <span aria-hidden="true">x</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+                <button
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 md:col-span-2"
+                  type="button"
+                  onClick={handleCreateShowQuestion}
+                >
+                  Add question
+                </button>
+              </div>
+              <div className="mt-6 space-y-3">
+                {showQuestions.length === 0 ? (
+                  <p className="text-sm text-zinc-400">
+                    No questions added for this show yet.
+                  </p>
+                ) : (
+                  showQuestions.map((question) => (
+                    <div
+                      key={question.id}
+                      className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-2">
+                          {question.image_url ? (
+                            <div className="relative h-32 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
+                              <Image
+                                src={question.image_url}
+                                alt={question.question}
+                                fill
+                                sizes="(max-width: 768px) 100vw, 400px"
+                                className="object-cover"
+                              />
+                            </div>
+                          ) : null}
+                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                            Question
+                          </p>
+                          <p className="text-sm text-zinc-100">{question.question}</p>
+                          <p className="text-xs text-zinc-400">
+                            {question.answers?.join(" • ") || "No answers"}
+                          </p>
+                        </div>
+                        <button
+                          className="inline-flex h-9 items-center justify-center rounded-full border border-red-500/70 px-4 text-[10px] font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
+                          type="button"
+                          onClick={() => handleDeleteShowQuestion(question.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           )}
         </section>
 
