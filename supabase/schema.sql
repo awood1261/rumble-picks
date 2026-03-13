@@ -84,6 +84,17 @@ create table if not exists public.events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.show_questions (
+  id uuid primary key default gen_random_uuid(),
+  show_id uuid not null references public.shows(id) on delete cascade,
+  image_url text,
+  question text not null,
+  answers text[] not null default '{}',
+  order_index integer,
+  created_at timestamptz not null default now(),
+  constraint show_questions_answers_chk check (array_length(answers, 1) is null or array_length(answers, 1) >= 2)
+);
+
 create table if not exists public.eliminators (
   id uuid primary key default gen_random_uuid(),
   show_id uuid references public.shows(id) on delete set null,
@@ -286,6 +297,9 @@ alter table public.events
 alter table public.events
   add column if not exists order_index integer;
 
+alter table public.show_questions
+  add column if not exists order_index integer;
+
 alter table public.matches
   add column if not exists order_index integer;
 
@@ -293,6 +307,7 @@ alter table public.profiles enable row level security;
 alter table public.promotions enable row level security;
 alter table public.shows enable row level security;
 alter table public.events enable row level security;
+alter table public.show_questions enable row level security;
 alter table public.eliminators enable row level security;
 alter table public.eliminator_entries enable row level security;
 alter table public.eliminator_eliminations enable row level security;
@@ -354,6 +369,17 @@ create policy "Events are viewable by everyone"
 
 create policy "Events are modifiable by admins"
   on public.events
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+create policy "Show questions are viewable by everyone"
+  on public.show_questions
+  for select
+  using (true);
+
+create policy "Show questions are modifiable by admins"
+  on public.show_questions
   for all
   using (public.is_admin(auth.uid()))
   with check (public.is_admin(auth.uid()));

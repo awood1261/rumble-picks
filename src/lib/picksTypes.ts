@@ -9,6 +9,16 @@ export type EventRow = {
   order_index?: number | null;
 };
 
+export type ShowQuestionRow = {
+  id: string;
+  show_id: string | null;
+  image_url: string | null;
+  question: string;
+  answers: string[];
+  order_index?: number | null;
+  created_at?: string;
+};
+
 export type EliminatorRow = {
   id: string;
   name: string;
@@ -75,6 +85,7 @@ export type EliminatorPick = {
 export type PicksPayload = {
   rumbles: Record<string, RumblePick>;
   eliminators?: Record<string, EliminatorPick>;
+  question_picks?: Record<string, string | null>;
   match_picks: Record<string, string | null>;
   match_finish_picks: Record<
     string,
