@@ -41,6 +41,7 @@ export type ShowRow = {
   starts_at: string | null;
   status: string;
   requires_email_registration?: boolean | null;
+  is_featured_play_show?: boolean | null;
 };
 
 export type PromotionRow = {

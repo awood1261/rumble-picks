@@ -49,6 +49,7 @@ create table if not exists public.shows (
   starts_at timestamptz,
   status text not null default 'draft',
   requires_email_registration boolean not null default true,
+  is_featured_play_show boolean not null default false,
   is_over boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -61,6 +62,9 @@ alter table public.shows
 
 alter table public.shows
   add column if not exists requires_email_registration boolean not null default true;
+
+alter table public.shows
+  add column if not exists is_featured_play_show boolean not null default false;
 
 alter table public.shows
   add column if not exists is_over boolean not null default false;
