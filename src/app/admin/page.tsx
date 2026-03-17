@@ -40,6 +40,7 @@ type ShowRow = {
   starts_at: string | null;
   status: string;
   requires_email_registration?: boolean | null;
+  is_featured_play_show?: boolean | null;
   is_over?: boolean | null;
 };
 
@@ -205,6 +206,7 @@ export default function AdminPage() {
   const [showStartsAt, setShowStartsAt] = useState("");
   const [showTagline, setShowTagline] = useState("");
   const [showRequiresEmail, setShowRequiresEmail] = useState(true);
+  const [showIsFeaturedPlayShow, setShowIsFeaturedPlayShow] = useState(false);
   const [showIsOver, setShowIsOver] = useState(false);
   const [showModalOpen, setShowModalOpen] = useState(false);
   const [promotionModalOpen, setPromotionModalOpen] = useState(false);
@@ -216,6 +218,7 @@ export default function AdminPage() {
   const [showEditStartsAt, setShowEditStartsAt] = useState("");
   const [showEditTagline, setShowEditTagline] = useState("");
   const [showEditRequiresEmail, setShowEditRequiresEmail] = useState(true);
+  const [showEditIsFeaturedPlayShow, setShowEditIsFeaturedPlayShow] = useState(false);
   const [showEditIsOver, setShowEditIsOver] = useState(false);
   const [showEditBusy, setShowEditBusy] = useState(false);
   const [showDeleteBusy, setShowDeleteBusy] = useState(false);
@@ -456,6 +459,7 @@ export default function AdminPage() {
       setShowEditStartsAt("");
       setShowEditTagline("");
       setShowEditRequiresEmail(true);
+      setShowEditIsFeaturedPlayShow(false);
       setShowEditIsOver(false);
       return;
     }
@@ -465,6 +469,7 @@ export default function AdminPage() {
     setShowEditStartsAt(formatLocalDateTime(activeShow.starts_at ?? null));
     setShowEditTagline(activeShow.tagline ?? "");
     setShowEditRequiresEmail(activeShow.requires_email_registration ?? true);
+    setShowEditIsFeaturedPlayShow(activeShow.is_featured_play_show ?? false);
     setShowEditIsOver(activeShow.is_over ?? false);
   }, [
     activeShow?.id,
@@ -474,6 +479,7 @@ export default function AdminPage() {
     activeShow?.starts_at,
     activeShow?.tagline,
     activeShow?.requires_email_registration,
+    activeShow?.is_featured_play_show,
     activeShow?.is_over,
   ]);
   useEffect(() => {
@@ -815,7 +821,7 @@ export default function AdminPage() {
         supabase
           .from("shows")
           .select(
-            "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, is_over"
+            "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, is_featured_play_show, is_over"
           )
           .order("created_at", { ascending: false }),
         supabase
@@ -1021,8 +1027,8 @@ export default function AdminPage() {
       ] = await Promise.all([
           supabase
             .from("shows")
-              .select(
-              "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, is_over"
+            .select(
+              "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, is_featured_play_show, is_over"
             )
             .order("created_at", { ascending: false }),
           supabase
@@ -1457,6 +1463,16 @@ export default function AdminPage() {
       setMessage("Select a promotion for the show.");
       return;
     }
+    if (showIsFeaturedPlayShow) {
+      const { error: clearFeaturedError } = await supabase
+        .from("shows")
+        .update({ is_featured_play_show: false })
+        .eq("is_featured_play_show", true);
+      if (clearFeaturedError) {
+        setMessage(clearFeaturedError.message);
+        return;
+      }
+    }
     const { data: newShow, error } = await supabase
       .from("shows")
       .insert({
@@ -1467,9 +1483,12 @@ export default function AdminPage() {
         status: "draft",
         starts_at: showStartsAt ? new Date(showStartsAt).toISOString() : null,
         requires_email_registration: showRequiresEmail,
+        is_featured_play_show: showIsFeaturedPlayShow,
         is_over: showIsOver,
       })
-      .select("id, name, tagline, image_url, promotion_id, requires_email_registration, is_over")
+      .select(
+        "id, name, tagline, image_url, promotion_id, requires_email_registration, is_featured_play_show, is_over"
+      )
       .single();
     if (error || !newShow) {
       setMessage(error?.message ?? "Failed to create show.");
@@ -1481,6 +1500,7 @@ export default function AdminPage() {
     setShowStartsAt("");
     setShowTagline("");
     setShowRequiresEmail(true);
+    setShowIsFeaturedPlayShow(false);
     setShowIsOver(false);
     setSelectedShowId(newShow.id);
     setEventShowId(newShow.id);
@@ -1529,6 +1549,18 @@ export default function AdminPage() {
     }
     setShowEditBusy(true);
     setMessage(null);
+    if (showEditIsFeaturedPlayShow) {
+      const { error: clearFeaturedError } = await supabase
+        .from("shows")
+        .update({ is_featured_play_show: false })
+        .eq("is_featured_play_show", true)
+        .neq("id", activeShow.id);
+      if (clearFeaturedError) {
+        setMessage(clearFeaturedError.message);
+        setShowEditBusy(false);
+        return;
+      }
+    }
     const payload = {
       name: showEditName.trim(),
       promotion_id: showEditPromotionId,
@@ -1538,6 +1570,7 @@ export default function AdminPage() {
         ? new Date(showEditStartsAt).toISOString()
         : null,
       requires_email_registration: showEditRequiresEmail,
+      is_featured_play_show: showEditIsFeaturedPlayShow,
       is_over: showEditIsOver,
     };
     const { data: updatedShow, error } = await supabase
@@ -1545,7 +1578,7 @@ export default function AdminPage() {
       .update(payload)
       .eq("id", activeShow.id)
       .select(
-        "id, name, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, is_over"
+        "id, name, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, is_featured_play_show, is_over"
       )
       .single();
     if (error || !updatedShow) {
@@ -2817,6 +2850,8 @@ export default function AdminPage() {
             setTagline={setShowEditTagline}
             requiresEmailRegistration={showEditRequiresEmail}
             setRequiresEmailRegistration={setShowEditRequiresEmail}
+            isFeaturedPlayShow={showEditIsFeaturedPlayShow}
+            setIsFeaturedPlayShow={setShowEditIsFeaturedPlayShow}
             isOver={showEditIsOver}
             setIsOver={setShowEditIsOver}
             startsAt={showEditStartsAt}
@@ -4898,6 +4933,17 @@ export default function AdminPage() {
                     onChange={(event) => setShowRequiresEmail(event.target.checked)}
                   />
                   Require email registration
+                </label>
+                <label className="flex items-center gap-3 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                    checked={showIsFeaturedPlayShow}
+                    onChange={(event) =>
+                      setShowIsFeaturedPlayShow(event.target.checked)
+                    }
+                  />
+                  Send /play to this show
                 </label>
                 <label className="flex items-center gap-3 text-sm text-zinc-300">
                   <input

@@ -14,6 +14,10 @@ export default function PlayPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
+  const featuredShow = useMemo(() => {
+    return shows.find((show) => show.is_featured_play_show);
+  }, [shows]);
+
   const activeShows = useMemo(() => {
     return shows.filter((show) => {
       if (!show.starts_at) return false;
@@ -31,7 +35,9 @@ export default function PlayPage() {
         await Promise.all([
           supabase
             .from("shows")
-            .select("id, name, image_url, promotion_id, status, starts_at")
+            .select(
+              "id, name, image_url, promotion_id, status, starts_at, is_featured_play_show"
+            )
             .order("starts_at", { ascending: true }),
           supabase
             .from("promotions")
@@ -58,6 +64,14 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (loading) return;
+    if (featuredShow) {
+      if (featuredShow.promotion_id) {
+        router.replace(`/shows/${featuredShow.promotion_id}/${featuredShow.id}`);
+      } else {
+        router.replace("/shows");
+      }
+      return;
+    }
     if (activeShows.length === 1) {
       const target = activeShows[0];
       if (target?.promotion_id) {
@@ -66,7 +80,7 @@ export default function PlayPage() {
         router.replace("/shows");
       }
     }
-  }, [activeShows, loading, router]);
+  }, [activeShows, featuredShow, loading, router]);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -103,7 +117,7 @@ export default function PlayPage() {
               />
             ))}
           </div>
-        ) : activeShows.length === 0 ? (
+        ) : featuredShow ? null : activeShows.length === 0 ? (
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 text-sm text-zinc-300">
             No active shows are available right now.
           </div>

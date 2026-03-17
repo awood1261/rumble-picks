@@ -13,6 +13,8 @@ type ShowEditorProps = {
   setTagline: (value: string) => void;
   requiresEmailRegistration: boolean;
   setRequiresEmailRegistration: (value: boolean) => void;
+  isFeaturedPlayShow: boolean;
+  setIsFeaturedPlayShow: (value: boolean) => void;
   isOver: boolean;
   setIsOver: (value: boolean) => void;
   startsAt: string;
@@ -36,6 +38,8 @@ export const ShowEditor = ({
   setTagline,
   requiresEmailRegistration,
   setRequiresEmailRegistration,
+  isFeaturedPlayShow,
+  setIsFeaturedPlayShow,
   isOver,
   setIsOver,
   startsAt,
@@ -124,6 +128,16 @@ export const ShowEditor = ({
         disabled={disabled}
       />
       Require email registration for this show
+    </label>
+    <label className="mt-2 flex items-center gap-3 text-sm text-zinc-300">
+      <input
+        type="checkbox"
+        className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+        checked={isFeaturedPlayShow}
+        onChange={(event) => setIsFeaturedPlayShow(event.target.checked)}
+        disabled={disabled}
+      />
+      Send /play to this show
     </label>
     <label className="mt-2 flex items-center gap-3 text-sm text-zinc-300">
       <input
