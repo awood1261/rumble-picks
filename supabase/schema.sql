@@ -90,9 +90,11 @@ create table if not exists public.show_questions (
   image_url text,
   question text not null,
   answers text[] not null default '{}',
+  correct_answer text,
   order_index integer,
   created_at timestamptz not null default now(),
-  constraint show_questions_answers_chk check (array_length(answers, 1) is null or array_length(answers, 1) >= 2)
+  constraint show_questions_answers_chk check (array_length(answers, 1) is null or array_length(answers, 1) >= 2),
+  constraint show_questions_correct_answer_chk check (correct_answer is null or correct_answer = any(answers))
 );
 
 create table if not exists public.eliminators (
@@ -299,6 +301,16 @@ alter table public.events
 
 alter table public.show_questions
   add column if not exists order_index integer;
+
+alter table public.show_questions
+  add column if not exists correct_answer text;
+
+alter table public.show_questions
+  drop constraint if exists show_questions_correct_answer_chk;
+
+alter table public.show_questions
+  add constraint show_questions_correct_answer_chk
+  check (correct_answer is null or correct_answer = any(answers));
 
 alter table public.matches
   add column if not exists order_index integer;

@@ -20,6 +20,7 @@ export type PicksPayload = {
       most_eliminations?: string | null;
     }
   >;
+  question_picks?: Record<string, string | null>;
   match_picks?: Record<string, string | null>;
   match_finish_picks?: Record<
     string,
@@ -79,6 +80,11 @@ export type EliminatorRow = {
   winner_entrant_id: string | null;
 };
 
+export type ShowQuestionRow = {
+  id: string;
+  correct_answer?: string | null;
+};
+
 const getEliminationKey = (entry: RumbleEntryRow) =>
   entry.eliminated_at ? new Date(entry.eliminated_at).getTime() : Number.MAX_SAFE_INTEGER;
 
@@ -92,7 +98,8 @@ export const calculateScore = (
   options?: { ironPersonId?: string | null },
   eliminatorEntries: EliminatorEntryRow[] = [],
   eliminatorEliminations: EliminatorEliminationRow[] = [],
-  eliminators: EliminatorRow[] = []
+  eliminators: EliminatorRow[] = [],
+  questions: ShowQuestionRow[] = []
 ) => {
   const breakdown: Record<string, number> = {};
   let points = 0;
@@ -360,6 +367,16 @@ export const calculateScore = (
   points += eliminatorElimByPoints;
   points += eliminatorMostElimsPoints;
   points += eliminatorWinnerPoints;
+
+  const questionPicks = payload.question_picks ?? {};
+  const questionPoints = questions.reduce((total, question) => {
+    if (!question.correct_answer) return total;
+    return questionPicks[question.id] === question.correct_answer
+      ? total + rules.question_correct
+      : total;
+  }, 0);
+  breakdown.questions = questionPoints;
+  points += questionPoints;
 
   return { points, breakdown };
 };

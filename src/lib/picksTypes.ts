@@ -15,6 +15,7 @@ export type ShowQuestionRow = {
   image_url: string | null;
   question: string;
   answers: string[];
+  correct_answer?: string | null;
   order_index?: number | null;
   created_at?: string;
 };

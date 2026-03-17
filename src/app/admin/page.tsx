@@ -143,6 +143,7 @@ type ShowQuestionRow = {
   image_url: string | null;
   question: string;
   answers: string[];
+  correct_answer?: string | null;
   order_index?: number | null;
   created_at?: string;
 };
@@ -228,6 +229,12 @@ export default function AdminPage() {
   const [newQuestionText, setNewQuestionText] = useState("");
   const [newQuestionAnswerInput, setNewQuestionAnswerInput] = useState("");
   const [newQuestionAnswers, setNewQuestionAnswers] = useState<string[]>([]);
+  const [questionImageEdits, setQuestionImageEdits] = useState<Record<string, string>>({});
+  const [questionTextEdits, setQuestionTextEdits] = useState<Record<string, string>>({});
+  const [questionAnswerEdits, setQuestionAnswerEdits] = useState<Record<string, string>>({});
+  const [questionCorrectAnswerEdits, setQuestionCorrectAnswerEdits] = useState<
+    Record<string, string>
+  >({});
   const [focusedEventId, setFocusedEventId] = useState<string>("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
@@ -297,6 +304,15 @@ export default function AdminPage() {
       prev.includes(answer) ? prev : [...prev, answer]
     );
   };
+  const parseQuestionAnswers = (value: string) =>
+    Array.from(
+      new Set(
+        value
+          .split(/\r?\n|,/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+      )
+    );
 
   const formatLocalDateTime = (value: string | null) => {
     if (!value) return "";
@@ -492,7 +508,9 @@ export default function AdminPage() {
     }
     const { data, error } = await supabase
       .from("show_questions")
-      .select("id, show_id, image_url, question, answers, order_index, created_at")
+      .select(
+        "id, show_id, image_url, question, answers, correct_answer, order_index, created_at"
+      )
       .eq("show_id", selectedShowId)
       .order("order_index", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true });
@@ -1227,6 +1245,7 @@ export default function AdminPage() {
       image_url: newQuestionImageUrl.trim() || null,
       question,
       answers,
+      correct_answer: null,
       order_index: highestOrder + 1,
     });
     if (error) {
@@ -1251,8 +1270,52 @@ export default function AdminPage() {
       setMessage(error.message);
       return;
     }
-    loadShowQuestions();
+    await loadShowQuestions();
+    if (activeEvent?.show_id === selectedShowId) {
+      await handleRecalculateScores({ silent: true });
+    }
     setToastMessage("Question removed.");
+  };
+
+  const handleUpdateShowQuestion = async (question: ShowQuestionRow) => {
+    setMessage(null);
+    const nextQuestion = (questionTextEdits[question.id] ?? question.question).trim();
+    if (!nextQuestion) {
+      setMessage("Question text is required.");
+      return;
+    }
+    const nextAnswers = parseQuestionAnswers(
+      questionAnswerEdits[question.id] ?? question.answers.join("\n")
+    );
+    if (nextAnswers.length < 2) {
+      setMessage("Add at least two possible answers.");
+      return;
+    }
+    const nextCorrectAnswerRaw =
+      questionCorrectAnswerEdits[question.id] ?? question.correct_answer ?? "";
+    const nextCorrectAnswer = nextCorrectAnswerRaw.trim() || null;
+    if (nextCorrectAnswer && !nextAnswers.includes(nextCorrectAnswer)) {
+      setMessage("Correct answer must match one of the possible answers.");
+      return;
+    }
+    const { error } = await supabase
+      .from("show_questions")
+      .update({
+        image_url: (questionImageEdits[question.id] ?? question.image_url ?? "").trim() || null,
+        question: nextQuestion,
+        answers: nextAnswers,
+        correct_answer: nextCorrectAnswer,
+      })
+      .eq("id", question.id);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await loadShowQuestions();
+    if (activeEvent?.show_id === selectedShowId) {
+      await handleRecalculateScores({ silent: true });
+    }
+    setToastMessage("Question updated.");
   };
 
   const handleMoveEventOrder = async (eventId: string, direction: "up" | "down") => {
@@ -2524,13 +2587,21 @@ export default function AdminPage() {
     const eliminatorEntries: EliminatorEntryRow[] = [];
     const eliminatorEliminations: EliminatorEliminationRow[] = [];
     const eliminatorList: { id: string; winner_entrant_id: string | null }[] = [];
+    const questionList: { id: string; correct_answer?: string | null }[] = [];
     if (activeEvent.show_id) {
-      const { data: eliminatorRows } = await supabase
-        .from("eliminators")
-        .select("id, winner_entrant_id")
-        .eq("show_id", activeEvent.show_id);
+      const [{ data: eliminatorRows }, { data: questionRows }] = await Promise.all([
+        supabase
+          .from("eliminators")
+          .select("id, winner_entrant_id")
+          .eq("show_id", activeEvent.show_id),
+        supabase
+          .from("show_questions")
+          .select("id, correct_answer")
+          .eq("show_id", activeEvent.show_id),
+      ]);
       const eliminatorIds = (eliminatorRows ?? []).map((row) => row.id);
       eliminatorList.push(...((eliminatorRows ?? []) as { id: string; winner_entrant_id: string | null }[]));
+      questionList.push(...((questionRows ?? []) as { id: string; correct_answer?: string | null }[]));
       if (eliminatorIds.length > 0) {
         const [
           { data: eliminatorEntryRows },
@@ -2567,7 +2638,8 @@ export default function AdminPage() {
         { ironPersonId: activeEvent.iron_person_entrant_id ?? null },
         eliminatorEntries,
         eliminatorEliminations,
-        eliminatorList
+        eliminatorList,
+        questionList
       );
       return {
         user_id: pick.user_id,
@@ -3606,7 +3678,7 @@ export default function AdminPage() {
                       className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-2">
+                        <div className="w-full space-y-3">
                           {question.image_url ? (
                             <div className="relative h-32 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
                               <Image
@@ -3621,18 +3693,84 @@ export default function AdminPage() {
                           <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                             Question
                           </p>
-                          <p className="text-sm text-zinc-100">{question.question}</p>
+                          <input
+                            className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                            value={questionImageEdits[question.id] ?? question.image_url ?? ""}
+                            placeholder="Image URL (optional)"
+                            onChange={(event) =>
+                              setQuestionImageEdits((prev) => ({
+                                ...prev,
+                                [question.id]: event.target.value,
+                              }))
+                            }
+                          />
+                          <textarea
+                            className="min-h-[88px] w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                            value={questionTextEdits[question.id] ?? question.question}
+                            placeholder="Question text"
+                            onChange={(event) =>
+                              setQuestionTextEdits((prev) => ({
+                                ...prev,
+                                [question.id]: event.target.value,
+                              }))
+                            }
+                          />
+                          <textarea
+                            className="min-h-[110px] w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                            value={
+                              questionAnswerEdits[question.id] ?? question.answers.join("\n")
+                            }
+                            placeholder="Possible answers (one per line or comma-separated)"
+                            onChange={(event) =>
+                              setQuestionAnswerEdits((prev) => ({
+                                ...prev,
+                                [question.id]: event.target.value,
+                              }))
+                            }
+                          />
+                          <select
+                            className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                            value={
+                              questionCorrectAnswerEdits[question.id] ??
+                              question.correct_answer ??
+                              ""
+                            }
+                            onChange={(event) =>
+                              setQuestionCorrectAnswerEdits((prev) => ({
+                                ...prev,
+                                [question.id]: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">Correct answer not set</option>
+                            {parseQuestionAnswers(
+                              questionAnswerEdits[question.id] ?? question.answers.join("\n")
+                            ).map((answer) => (
+                              <option key={`${question.id}-${answer}`} value={answer}>
+                                {answer}
+                              </option>
+                            ))}
+                          </select>
                           <p className="text-xs text-zinc-400">
-                            {question.answers?.join(" • ") || "No answers"}
+                            Correct custom-question picks are worth {scoringRules.question_correct} points.
                           </p>
                         </div>
-                        <button
-                          className="inline-flex h-9 items-center justify-center rounded-full border border-red-500/70 px-4 text-[10px] font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
-                          type="button"
-                          onClick={() => handleDeleteShowQuestion(question.id)}
-                        >
-                          Delete
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                            type="button"
+                            onClick={() => handleUpdateShowQuestion(question)}
+                          >
+                            Save
+                          </button>
+                          <button
+                            className="inline-flex h-9 items-center justify-center rounded-full border border-red-500/70 px-4 text-[10px] font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
+                            type="button"
+                            onClick={() => handleDeleteShowQuestion(question.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))
