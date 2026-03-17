@@ -660,7 +660,9 @@ function PicksPageInner() {
         .order("name", { ascending: true }),
       supabase
         .from("show_questions")
-        .select("id, show_id, image_url, question, answers, order_index, created_at")
+        .select(
+          "id, show_id, image_url, question, answers, correct_answer, order_index, created_at"
+        )
         .order("order_index", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true }),
     ]).then(([showsResult, promotionsResult, eventsResult, questionsResult]) => {
