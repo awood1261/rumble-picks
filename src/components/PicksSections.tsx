@@ -141,6 +141,126 @@ export const ShowSelector = ({
   );
 };
 
+type TeamStackMatchupPickerProps = {
+  matchId: string;
+  sides: {
+    side: MatchSideRow;
+    label: string;
+    entrants: EntrantRow[];
+  }[];
+  sideTitles: string[];
+  selectedSideId: string | null;
+  getPercent: (sideId?: string | null) => number | null;
+  isLocked: boolean;
+  onSelect: (sideId: string | null) => void;
+};
+
+const TeamStackMatchupPicker = ({
+  matchId,
+  sides,
+  sideTitles,
+  selectedSideId,
+  getPercent,
+  isLocked,
+  onSelect,
+}: TeamStackMatchupPickerProps) => (
+  <div className="space-y-4">
+    {sides.slice(0, 2).map((sideEntry, index) => {
+      const isSelected = selectedSideId === sideEntry.side.id;
+      const hasSelection = Boolean(selectedSideId);
+      const isDimmed = hasSelection && !isSelected;
+      const visibleEntrants = (sideEntry.entrants ?? []).slice(0, 3);
+      return (
+        <div key={`${matchId}-team-${sideEntry.side.id}`} className="space-y-2">
+          <p className="text-center text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200">
+            {sideTitles[index]}
+          </p>
+          <button
+            type="button"
+            disabled={isLocked}
+            onClick={() => onSelect(sideEntry.side.id)}
+            className={`w-full overflow-hidden rounded-2xl border transition ${
+              isSelected
+                ? "border-amber-300 shadow-[0_0_22px_rgba(251,196,0,0.28)]"
+                : "border-zinc-700 hover:border-amber-400/60"
+            } ${isDimmed ? "opacity-35" : "opacity-100"}`}
+            aria-label={`Select ${sideEntry.label ?? `Side ${index + 1}`} as winner`}
+          >
+            <div className="relative flex h-56 items-end justify-center overflow-hidden sm:h-64">
+              <div className="absolute left-2 top-2 z-20 flex items-center gap-2 rounded-full border border-amber-400/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200 shadow-[0_0_18px_rgba(198,162,74,0.35)]">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/20 text-[11px]">
+                  ★
+                </span>
+                {getPercent(sideEntry.side.id ?? null) === null
+                  ? "—"
+                  : `${getPercent(sideEntry.side.id ?? null)}% fans`}
+              </div>
+              {isSelected && (
+                <div className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-black/80 text-amber-200">
+                  ✓
+                </div>
+              )}
+              {visibleEntrants.map((entrant, entrantIndex) => {
+                const isThreeWide = visibleEntrants.length >= 3;
+                return (
+                  <div
+                    key={`${matchId}-team-card-${entrant.id}`}
+                    className={`relative h-full shrink-0 ${
+                      isThreeWide ? "w-[40%]" : "w-1/2"
+                    } ${
+                      entrantIndex === 1
+                        ? "z-20"
+                        : entrantIndex === 0
+                          ? "z-10 -mr-7"
+                          : "z-10 -ml-7"
+                    }`}
+                  >
+                    {entrant.image_url ? (
+                      <Image
+                        src={entrant.image_url}
+                        alt={entrant.name}
+                        fill
+                        sizes="(max-width: 640px) 42vw, 200px"
+                        className="object-cover object-bottom"
+                      />
+                    ) : (
+                      <div className="h-full w-full" />
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 z-10 p-1 text-center">
+                      {entrant.logo_url ? (
+                        <Image
+                          src={entrant.logo_url}
+                          alt={`${entrant.name} logo`}
+                          width={220}
+                          height={72}
+                          className="mx-auto h-16 w-auto object-contain"
+                        />
+                      ) : (
+                        <span className="inline-flex max-w-full rounded-md bg-black/75 px-2 py-1 line-clamp-2 text-[9px] font-semibold uppercase tracking-[0.13em] text-zinc-100 shadow-[0_4px_14px_rgba(0,0,0,0.45)]">
+                          {entrant.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </button>
+          {index === 0 ? (
+            <div className="flex items-center justify-center gap-3 py-1">
+              <span className="h-px w-14 bg-amber-300/45" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200">
+                VS
+              </span>
+              <span className="h-px w-14 bg-amber-300/45" />
+            </div>
+          ) : null}
+        </div>
+      );
+    })}
+  </div>
+);
+
 type RumbleSummarySectionProps = {
   event: EventRow;
   showName: string | null;
@@ -1893,7 +2013,6 @@ export const MatchPicksSection = ({
           const isTripleOrFatal =
             matchType === "triple_threat" || matchType === "fatal_4_way";
           const isTag = matchType === "tag" || matchType === "tag_3";
-          const isThreeTag = matchType === "tag_3";
           const winningSideId = payload.match_picks[match.id] ?? null;
           const winningSideEntrants =
             sideEntries.find((side) => side.side.id === winningSideId)?.entrants ??
@@ -1939,7 +2058,7 @@ export const MatchPicksSection = ({
           const hasMatchup =
             matchupSides.length >= 2 &&
             matchupSides.some((side) => side.entrants.length > 0);
-          const sideGridClass = isTag ? "grid-cols-2 auto-rows-fr" : "grid-cols-1";
+          const sideGridClass = "grid-cols-1";
           const finishOptions = [
             { value: "pinfall", label: "Pinfall" },
             { value: "submission", label: "Submission" },
@@ -2048,87 +2167,18 @@ export const MatchPicksSection = ({
                 )}
                 {sideEntries.length > 0 && (
                   <div className="mt-3 space-y-3">
-                    {isThreeTag && hasMatchup && (
-                      <div className="space-y-4">
-                        {matchupSides.slice(0, 2).map((sideEntry, index) => {
-                          const isSelected =
-                            payload.match_picks[match.id] === sideEntry.side.id;
-                          const hasSelection = Boolean(payload.match_picks[match.id]);
-                          const isDimmed = hasSelection && !isSelected;
-                          return (
-                            <div key={`${match.id}-team-${sideEntry.side.id}`} className="space-y-2">
-                              <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200">
-                                {matchupSideTitles[index]}
-                              </p>
-                              <button
-                                type="button"
-                                disabled={isLocked}
-                                onClick={() => handleSelectWinner(sideEntry.side.id)}
-                                className={`w-full overflow-hidden rounded-2xl border transition ${
-                                  isSelected
-                                    ? "border-amber-300 shadow-[0_0_22px_rgba(251,196,0,0.28)]"
-                                    : "border-zinc-700 hover:border-amber-400/60"
-                                } ${isDimmed ? "opacity-35" : "opacity-100"}`}
-                                aria-label={`Select ${sideEntry.label ?? `Side ${index + 1}`} as winner`}
-                              >
-                                <div className="relative flex h-56 items-end justify-center overflow-hidden bg-zinc-900 sm:h-64">
-                                  {(sideEntry.entrants ?? []).slice(0, 3).map((entrant, entrantIndex) => (
-                                    <div
-                                      key={`${match.id}-team-card-${entrant.id}`}
-                                      className={`relative h-full w-[40%] shrink-0 bg-zinc-900 ${
-                                        entrantIndex === 1
-                                          ? "z-20"
-                                          : entrantIndex === 0
-                                            ? "z-10 -mr-7"
-                                            : "z-10 -ml-7"
-                                      }`}
-                                    >
-                                      {entrant.image_url ? (
-                                        <Image
-                                          src={entrant.image_url}
-                                          alt={entrant.name}
-                                          fill
-                                          sizes="(max-width: 640px) 42vw, 200px"
-                                          className="object-cover"
-                                        />
-                                      ) : (
-                                        <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
-                                      )}
-                                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                                      <div className="absolute inset-x-0 bottom-0 z-10 p-1 text-center">
-                                        {entrant.logo_url ? (
-                                          <Image
-                                            src={entrant.logo_url}
-                                            alt={`${entrant.name} logo`}
-                                            width={220}
-                                            height={72}
-                                            className="mx-auto h-16 w-auto object-contain"
-                                          />
-                                        ) : (
-                                          <span className="line-clamp-2 text-[9px] font-semibold uppercase tracking-[0.13em] text-zinc-100">
-                                            {entrant.name}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </button>
-                              {index === 0 ? (
-                                <div className="flex items-center justify-center gap-3 py-1">
-                                  <span className="h-px w-14 bg-amber-300/45" />
-                                  <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200">
-                                    VS
-                                  </span>
-                                  <span className="h-px w-14 bg-amber-300/45" />
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
+                    {isTag && hasMatchup && matchupSides.length === 2 && (
+                      <TeamStackMatchupPicker
+                        matchId={match.id}
+                        sides={matchupSides}
+                        sideTitles={matchupSideTitles}
+                        selectedSideId={payload.match_picks[match.id] ?? null}
+                        getPercent={getPercent}
+                        isLocked={isLocked}
+                        onSelect={handleSelectWinner}
+                      />
                     )}
-                    {!isThreeTag && hasMatchup && (
+                    {!isTag && hasMatchup && (
                       <div>
                         <div
                           className={`mb-2 grid gap-3 ${
