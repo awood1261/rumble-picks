@@ -8,6 +8,7 @@ import {
   DEFAULT_AVATAR_KEY,
 } from "../../lib/avatarOptions";
 import { containsProfanity } from "../../lib/profanityFilter";
+import posthog from "posthog-js";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -86,6 +87,7 @@ export default function ProfilePage() {
       setBusy(false);
       return;
     }
+    posthog.capture("profile_updated", { avatar_key: avatarKey });
     setMessage("Username updated.");
     setBusy(false);
   };
@@ -110,6 +112,7 @@ export default function ProfilePage() {
       setUpgradeBusy(false);
       return;
     }
+    posthog.capture("account_upgraded", { marketing_opt_in: upgradeMarketingOptIn });
     setMessage("Check your inbox to confirm your email.");
     setUpgradeBusy(false);
   };

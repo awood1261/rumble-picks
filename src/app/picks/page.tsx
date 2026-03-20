@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import { scoringRules } from "../../lib/scoringRules";
+import posthog from "posthog-js";
 import {
   CustomEntrantModal,
   EliminatorPicksSection,
@@ -1358,6 +1359,7 @@ function PicksPageInner() {
       setSaving(false);
       return false;
     }
+    posthog.capture("picks_saved", { show_id: selectedShowId });
     setHasSaved(true);
     setEditSection(null);
     setFocusedEventId("");
