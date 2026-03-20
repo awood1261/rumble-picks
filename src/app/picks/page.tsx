@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import { scoringRules } from "../../lib/scoringRules";
+import posthog from "posthog-js";
 import {
   CustomEntrantModal,
   EliminatorPicksSection,
@@ -152,6 +153,7 @@ function PicksPageInner() {
   const loadMatchPickStatsRef = useRef<() => void>(() => {});
   const loadRankRef = useRef<() => void>(() => {});
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
+  const lastTrackedPicksFlowRef = useRef<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [editSection, setEditSection] = useState<EditSection>(null);
   const [focusedEventId, setFocusedEventId] = useState<string>("");
@@ -179,6 +181,18 @@ function PicksPageInner() {
           (a.created_at ?? "").localeCompare(b.created_at ?? "")
       );
   }, [selectedShowId, showQuestions]);
+  useEffect(() => {
+    if (!userId || !selectedShowId || loading) return;
+    const trackingKey = `${userId}:${selectedShowId}`;
+    if (lastTrackedPicksFlowRef.current === trackingKey) return;
+    posthog.capture("picks_flow_started", {
+      show_id: selectedShowId,
+      show_name: selectedShow?.name ?? null,
+      promotion_id: selectedShow?.promotion_id ?? null,
+      has_existing_payload: picksLoadedForShowIdRef.current === selectedShowId,
+    });
+    lastTrackedPicksFlowRef.current = trackingKey;
+  }, [loading, selectedShow?.name, selectedShow?.promotion_id, selectedShowId, userId]);
   const selectedPromotionImageUrl = useMemo(() => {
     if (!selectedShow?.promotion_id) return null;
     return (
@@ -1358,6 +1372,11 @@ function PicksPageInner() {
       setSaving(false);
       return false;
     }
+    posthog.capture("picks_saved", {
+      show_id: selectedShowId,
+      show_name: selectedShow?.name ?? null,
+      promotion_id: selectedShow?.promotion_id ?? null,
+    });
     setHasSaved(true);
     setEditSection(null);
     setFocusedEventId("");

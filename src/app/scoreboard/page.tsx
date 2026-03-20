@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSPr
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import posthog from "posthog-js";
 import { supabase } from "../../lib/supabaseClient";
 import { avatarSrcForKey } from "../../lib/avatarOptions";
 import { ScoreboardCountdown } from "../../components/ScoreboardCountdown";
@@ -240,6 +241,7 @@ function ScoreboardPageInner() {
   );
   const initialLoadByShowRef = useRef<string | null>(null);
   const queryShowIdRef = useRef<string | null>(null);
+  const lastTrackedScoreboardViewRef = useRef<string | null>(null);
 
   const selectedShow = useMemo(
     () => shows.find((show) => show.id === selectedShowId) ?? null,
@@ -842,6 +844,24 @@ function ScoreboardPageInner() {
     if (!selectedShowId || typeof window === "undefined") return;
     window.localStorage.setItem("bp:lastShowId", selectedShowId);
   }, [selectedShowId]);
+
+  useEffect(() => {
+    if (!selectedShowId || loading) return;
+    if (lastTrackedScoreboardViewRef.current === selectedShowId) return;
+    posthog.capture("scoreboard_viewed", {
+      show_id: selectedShowId,
+      show_name: selectedShow?.name ?? null,
+      promotion_id: selectedShow?.promotion_id ?? null,
+      has_results: hasAnyResults,
+    });
+    lastTrackedScoreboardViewRef.current = selectedShowId;
+  }, [
+    hasAnyResults,
+    loading,
+    selectedShow?.name,
+    selectedShow?.promotion_id,
+    selectedShowId,
+  ]);
 
   useEffect(() => {
     previousRanksRef.current = {};

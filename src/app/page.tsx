@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import posthog from "posthog-js";
 import { AdminConsoleLink } from "../components/AdminConsoleLink";
 import { ShowCardsGrid } from "../components/ShowCardsGrid";
 import { supabase } from "../lib/supabaseClient";
@@ -132,6 +133,12 @@ export default function Home() {
               <Link
                 className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
                 href="/login"
+                onClick={() =>
+                  posthog.capture("homepage_cta_clicked", {
+                    cta: "sign_in_to_play",
+                    has_player_identity: hasPlayerIdentity,
+                  })
+                }
               >
                 Sign in to play
               </Link>
@@ -139,12 +146,24 @@ export default function Home() {
             <Link
               className="inline-flex h-12 items-center justify-center rounded-full border border-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
               href="/scoreboard"
+              onClick={() =>
+                posthog.capture("homepage_cta_clicked", {
+                  cta: "view_scoreboard",
+                  has_player_identity: hasPlayerIdentity,
+                })
+              }
             >
               View scoreboard
             </Link>
             <Link
               className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-700 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
               href="/picks"
+              onClick={() =>
+                posthog.capture("homepage_cta_clicked", {
+                  cta: "make_picks",
+                  has_player_identity: hasPlayerIdentity,
+                })
+              }
             >
               Make picks
             </Link>
@@ -178,7 +197,12 @@ export default function Home() {
               ))}
             </div>
           ) : upcomingShows.length > 0 ? (
-            <ShowCardsGrid shows={upcomingShows} promotions={promotions} now={now} />
+            <ShowCardsGrid
+              shows={upcomingShows}
+              promotions={promotions}
+              now={now}
+              source="homepage_upcoming_shows"
+            />
           ) : (
             <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 text-sm text-zinc-300">
               No upcoming shows are scheduled right now.

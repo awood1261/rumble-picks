@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabaseClient";
 import type { PromotionRow, ShowRow } from "../../../../lib/picksTypes";
+import posthog from "posthog-js";
 
 export default function ShowDetailPage() {
   const params = useParams();
@@ -96,6 +97,12 @@ export default function ShowDetailPage() {
   useEffect(() => {
     if (!show?.id || typeof window === "undefined") return;
     window.localStorage.setItem("bp:lastShowId", show.id);
+    posthog.capture("show_viewed", {
+      show_id: show.id,
+      show_name: show.name,
+      show_status: show.status,
+      promotion_id: show.promotion_id,
+    });
   }, [show?.id]);
 
   useEffect(() => {

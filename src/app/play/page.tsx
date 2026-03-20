@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { supabase } from "../../lib/supabaseClient";
 import type { PromotionRow, ShowRow } from "../../lib/picksTypes";
 import { ShowCardsGrid } from "../../components/ShowCardsGrid";
@@ -65,6 +66,12 @@ export default function PlayPage() {
   useEffect(() => {
     if (loading) return;
     if (featuredShow) {
+      posthog.capture("play_redirected", {
+        reason: "featured_show",
+        show_id: featuredShow.id,
+        show_name: featuredShow.name,
+        promotion_id: featuredShow.promotion_id,
+      });
       if (featuredShow.promotion_id) {
         router.replace(`/shows/${featuredShow.promotion_id}/${featuredShow.id}`);
       } else {
@@ -74,6 +81,12 @@ export default function PlayPage() {
     }
     if (activeShows.length === 1) {
       const target = activeShows[0];
+      posthog.capture("play_redirected", {
+        reason: "single_active_show",
+        show_id: target.id,
+        show_name: target.name,
+        promotion_id: target.promotion_id,
+      });
       if (target?.promotion_id) {
         router.replace(`/shows/${target.promotion_id}/${target.id}`);
       } else {
@@ -122,7 +135,7 @@ export default function PlayPage() {
             No active shows are available right now.
           </div>
         ) : activeShows.length > 1 ? (
-          <ShowCardsGrid shows={activeShows} promotions={promotions} now={now} />
+          <ShowCardsGrid shows={activeShows} promotions={promotions} now={now} source="play" />
         ) : null}
       </main>
     </div>

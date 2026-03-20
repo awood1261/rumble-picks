@@ -9,6 +9,7 @@ import {
   DEFAULT_AVATAR_KEY,
 } from "../../lib/avatarOptions";
 import { containsProfanity } from "../../lib/profanityFilter";
+import posthog from "posthog-js";
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -129,11 +130,15 @@ function LoginPageInner() {
 
     try {
       if (mode === "sign-in") {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data: signInData, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+        if (signInData.user) {
+          posthog.identify(signInData.user.id, { email: signInData.user.email });
+          posthog.capture("user_signed_in", { method: "email" });
+        }
         setMessage("Signed in. Welcome back!");
       } else {
         const trimmed = displayName.trim();
@@ -148,7 +153,7 @@ function LoginPageInner() {
           return;
         }
         if (requiresEmailRegistration) {
-          const { error } = await supabase.auth.signUp({
+          const { data: signUpData, error } = await supabase.auth.signUp({
             email,
             password,
             options: {
@@ -161,9 +166,21 @@ function LoginPageInner() {
             },
           });
           if (error) throw error;
+          if (signUpData.user) {
+            posthog.identify(signUpData.user.id, {
+              email: signUpData.user.email,
+              display_name: trimmed,
+            });
+            posthog.capture("user_signed_up", {
+              method: "email",
+              avatar_key: avatarKey,
+              marketing_opt_in: marketingOptIn,
+              show_id: showId,
+            });
+          }
           setMessage("Check your inbox to confirm your account.");
         } else {
-          const { error } = await supabase.auth.signInAnonymously({
+          const { data: anonData, error } = await supabase.auth.signInAnonymously({
             options: {
               data: {
                 display_name: trimmed,
@@ -173,11 +190,19 @@ function LoginPageInner() {
             },
           });
           if (error) throw error;
+          if (anonData.user) {
+            posthog.identify(anonData.user.id, { display_name: trimmed });
+            posthog.capture("user_signed_up_anonymous", {
+              avatar_key: avatarKey,
+              show_id: showId,
+            });
+          }
           setMessage("You’re ready to make picks.");
         }
       }
     } catch (err) {
       const error = err as { message?: string };
+      posthog.captureException(err);
       setMessage(error.message ?? "Something went wrong.");
     } finally {
       setBusy(false);
@@ -187,6 +212,8 @@ function LoginPageInner() {
   const onSignOut = async () => {
     setMessage(null);
     setBusy(true);
+    posthog.capture("user_signed_out");
+    posthog.reset();
     const { error } = await supabase.auth.signOut();
     if (error) {
       setMessage(error.message);
