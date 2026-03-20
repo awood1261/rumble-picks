@@ -2044,7 +2044,7 @@ export const MatchPicksSection = ({
               match.champion_side_id === side.id
                 ? " (C)"
                 : "";
-            if (trimmedLabel && entrants.length > 1) {
+            if (trimmedLabel) {
               return `${trimmedLabel}${championSuffix}`;
             }
             if (entrants.length > 0) {
