@@ -171,11 +171,18 @@ const TeamStackMatchupPicker = ({
       const hasSelection = Boolean(selectedSideId);
       const isDimmed = hasSelection && !isSelected;
       const visibleEntrants = (sideEntry.entrants ?? []).slice(0, 3);
+      const isThreeWide = visibleEntrants.length >= 3;
+      const percent = getPercent(sideEntry.side.id ?? null);
       return (
         <div key={`${matchId}-team-${sideEntry.side.id}`} className="space-y-2">
-          <p className="text-center text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200">
-            {sideTitles[index]}
-          </p>
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-center text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200">
+              {sideTitles[index]}
+            </p>
+            <span className="inline-flex min-w-[5.75rem] items-center justify-center rounded-full border border-amber-400/40 bg-black/50 px-2 py-0.5 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200">
+              {percent === null ? "—" : `${percent}% fans`}
+            </span>
+          </div>
           <button
             type="button"
             disabled={isLocked}
@@ -187,33 +194,24 @@ const TeamStackMatchupPicker = ({
             } ${isDimmed ? "opacity-35" : "opacity-100"}`}
             aria-label={`Select ${sideEntry.label ?? `Side ${index + 1}`} as winner`}
           >
-            <div className="relative flex h-56 items-end justify-center overflow-hidden sm:h-64">
-              <div className="absolute left-2 top-2 z-20 flex items-center gap-2 rounded-full border border-amber-400/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200 shadow-[0_0_18px_rgba(198,162,74,0.35)]">
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/20 text-[11px]">
-                  ★
-                </span>
-                {getPercent(sideEntry.side.id ?? null) === null
-                  ? "—"
-                  : `${getPercent(sideEntry.side.id ?? null)}% fans`}
-              </div>
+            <div className="relative flex h-72 items-end justify-center overflow-hidden sm:h-80">
               {isSelected && (
                 <div className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-black/80 text-amber-200">
                   ✓
                 </div>
               )}
               {visibleEntrants.map((entrant, entrantIndex) => {
-                const isThreeWide = visibleEntrants.length >= 3;
                 return (
                   <div
                     key={`${matchId}-team-card-${entrant.id}`}
-                    className={`relative h-full shrink-0 ${
-                      isThreeWide ? "w-[40%]" : "w-1/2"
+                    className={`relative h-full shrink-0 overflow-visible ${
+                      isThreeWide ? "w-[52%] md:w-[40%]" : "w-[72%] md:w-1/2"
                     } ${
                       entrantIndex === 1
                         ? "z-20"
                         : entrantIndex === 0
-                          ? "z-10 -mr-7"
-                          : "z-10 -ml-7"
+                          ? "z-10 -mr-14 md:-mr-7"
+                          : "z-10 -ml-14 md:-ml-7"
                     }`}
                   >
                     {entrant.image_url ? (
@@ -222,12 +220,33 @@ const TeamStackMatchupPicker = ({
                         alt={entrant.name}
                         fill
                         sizes="(max-width: 640px) 42vw, 200px"
-                        className="object-cover object-bottom"
+                        className={`z-0 object-contain object-bottom md:object-top ${
+                          isThreeWide
+                            ? "scale-[1.72] md:scale-[1.22]"
+                            : "scale-[1.45] md:scale-[1.08]"
+                        }`}
                       />
                     ) : (
                       <div className="h-full w-full" />
                     )}
-                    <div className="absolute inset-x-0 bottom-0 z-10 p-1 text-center">
+                  </div>
+                );
+              })}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40 flex items-end justify-center">
+                {visibleEntrants.map((entrant, entrantIndex) => {
+                  return (
+                    <div
+                      key={`${matchId}-team-label-${entrant.id}`}
+                      className={`relative shrink-0 p-1 text-center ${
+                        isThreeWide ? "w-[52%] md:w-[40%]" : "w-[72%] md:w-1/2"
+                      } ${
+                        entrantIndex === 1
+                          ? "z-20"
+                          : entrantIndex === 0
+                            ? "z-10 -mr-14 md:-mr-7"
+                            : "z-10 -ml-14 md:-ml-7"
+                      }`}
+                    >
                       {entrant.logo_url ? (
                         <Image
                           src={entrant.logo_url}
@@ -242,9 +261,9 @@ const TeamStackMatchupPicker = ({
                         </span>
                       )}
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </button>
           {index === 0 ? (
@@ -2289,7 +2308,7 @@ export const MatchPicksSection = ({
                                               alt={entrant.name}
                                               fill
                                               sizes="(min-width: 1024px) 220px, 33vw"
-                                              className="object-cover"
+                                              className="object-cover object-center md:object-top"
                                             />
                                           ) : (
                                             <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
