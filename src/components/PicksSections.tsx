@@ -6,6 +6,7 @@ import {
   type SetStateAction,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import Image from "next/image";
@@ -1980,8 +1981,88 @@ export const MatchPicksSection = ({
   onCancel,
   onSave,
   saving,
-}: MatchPicksSectionProps) => (
-  <section>
+}: MatchPicksSectionProps) => {
+  const bonusProgressRef = useRef<
+    Record<string, { choiceCount: number; status: "none" | "partial" | "complete" }>
+  >({});
+
+  useEffect(() => {
+    matches.forEach((match) => {
+      const finishPick = payload.match_finish_picks[match.id] ?? {
+        method: null,
+        winner: null,
+        loser: null,
+      };
+      const lengthPick = payload.match_length_picks?.[match.id] ?? null;
+      const interferencePick =
+        payload.match_interference_picks?.[match.id] ?? null;
+      const isSingles = match.match_type === "singles";
+      const isTripleOrFatal =
+        match.match_type === "triple_threat" || match.match_type === "fatal_4_way";
+      const showFinishWinner = !isSingles && !isTripleOrFatal;
+      const showFinishLoser = !isSingles;
+      const choiceCount =
+        (lengthPick ? 1 : 0) +
+        (finishPick.method ? 1 : 0) +
+        (interferencePick ? 1 : 0) +
+        (showFinishWinner && finishPick.winner ? 1 : 0) +
+        (showFinishLoser && finishPick.loser ? 1 : 0);
+      const totalChoices = 3 + (showFinishWinner ? 1 : 0) + (showFinishLoser ? 1 : 0);
+      const status: "none" | "partial" | "complete" =
+        choiceCount === 0
+          ? "none"
+          : choiceCount >= totalChoices
+            ? "complete"
+            : "partial";
+      const previous = bonusProgressRef.current[match.id];
+
+      if (!previous) {
+        bonusProgressRef.current[match.id] = { choiceCount, status };
+        return;
+      }
+
+      if (previous.choiceCount === choiceCount && previous.status === status) {
+        return;
+      }
+
+      bonusProgressRef.current[match.id] = { choiceCount, status };
+
+      if (choiceCount === 0) {
+        return;
+      }
+
+      const milestone =
+        previous.choiceCount === 0
+          ? "started"
+          : status === "complete" && previous.status !== "complete"
+            ? "completed"
+            : "partial";
+
+      posthog.capture("bonus_picks_progressed", {
+        show_id: selectedShowId,
+        show_name: selectedShowName ?? null,
+        promotion_id: selectedPromotionId ?? null,
+        match_id: match.id,
+        match_name: match.name,
+        match_type: match.match_type,
+        milestone,
+        status,
+        selected_count: choiceCount,
+        total_choices: totalChoices,
+      });
+    });
+  }, [
+    matches,
+    payload.match_finish_picks,
+    payload.match_interference_picks,
+    payload.match_length_picks,
+    selectedPromotionId,
+    selectedShowId,
+    selectedShowName,
+  ]);
+
+  return (
+    <section>
     <div className="flex items-center justify-between">
       {hasSaved && (
         <button
@@ -2690,8 +2771,9 @@ export const MatchPicksSection = ({
         </button>
       </div>
     )}
-  </section>
-);
+    </section>
+  );
+};
 
 type KeyPicksEditorProps = {
   event: EventRow;
