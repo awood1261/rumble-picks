@@ -154,6 +154,7 @@ function PicksPageInner() {
   const loadRankRef = useRef<() => void>(() => {});
   const keyPicksRef = useRef<HTMLDivElement | null>(null);
   const lastTrackedPicksFlowRef = useRef<string | null>(null);
+  const lastTrackedStepViewRef = useRef<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [editSection, setEditSection] = useState<EditSection>(null);
   const [focusedEventId, setFocusedEventId] = useState<string>("");
@@ -1437,6 +1438,27 @@ function PicksPageInner() {
     totalSteps > 0 ? Math.round(((stepIndex + 1) / totalSteps) * 100) : 0;
   const loadingStepType: "event" | "match" | "eliminator" | "question" =
     currentStep?.type ?? "match";
+  useEffect(() => {
+    if (!userId || !selectedShowId || !currentStep || totalSteps === 0) return;
+    const trackingKey = `${userId}:${selectedShowId}:${currentStep.type}:${currentStep.id}:${stepIndex}`;
+    if (lastTrackedStepViewRef.current === trackingKey) return;
+    posthog.capture("pick_step_viewed", {
+      show_id: selectedShowId,
+      show_name: selectedShow?.name ?? null,
+      step_type: currentStep.type,
+      step_id: currentStep.id,
+      step_index: stepIndex + 1,
+      total_steps: totalSteps,
+    });
+    lastTrackedStepViewRef.current = trackingKey;
+  }, [
+    currentStep,
+    selectedShow?.name,
+    selectedShowId,
+    stepIndex,
+    totalSteps,
+    userId,
+  ]);
 
   const draftKey = useMemo(() => {
     if (!selectedShowId || !userId) return null;
@@ -2218,15 +2240,24 @@ function PicksPageInner() {
                                 key={`${question.id}-${answer}`}
                                 type="button"
                                 disabled={isLocked}
-                                onClick={() =>
+                                onClick={() => {
+                                  posthog.capture("question_answer_selected", {
+                                    show_id: selectedShowId,
+                                    show_name: selectedShow?.name ?? null,
+                                    promotion_id: selectedShow?.promotion_id ?? null,
+                                    question_id: question.id,
+                                    question_text: question.question,
+                                    answer,
+                                    step_index: stepIndex + 1,
+                                  });
                                   setPayload((prev) => ({
                                     ...prev,
                                     question_picks: {
                                       ...(prev.question_picks ?? {}),
                                       [question.id]: answer,
                                     },
-                                  }))
-                                }
+                                  }));
+                                }}
                                 className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition ${
                                   isSelected
                                     ? "border-amber-300 bg-amber-400/10 text-amber-100"
@@ -2254,6 +2285,9 @@ function PicksPageInner() {
                     >
                       <MatchPicksSection
                         matches={[match]}
+                        selectedShowId={selectedShowId}
+                        selectedShowName={selectedShow?.name}
+                        selectedPromotionId={selectedShow?.promotion_id}
                         matchSidesByMatch={matchSidesByMatch}
                         matchEntrantsByMatch={matchEntrantsByMatch}
                         entrantByIdAll={entrantByIdAll}
