@@ -10,6 +10,7 @@ import {
 } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import posthog from "posthog-js";
 import { EntrantCard } from "./EntrantCard";
 import { scoringRules } from "../lib/scoringRules";
 import { getKeyPickFields } from "../lib/picksCopy";
@@ -1164,6 +1165,9 @@ export const MatchSummarySection = ({
 
 type MatchPicksSectionProps = {
   matches: MatchRow[];
+  selectedShowId: string;
+  selectedShowName?: string | null;
+  selectedPromotionId?: string | null;
   matchSidesByMatch: Record<string, MatchSideRow[]>;
   matchEntrantsByMatch: Record<string, MatchEntrantRow[]>;
   entrantByIdAll: Map<string, EntrantRow>;
@@ -1943,6 +1947,9 @@ const SegmentedPills = ({
 
 export const MatchPicksSection = ({
   matches,
+  selectedShowId,
+  selectedShowName,
+  selectedPromotionId,
   matchSidesByMatch,
   matchEntrantsByMatch,
   entrantByIdAll,
@@ -2093,6 +2100,28 @@ export const MatchPicksSection = ({
           const bonusSectionId = `bonus-picks-${match.id}`;
           const handleSelectWinner = (sideId: string | null) => {
             if (!sideId) return;
+            const selectedSide =
+              sideEntries.find((sideEntry) => sideEntry.side.id === sideId) ?? null;
+            const selectedEntrants = selectedSide?.entrants ?? [];
+            const selectedSideTitle =
+              matchupSideTitles[
+                matchupSides.findIndex((sideEntry) => sideEntry.side.id === sideId)
+              ] ??
+              selectedSide?.label ??
+              null;
+            posthog.capture("match_winner_selected", {
+              show_id: selectedShowId,
+              show_name: selectedShowName ?? null,
+              promotion_id: selectedPromotionId ?? null,
+              match_id: match.id,
+              match_name: match.name,
+              match_type: match.match_type,
+              selected_side_id: sideId,
+              selected_side_label: selectedSideTitle,
+              selected_entrant_ids: selectedEntrants.map((entrant) => entrant.id),
+              selected_entrant_names: selectedEntrants.map((entrant) => entrant.name),
+              selection_mode: isSingles ? "singles" : isTag ? "tag_side" : "multi_side",
+            });
             setPayload((prev) => ({
               ...prev,
               match_picks: {
