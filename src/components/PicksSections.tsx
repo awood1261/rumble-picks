@@ -1949,7 +1949,7 @@ const SegmentedPills = ({
           onClick={() => onSelect(option.value)}
           disabled={disabled}
           aria-pressed={isSelected}
-          className={`relative flex-1 border px-5 py-3 text-[10px] uppercase transition ${
+          className={`relative flex-1 whitespace-nowrap border px-3 py-3 text-[9px] uppercase transition sm:px-5 sm:text-[10px] ${
             isSelected
               ? "z-10 border-amber-400/70 bg-amber-400/20 text-amber-100"
               : "border-zinc-800 text-zinc-300 hover:text-amber-200"
@@ -2026,9 +2026,9 @@ export const MatchPicksSection = ({
             value: "sprint" | "standard" | "epic";
             label: string;
           }> = [
-            { value: "sprint", label: "Sprint" },
-            { value: "standard", label: "Standard" },
-            { value: "epic", label: "Epic" },
+            { value: "sprint", label: "UNDER 6 MINUTES" },
+            { value: "standard", label: "6-10 MINUTES" },
+            { value: "epic", label: "11+ MINUTES" },
           ];
           const interferenceOptions = [
             { value: "yes", label: "Yes" },
