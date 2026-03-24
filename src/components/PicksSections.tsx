@@ -196,6 +196,7 @@ const TeamStackMatchupPicker = ({
             aria-label={`Select ${sideEntry.label ?? `Side ${index + 1}`} as winner`}
           >
             <div className="relative flex h-72 items-end justify-center overflow-hidden sm:h-80">
+              <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_top,_rgba(245,210,120,0.14),_transparent_42%),linear-gradient(180deg,_rgba(255,255,255,0.03),_rgba(255,255,255,0)_28%),repeating-linear-gradient(135deg,_rgba(255,255,255,0.028)_0px,_rgba(255,255,255,0.028)_2px,_transparent_2px,_transparent_12px)]" />
               {isSelected && (
                 <div className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-black/80 text-amber-200">
                   ✓
@@ -222,7 +223,7 @@ const TeamStackMatchupPicker = ({
                         alt={entrant.name}
                         fill
                         sizes="(max-width: 640px) 42vw, 200px"
-                        className={`z-0 object-contain object-bottom md:object-top ${
+                        className={`z-10 object-contain object-bottom md:object-top ${
                           isThreeWide
                             ? isCenterEntrant
                               ? "-translate-y-3 scale-[1.64] md:-translate-y-1 md:scale-[1.16]"
@@ -2341,8 +2342,9 @@ export const MatchPicksSection = ({
                               : "rounded-2xl border border-zinc-800 bg-black/40"
                           }`}
                         >
+                          <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_top,_rgba(245,210,120,0.14),_transparent_42%),linear-gradient(180deg,_rgba(255,255,255,0.03),_rgba(255,255,255,0)_28%),repeating-linear-gradient(135deg,_rgba(255,255,255,0.028)_0px,_rgba(255,255,255,0.028)_2px,_transparent_2px,_transparent_12px)]" />
                           <div
-                            className={`grid h-full w-full ${
+                            className={`relative z-0 grid h-full w-full ${
                               matchupSides.length === 3
                                 ? "grid-cols-3"
                                 : "grid-cols-2"
@@ -2365,14 +2367,14 @@ export const MatchPicksSection = ({
                                       : ""
                                   } ${isDimmed ? "opacity-35" : "opacity-100"}`}
                                 >
-                                  <div className="absolute left-2 top-2 z-20 flex items-center gap-2 rounded-full border border-amber-400/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200 shadow-[0_0_18px_rgba(198,162,74,0.35)]">
+                                  <div className="absolute left-2 top-2 z-40 flex items-center gap-2 rounded-full border border-amber-400/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200 shadow-[0_0_18px_rgba(198,162,74,0.35)]">
                                     <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/20 text-[11px]">
                                       ★
                                     </span>
                                     {percent === null ? "—" : `${percent}% fans`}
                                   </div>
                                   {isSelected && (
-                                    <div className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-black/80 text-amber-200">
+                                    <div className="absolute right-2 top-2 z-40 flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-black/80 text-amber-200">
                                       ✓
                                     </div>
                                   )}
@@ -2380,7 +2382,6 @@ export const MatchPicksSection = ({
                                     {entrants.length > 0 ? (
                                       entrants.map((entrant) => (
                                         (() => {
-                                          const hasLogo = Boolean(entrant.logo_url);
                                           return (
                                         <div
                                           key={`${match.id}-${index}-${entrant.id}`}
@@ -2397,34 +2398,7 @@ export const MatchPicksSection = ({
                                           ) : (
                                             <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
                                           )}
-                                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                                          <div
-                                            className={`absolute inset-x-0 bottom-0 z-10 p-2 text-center ${
-                                              hasLogo ? "translate-y-8" : "translate-y-1"
-                                            }`}
-                                          >
-                                            <div
-                                              className={`mx-auto flex max-w-[9rem] flex-col items-center gap-1 ${
-                                                hasLogo ? "pt-12" : "pt-0"
-                                              }`}
-                                            >
-                                              {entrant.logo_url ? (
-                                                <span className="relative inline-flex h-32 w-32 items-center justify-center rounded-full p-3 drop-shadow">
-                                                  <Image
-                                                    src={entrant.logo_url}
-                                                    alt={`${entrant.name} logo`}
-                                                    width={128}
-                                                    height={128}
-                                                    className="h-32 w-32 object-contain"
-                                                  />
-                                                </span>
-                                              ) : (
-                                                <span className="block text-[13px] font-semibold uppercase leading-[0.95] tracking-[0.18em] text-zinc-100 drop-shadow">
-                                                  {entrant.name}
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
+                                          <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                                         </div>
                                           );
                                         })()
@@ -2446,7 +2420,7 @@ export const MatchPicksSection = ({
                             <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/15" />
                           )}
                           <div
-                            className={`pointer-events-none absolute inset-0 z-10 flex justify-center ${
+                            className={`pointer-events-none absolute inset-0 z-40 flex justify-center ${
                               matchupSides.length === 3 ? "items-end pb-10" : "items-center"
                             }`}
                           >
@@ -2527,7 +2501,46 @@ export const MatchPicksSection = ({
                               </span>
                             )}
                           </div>
-                          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-zinc-950/20" />
+                          <div
+                            className={`pointer-events-none absolute inset-0 z-50 grid items-end ${
+                              matchupSides.length === 3 ? "grid-cols-3" : "grid-cols-2"
+                            }`}
+                          >
+                            {matchupSides.map((sideEntry, index) => {
+                              const entrant = sideEntry.entrants?.[0] ?? null;
+                              if (!entrant) {
+                                return <div key={`${match.id}-overlay-label-${index}`} />;
+                              }
+                              const hasLogo = Boolean(entrant.logo_url);
+                              return (
+                                <div
+                                  key={`${match.id}-overlay-label-${entrant.id}`}
+                                  className="flex h-full items-end justify-center p-2 text-center"
+                                >
+                                  <div
+                                    className={`mx-auto flex max-w-[9rem] flex-col items-center gap-1 ${
+                                      hasLogo ? "translate-y-8" : ""
+                                    }`}
+                                  >
+                                    {entrant.logo_url ? (
+                                      <Image
+                                        src={entrant.logo_url}
+                                        alt={`${entrant.name} logo`}
+                                        width={128}
+                                        height={128}
+                                        className="mx-auto h-32 w-32 object-contain"
+                                      />
+                                    ) : (
+                                      <span className="block text-[13px] font-semibold uppercase leading-[0.95] tracking-[0.18em] text-zinc-100 drop-shadow">
+                                        {entrant.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-t from-zinc-950/80 via-transparent to-zinc-950/20" />
                           {!isLocked &&
                             matchupSides.map((sideEntry, index) => {
                               const isSelected =
@@ -2549,9 +2562,9 @@ export const MatchPicksSection = ({
                                 <button
                                   key={`${match.id}-pick-${sideEntry.side.id}`}
                                   type="button"
-                                  className={`absolute top-0 h-full ${widthClass} ${leftClass} transition ${
+                                  className={`absolute top-0 z-30 h-full ${widthClass} ${leftClass} transition ${
                                     isSelected
-                                      ? "bg-amber-400/20 ring-2 ring-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.35)]"
+                                      ? "ring-2 ring-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.35)]"
                                       : "hover:bg-white/5"
                                   }`}
                                   onClick={() =>
