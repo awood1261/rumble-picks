@@ -202,6 +202,7 @@ const TeamStackMatchupPicker = ({
                 </div>
               )}
               {visibleEntrants.map((entrant, entrantIndex) => {
+                const isCenterEntrant = isThreeWide && entrantIndex === 1;
                 return (
                   <div
                     key={`${matchId}-team-card-${entrant.id}`}
@@ -223,7 +224,9 @@ const TeamStackMatchupPicker = ({
                         sizes="(max-width: 640px) 42vw, 200px"
                         className={`z-0 object-contain object-bottom md:object-top ${
                           isThreeWide
-                            ? "scale-[1.72] md:scale-[1.22]"
+                            ? isCenterEntrant
+                              ? "-translate-y-3 scale-[1.64] md:-translate-y-1 md:scale-[1.16]"
+                              : "-translate-y-8 scale-[1.92] md:-translate-y-4 md:scale-[1.32]"
                             : "scale-[1.45] md:scale-[1.08]"
                         }`}
                       />
