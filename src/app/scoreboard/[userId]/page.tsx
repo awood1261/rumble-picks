@@ -31,6 +31,7 @@ type PicksPayload = {
       most_eliminations?: string | null;
     }
   >;
+  question_picks?: Record<string, string | null>;
   match_picks?: Record<string, string | null>;
   match_finish_picks?: Record<
     string,
@@ -60,6 +61,16 @@ type ShowRow = {
   id: string;
   name: string;
   tagline?: string | null;
+};
+
+type ShowQuestionRow = {
+  id: string;
+  show_id: string | null;
+  question: string;
+  answers: string[];
+  correct_answer?: string | null;
+  order_index?: number | null;
+  created_at?: string | null;
 };
 
 type ProfileRow = {
@@ -224,6 +235,7 @@ export default function ScoreboardPicksPage() {
   const [matchPickStats, setMatchPickStats] = useState<
     Record<string, { total: number; bySide: Record<string, number> }>
   >({});
+  const [showQuestions, setShowQuestions] = useState<ShowQuestionRow[]>([]);
   const [show, setShow] = useState<ShowRow | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -304,6 +316,23 @@ export default function ScoreboardPicksPage() {
       );
     });
   }, [matches, payload]);
+
+  const questionsWithPicks = useMemo(() => {
+    if (!payload) return [];
+    return showQuestions.filter(
+      (question) => payload.question_picks?.[question.id] ?? null,
+    );
+  }, [payload, showQuestions]);
+
+  const questionPointsSummary = useMemo(() => {
+    if (!payload) return 0;
+    return showQuestions.reduce((total, question) => {
+      if (!question.correct_answer) return total;
+      return payload.question_picks?.[question.id] === question.correct_answer
+        ? total + scoringRules.question_correct
+        : total;
+    }, 0);
+  }, [payload, showQuestions]);
 
   const renderGhostStrip = (ids: string[], maxVisible = 3) => {
     const uniqueIds = Array.from(new Set(ids)).filter(Boolean);
@@ -695,9 +724,15 @@ export default function ScoreboardPicksPage() {
     return (
       eventPointsSummary.total +
       matchPointsSummary.total +
-      eliminatorPointsSummary
+      eliminatorPointsSummary +
+      questionPointsSummary
     );
-  }, [eventPointsSummary.total, matchPointsSummary.total, eliminatorPointsSummary]);
+  }, [
+    eventPointsSummary.total,
+    matchPointsSummary.total,
+    eliminatorPointsSummary,
+    questionPointsSummary,
+  ]);
 
   const load = useCallback(async () => {
     if (!validShowId) {
@@ -709,6 +744,7 @@ export default function ScoreboardPicksPage() {
       { data: pickRow, error: pickError },
       { data: showRow },
       { data: eventRows },
+      { data: questionRows, error: questionError },
       { data: profileRow },
       { data: matchRows, error: matchError },
       { data: eliminatorRows, error: eliminatorError },
@@ -718,7 +754,7 @@ export default function ScoreboardPicksPage() {
       supabase
         .from("picks")
         .select(
-          "rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+          "rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
         )
         .eq("show_id", validShowId)
         .eq("user_id", userId)
@@ -734,6 +770,12 @@ export default function ScoreboardPicksPage() {
         .eq("show_id", validShowId)
         .order("order_index", { ascending: true, nullsFirst: false })
         .order("name", { ascending: true }),
+      supabase
+        .from("show_questions")
+        .select("id, show_id, question, answers, correct_answer, order_index, created_at")
+        .eq("show_id", validShowId)
+        .order("order_index", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true }),
       supabase
         .from("profiles")
         .select("id, display_name")
@@ -768,6 +810,11 @@ export default function ScoreboardPicksPage() {
       setLoading(false);
       return;
     }
+    if (questionError) {
+      setMessage(questionError.message);
+      setLoading(false);
+      return;
+    }
     if (scoreError) {
       setMessage(scoreError.message);
       setLoading(false);
@@ -793,6 +840,7 @@ export default function ScoreboardPicksPage() {
       ? ({
           rumbles: pickRow.rumbles ?? {},
           eliminators: pickRow.eliminators ?? {},
+          question_picks: pickRow.question_picks ?? {},
           match_picks: pickRow.match_picks ?? {},
           match_finish_picks: pickRow.match_finish_picks ?? {},
           match_length_picks: pickRow.match_length_picks ?? {},
@@ -802,6 +850,7 @@ export default function ScoreboardPicksPage() {
     setPayload(nextPayload);
     setShow(showRow ?? null);
     setEvents(eventList);
+    setShowQuestions((questionRows ?? []) as ShowQuestionRow[]);
     setProfile(profileRow ?? null);
     const eliminatorList = ((eliminatorRows ?? []) as EliminatorRow[]).sort(
       (a, b) =>
@@ -1518,6 +1567,74 @@ export default function ScoreboardPicksPage() {
                         </div>
                       )}
                     </details>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {questionsWithPicks.length > 0 && (
+          <section className="mt-10">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-lg font-semibold">Question Picks</h2>
+              <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                {questionPointsSummary} pts
+              </span>
+            </div>
+            <div className="mt-4 space-y-3">
+              {questionsWithPicks.map((question) => {
+                const pickedAnswer = payload.question_picks?.[question.id] ?? null;
+                const isCorrect =
+                  Boolean(question.correct_answer) &&
+                  pickedAnswer === question.correct_answer;
+                const points = isCorrect ? scoringRules.question_correct : 0;
+                return (
+                  <div
+                    key={question.id}
+                    className={`rounded-2xl border px-4 py-3 ${
+                      !question.correct_answer
+                        ? "border-zinc-800 bg-zinc-900/70"
+                        : isCorrect
+                          ? "border-emerald-400/60 bg-emerald-400/10"
+                          : "border-red-500/50 bg-red-500/10"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Question
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-zinc-100">
+                          {question.question}
+                        </p>
+                      </div>
+                      {question.correct_answer ? (
+                        <span
+                          className={`text-[10px] font-semibold uppercase tracking-wide ${
+                            isCorrect ? "text-emerald-200" : "text-red-200"
+                          }`}
+                        >
+                          {points} pts
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 space-y-1 text-sm">
+                      <p className="text-zinc-300">
+                        Your answer:{" "}
+                        <span className="font-semibold text-zinc-100">
+                          {pickedAnswer ?? "Not set"}
+                        </span>
+                      </p>
+                      {question.correct_answer ? (
+                        <p className="text-zinc-400">
+                          Correct answer:{" "}
+                          <span className="font-semibold text-zinc-200">
+                            {question.correct_answer}
+                          </span>
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}
