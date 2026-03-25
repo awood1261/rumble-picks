@@ -157,6 +157,9 @@ type TeamStackMatchupPickerProps = {
   onSelect: (sideId: string | null) => void;
 };
 
+const WRESTLER_OUTLINE_FILTER =
+  "drop-shadow(0 0 0 rgba(0,0,0,0.92)) drop-shadow(1px 0 0 rgba(245,210,120,0.28)) drop-shadow(-1px 0 0 rgba(245,210,120,0.28)) drop-shadow(0 1px 0 rgba(245,210,120,0.28)) drop-shadow(0 -1px 0 rgba(245,210,120,0.28)) drop-shadow(0 0 8px rgba(245,210,120,0.08))";
+
 const TeamStackMatchupPicker = ({
   matchId,
   sides,
@@ -223,10 +226,11 @@ const TeamStackMatchupPicker = ({
                         alt={entrant.name}
                         fill
                         sizes="(max-width: 640px) 42vw, 200px"
+                        style={{ filter: WRESTLER_OUTLINE_FILTER }}
                         className={`z-10 object-contain object-bottom md:object-top ${
                           isThreeWide
                             ? isCenterEntrant
-                              ? "-translate-y-3 scale-[1.64] md:-translate-y-1 md:scale-[1.16]"
+                              ? "-translate-y-5 scale-[1.72] md:-translate-y-2 md:scale-[1.2]"
                               : "-translate-y-8 scale-[1.92] md:-translate-y-4 md:scale-[1.32]"
                             : "scale-[1.45] md:scale-[1.08]"
                         }`}
@@ -2393,6 +2397,7 @@ export const MatchPicksSection = ({
                                               alt={entrant.name}
                                               fill
                                               sizes="(min-width: 1024px) 220px, 33vw"
+                                              style={{ filter: WRESTLER_OUTLINE_FILTER }}
                                               className="object-cover object-center md:object-top"
                                             />
                                           ) : (
@@ -2421,7 +2426,7 @@ export const MatchPicksSection = ({
                           )}
                           <div
                             className={`pointer-events-none absolute inset-0 z-40 flex justify-center ${
-                              matchupSides.length === 3 ? "items-end pb-10" : "items-center"
+                              matchupSides.length === 3 ? "items-center" : "items-center"
                             }`}
                           >
                             {matchupSides.length === 3 ? (
@@ -2446,7 +2451,7 @@ export const MatchPicksSection = ({
                                       </span>
                                     </div>
                                   ) : (
-                                    <span className="rounded-full bg-black px-2.5 py-1 text-[10px] uppercase tracking-[0.35em] text-amber-200 shadow-lg">
+                                    <span className="rounded-full bg-black px-3 py-1.5 text-[11px] uppercase tracking-[0.35em] text-amber-200 shadow-lg">
                                       VS
                                     </span>
                                   )}
@@ -2471,7 +2476,7 @@ export const MatchPicksSection = ({
                                       </span>
                                     </div>
                                   ) : (
-                                    <span className="rounded-full bg-black px-2.5 py-1 text-[10px] uppercase tracking-[0.35em] text-amber-200 shadow-lg">
+                                    <span className="rounded-full bg-black px-3 py-1.5 text-[11px] uppercase tracking-[0.35em] text-amber-200 shadow-lg">
                                       VS
                                     </span>
                                   )}
