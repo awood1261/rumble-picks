@@ -164,6 +164,7 @@ function PicksPageInner() {
     () => shows.find((show) => show.id === selectedShowId) ?? null,
     [shows, selectedShowId],
   );
+  const showLocksAtStart = selectedShow?.lock_picks_at_start ?? true;
   const showEvents = useMemo(() => {
     return events
       .filter((event) => event.show_id === selectedShowId)
@@ -223,9 +224,10 @@ function PicksPageInner() {
     [customModalEventId, showEvents],
   );
   const isLocked = useMemo(() => {
+    if (!showLocksAtStart) return false;
     if (!selectedShow?.starts_at) return false;
     return new Date() >= new Date(selectedShow.starts_at);
-  }, [selectedShow?.starts_at]);
+  }, [selectedShow?.starts_at, showLocksAtStart]);
 
   const lockStatusText = useMemo(() => {
     if (!selectedShow?.starts_at) {
@@ -234,7 +236,7 @@ function PicksPageInner() {
     const startTime = new Date(selectedShow.starts_at).getTime();
     const diffMs = startTime - now;
     if (diffMs <= 0) {
-      return "Show is locked";
+      return showLocksAtStart ? "Show is locked" : "Live picks are open";
     }
     const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
     const days = Math.floor(totalSeconds / 86400);
@@ -248,8 +250,10 @@ function PicksPageInner() {
       minutes ? `${pad(minutes)}m` : null,
       `${pad(seconds)}s`,
     ].filter(Boolean);
-    return `Picks lock in ${parts.join(" ")}`;
-  }, [selectedShow?.starts_at, now]);
+    return showLocksAtStart
+      ? `Picks lock in ${parts.join(" ")}`
+      : `Show starts in ${parts.join(" ")}`;
+  }, [selectedShow?.starts_at, now, showLocksAtStart]);
 
   const lockInfo = useMemo(() => {
     if (!selectedShow?.starts_at) {
@@ -272,15 +276,23 @@ function PicksPageInner() {
     const timeString = parts.join(" ");
     if (diffMs > 0) {
       return {
-        label: `Locks in ${timeString}`,
-        detail: "",
+        label: showLocksAtStart ? `Locks in ${timeString}` : `Starts in ${timeString}`,
+        detail: showLocksAtStart
+          ? ""
+          : "Picks stay open after bell time until results are entered.",
+      };
+    }
+    if (!showLocksAtStart) {
+      return {
+        label: "Live picks are open",
+        detail: "Matches disappear from the flow once a winner is recorded.",
       };
     }
     return {
       label: `Locked ${timeString} ago`,
       detail: "",
     };
-  }, [selectedShow?.starts_at, now]);
+  }, [selectedShow?.starts_at, now, showLocksAtStart]);
 
   const entrantOptionsByEvent = useMemo(() => {
     const byEvent: Record<string, EntrantRow[]> = {};
@@ -436,6 +448,13 @@ function PicksPageInner() {
   const matchWinnerMap = useMemo(() => {
     return new Map(matches.map((match) => [match.id, match.winner_side_id]));
   }, [matches]);
+
+  const availableMatches = useMemo(() => {
+    if (isLocked) return matches;
+    return matches.filter(
+      (match) => !match.winner_side_id && !match.winner_entrant_id,
+    );
+  }, [isLocked, matches]);
 
   const getEliminationKey = (entry: RumbleEntryRow) =>
     entry.eliminated_at
@@ -658,10 +677,10 @@ function PicksPageInner() {
   useEffect(() => {
     if (!userId) return;
     Promise.all([
-      supabase
-        .from("shows")
-        .select("id, name, image_url, promotion_id, status, starts_at")
-        .order("name", { ascending: true }),
+          supabase
+            .from("shows")
+            .select("id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start")
+            .order("name", { ascending: true }),
       supabase
         .from("promotions")
         .select("id, name, image_url")
@@ -1412,7 +1431,7 @@ function PicksPageInner() {
       order_index: question.order_index ?? null,
       name: question.question,
     }));
-    const matchItems = matches.map((match) => ({
+    const matchItems = availableMatches.map((match) => ({
       type: "match" as const,
       id: match.id,
       order_index: match.order_index ?? null,
@@ -1423,7 +1442,7 @@ function PicksPageInner() {
         (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
         a.name.localeCompare(b.name)
     );
-  }, [matches, showEvents, eliminators, questionsForShow]);
+  }, [availableMatches, showEvents, eliminators, questionsForShow]);
   const stepIndexById = useMemo(() => {
     const map = new Map<string, number>();
     stepItems.forEach((item, index) => {
@@ -1432,6 +1451,8 @@ function PicksPageInner() {
     return map;
   }, [stepItems]);
   const totalSteps = stepItems.length;
+  const hasConfiguredItems =
+    showEvents.length + eliminators.length + questionsForShow.length + matches.length > 0;
   const currentStep =
     stepItems[Math.min(stepIndex, Math.max(totalSteps - 1, 0))];
   const progressPercent =
@@ -1794,7 +1815,9 @@ function PicksPageInner() {
         {totalSteps === 0 ? (
           <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <p className="text-sm text-zinc-400">
-              No matches or events are available yet.
+              {hasConfiguredItems
+                ? "No open picks remain for this show."
+                : "No matches or events are available yet."}
             </p>
           </section>
         ) : stepIndex >= totalSteps ? (
@@ -1803,10 +1826,51 @@ function PicksPageInner() {
               All picks are in
             </h2>
             <p className="mt-2 text-sm text-zinc-400">
-              You can edit your picks until the show starts.
+              {showLocksAtStart
+                ? "You can edit your picks until the show starts."
+                : "Only the picks you made are shown here. Unresolved matches stay open until results are entered."}
             </p>
             <div className="mt-6 space-y-4">
-              {[...showEvents, ...eliminators, ...questionsForShow, ...matches]
+              {[
+                ...showEvents.filter((event) => {
+                  const pick = getRumblePick(event.id);
+                  return Boolean(
+                    pick.entrants.length ||
+                      pick.final_four.length ||
+                      pick.winner ||
+                      pick.entry_1 ||
+                      pick.entry_2 ||
+                      pick.entry_30 ||
+                      pick.iron_person ||
+                      pick.most_eliminations,
+                  );
+                }),
+                ...eliminators.filter((eliminator) => {
+                  const pick =
+                    payload.eliminators?.[eliminator.id] ?? emptyEliminatorPick;
+                  return Boolean(
+                    Object.keys(pick.entry_order ?? {}).length ||
+                      Object.keys(pick.elimination_order ?? {}).length ||
+                      Object.keys(pick.elimination_type ?? {}).length ||
+                      pick.winner_id ||
+                      pick.most_eliminations,
+                  );
+                }),
+                ...questionsForShow.filter(
+                  (question) => payload.question_picks?.[question.id] ?? null,
+                ),
+                ...matches.filter((match) => {
+                  const finishPick = payload.match_finish_picks?.[match.id];
+                  return Boolean(
+                    payload.match_picks[match.id] ||
+                      payload.match_length_picks?.[match.id] ||
+                      payload.match_interference_picks?.[match.id] ||
+                      finishPick?.method ||
+                      finishPick?.winner ||
+                      finishPick?.loser,
+                  );
+                }),
+              ]
                 .map((item) => ({
                   type: ("match_type" in item
                     ? "match"

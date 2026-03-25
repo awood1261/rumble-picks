@@ -15,14 +15,19 @@ const formatShowDate = (startsAt: string | null) => {
   });
 };
 
-const getLockStatusText = (startsAt: string | null, now: number) => {
+const getLockStatusText = (
+  startsAt: string | null,
+  lockPicksAtStart: boolean | null | undefined,
+  now: number,
+) => {
+  const locksAtStart = lockPicksAtStart ?? true;
   if (!startsAt) {
     return "Lock time not set";
   }
   const startTime = new Date(startsAt).getTime();
   const diffMs = startTime - now;
   if (diffMs <= 0) {
-    return "Show is locked";
+    return locksAtStart ? "Show is locked" : "Live picks are open";
   }
   const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
   const days = Math.floor(totalSeconds / 86400);
@@ -36,7 +41,9 @@ const getLockStatusText = (startsAt: string | null, now: number) => {
     minutes ? `${pad(minutes)}m` : null,
     `${pad(seconds)}s`,
   ].filter(Boolean);
-  return `Picks lock in ${parts.join(" ")}`;
+  return locksAtStart
+    ? `Picks lock in ${parts.join(" ")}`
+    : `Show starts in ${parts.join(" ")}`;
 };
 
 type ShowCardsGridProps = {
@@ -62,7 +69,11 @@ export const ShowCardsGrid = ({
         const promotion = show.promotion_id
           ? promotionById.get(show.promotion_id)
           : null;
-        const lockStatusText = getLockStatusText(show.starts_at, now);
+        const lockStatusText = getLockStatusText(
+          show.starts_at,
+          show.lock_picks_at_start,
+          now,
+        );
         return (
           <Link
             key={show.id}

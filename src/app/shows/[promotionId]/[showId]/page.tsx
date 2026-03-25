@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -20,7 +20,7 @@ export default function ShowDetailPage() {
   const [authChecked, setAuthChecked] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  const formattedStart = useMemo(() => {
+  const formattedStart = (() => {
     if (!show?.starts_at) return null;
     const date = new Date(show.starts_at);
     if (Number.isNaN(date.getTime())) return null;
@@ -29,16 +29,17 @@ export default function ShowDetailPage() {
       day: "numeric",
       year: "numeric",
     });
-  }, [show?.starts_at]);
+  })();
 
-  const lockStatusText = useMemo(() => {
+  const lockStatusText = (() => {
+    const locksAtStart = show?.lock_picks_at_start ?? true;
     if (!show?.starts_at) {
       return "Lock time not set";
     }
     const startTime = new Date(show.starts_at).getTime();
     const diffMs = startTime - now;
     if (diffMs <= 0) {
-      return "Show is locked";
+      return locksAtStart ? "Show is locked" : "Live picks are open";
     }
     const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
     const days = Math.floor(totalSeconds / 86400);
@@ -52,8 +53,10 @@ export default function ShowDetailPage() {
       minutes ? `${pad(minutes)}m` : null,
       `${pad(seconds)}s`,
     ].filter(Boolean);
-    return `Picks lock in ${parts.join(" ")}`;
-  }, [show?.starts_at, now]);
+    return locksAtStart
+      ? `Picks lock in ${parts.join(" ")}`
+      : `Show starts in ${parts.join(" ")}`;
+  })();
 
   useEffect(() => {
     let ignore = false;
@@ -62,7 +65,7 @@ export default function ShowDetailPage() {
       const { data, error } = await supabase
         .from("shows")
         .select(
-          "id, name, tagline, image_url, starts_at, status, promotion_id, requires_email_registration"
+          "id, name, tagline, image_url, starts_at, status, promotion_id, requires_email_registration, lock_picks_at_start"
         )
         .eq("id", showId)
         .maybeSingle();

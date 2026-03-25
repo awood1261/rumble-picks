@@ -34,7 +34,7 @@ export default function Home() {
         await Promise.all([
           supabase
             .from("shows")
-            .select("id, name, image_url, promotion_id, status, starts_at")
+            .select("id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start")
             .order("starts_at", { ascending: true }),
           supabase
             .from("promotions")
