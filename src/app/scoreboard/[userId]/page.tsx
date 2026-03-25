@@ -259,6 +259,52 @@ export default function ScoreboardPicksPage() {
     return new Map(matches.map((match) => [match.id, match.winner_side_id]));
   }, [matches]);
 
+  const eventsWithPicks = useMemo(() => {
+    if (!payload) return [];
+    return events.filter((event) => {
+      const pick = payload.rumbles?.[event.id] ?? emptyRumblePick;
+      return Boolean(
+        pick.entrants.length ||
+          pick.final_four.length ||
+          pick.winner ||
+          pick.entry_1 ||
+          pick.entry_2 ||
+          pick.entry_30 ||
+          pick.iron_person ||
+          pick.most_eliminations,
+      );
+    });
+  }, [events, payload]);
+
+  const eliminatorsWithPicks = useMemo(() => {
+    if (!payload) return [];
+    return eliminators.filter((eliminator) => {
+      const pick = payload.eliminators?.[eliminator.id] ?? emptyEliminatorPick;
+      return Boolean(
+        Object.keys(pick.entry_order ?? {}).length ||
+          Object.keys(pick.elimination_order ?? {}).length ||
+          Object.keys(pick.elimination_type ?? {}).length ||
+          pick.winner_id ||
+          pick.most_eliminations,
+      );
+    });
+  }, [eliminators, payload]);
+
+  const matchesWithPicks = useMemo(() => {
+    if (!payload) return [];
+    return matches.filter((match) => {
+      const finishPick = payload.match_finish_picks?.[match.id];
+      return Boolean(
+        payload.match_picks?.[match.id] ||
+          payload.match_length_picks?.[match.id] ||
+          payload.match_interference_picks?.[match.id] ||
+          finishPick?.method ||
+          finishPick?.winner ||
+          finishPick?.loser,
+      );
+    });
+  }, [matches, payload]);
+
   const renderGhostStrip = (ids: string[], maxVisible = 3) => {
     const uniqueIds = Array.from(new Set(ids)).filter(Boolean);
     if (uniqueIds.length === 0) return null;
@@ -1128,8 +1174,8 @@ export default function ScoreboardPicksPage() {
 
         
 
-        {events.length > 0 &&
-          events.map((event) => {
+        {eventsWithPicks.length > 0 &&
+          eventsWithPicks.map((event) => {
             const rumblePick = payload.rumbles?.[event.id] ?? emptyRumblePick;
             const actuals = actualsByEvent[event.id] ?? emptyActuals;
             const eventPoints = eventPointsByEvent[event.id] ?? {
@@ -1335,7 +1381,7 @@ export default function ScoreboardPicksPage() {
             );
           })}
 
-        {eliminators.length > 0 && (
+        {eliminatorsWithPicks.length > 0 && (
           <section className="mt-10">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-lg font-semibold">Eliminator Picks</h2>
@@ -1344,7 +1390,7 @@ export default function ScoreboardPicksPage() {
               </span>
             </div>
             <div className="mt-4 grid gap-4">
-              {eliminators.map((eliminator) => {
+              {eliminatorsWithPicks.map((eliminator) => {
                 const pick =
                   payload.eliminators?.[eliminator.id] ?? emptyEliminatorPick;
                 const entries = eliminatorEntries.filter(
@@ -1479,18 +1525,17 @@ export default function ScoreboardPicksPage() {
           </section>
         )}
 
-        <div className="mt-10 flex flex-wrap items-center gap-3">
-          <h2 className="text-lg font-semibold">Match Picks</h2>
-          <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
-            {matchPointsSummary.total} pts
-          </span>
-        </div>
-        <section className="mt-4">
-          {matches.length === 0 ? (
-            <p className="mt-3 text-sm text-zinc-400">No matches available.</p>
-          ) : (
+        {matchesWithPicks.length > 0 && (
+          <>
+            <div className="mt-10 flex flex-wrap items-center gap-3">
+              <h2 className="text-lg font-semibold">Match Picks</h2>
+              <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                {matchPointsSummary.total} pts
+              </span>
+            </div>
+            <section className="mt-4">
             <div className="mt-4 space-y-3 text-sm text-zinc-200">
-              {matches.map((match) => {
+              {matchesWithPicks.map((match) => {
                 const pick = payload.match_picks?.[match.id] ?? null;
                 const winner = matchWinnerMap.get(match.id) ?? null;
                 const sides = matchSidesByMatch[match.id] ?? [];
@@ -1773,8 +1818,9 @@ export default function ScoreboardPicksPage() {
                 );
               })}
             </div>
-          )}
-        </section>
+            </section>
+          </>
+        )}
       </main>
     </div>
   );

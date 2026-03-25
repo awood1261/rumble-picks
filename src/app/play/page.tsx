@@ -21,10 +21,12 @@ export default function PlayPage() {
 
   const activeShows = useMemo(() => {
     return shows.filter((show) => {
+      if (show.is_over) return false;
       if (!show.starts_at) return false;
       const startTime = new Date(show.starts_at).getTime();
       if (Number.isNaN(startTime)) return false;
-      return startTime > now;
+      if (startTime > now) return true;
+      return !(show.lock_picks_at_start ?? true);
     });
   }, [shows, now]);
 
@@ -37,7 +39,7 @@ export default function PlayPage() {
           supabase
             .from("shows")
             .select(
-              "id, name, image_url, promotion_id, status, starts_at, is_featured_play_show"
+              "id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start, is_featured_play_show, is_over"
             )
             .order("starts_at", { ascending: true }),
           supabase
