@@ -160,6 +160,28 @@ type TeamStackMatchupPickerProps = {
 const WRESTLER_OUTLINE_FILTER =
   "drop-shadow(0 0 0 rgba(0,0,0,0.92)) drop-shadow(1px 0 0 rgba(245,210,120,0.28)) drop-shadow(-1px 0 0 rgba(245,210,120,0.28)) drop-shadow(0 1px 0 rgba(245,210,120,0.28)) drop-shadow(0 -1px 0 rgba(245,210,120,0.28)) drop-shadow(0 0 8px rgba(245,210,120,0.08))";
 
+const MatchupSilhouette = ({
+  className = "",
+}: {
+  className?: string;
+}) => (
+  <div
+    className={`relative h-full w-full overflow-hidden bg-gradient-to-b from-zinc-800 via-zinc-900 to-black ${className}`}
+  >
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(245,210,120,0.12),_transparent_36%),linear-gradient(180deg,_rgba(255,255,255,0.04),_rgba(255,255,255,0)_30%)]" />
+    <svg
+      viewBox="0 0 240 320"
+      aria-hidden="true"
+      className="absolute inset-x-1/2 bottom-0 h-[92%] w-auto -translate-x-1/2 text-zinc-700/80"
+      fill="currentColor"
+    >
+      <circle cx="120" cy="72" r="44" />
+      <path d="M120 132c-46 0-84 36-84 82v106h168V214c0-46-38-82-84-82Z" />
+    </svg>
+    <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black via-black/65 to-transparent" />
+  </div>
+);
+
 const TeamStackMatchupPicker = ({
   matchId,
   sides,
@@ -236,7 +258,7 @@ const TeamStackMatchupPicker = ({
                         }`}
                       />
                     ) : (
-                      <div className="h-full w-full" />
+                      <MatchupSilhouette />
                     )}
                   </div>
                 );
@@ -2401,7 +2423,7 @@ export const MatchPicksSection = ({
                                               className="object-cover object-center md:object-top"
                                             />
                                           ) : (
-                                            <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
+                                            <MatchupSilhouette />
                                           )}
                                           <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                                         </div>
@@ -2409,7 +2431,7 @@ export const MatchPicksSection = ({
                                         })()
                                       ))
                                     ) : (
-                                      <div className="h-full w-full bg-gradient-to-b from-zinc-800 via-zinc-900 to-black" />
+                                      <MatchupSilhouette />
                                     )}
                                   </div>
                                 </div>
