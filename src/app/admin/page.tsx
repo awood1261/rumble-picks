@@ -139,6 +139,36 @@ type EliminatorEliminationRow = {
   elimination_order: number;
 };
 
+const ENTRANT_SELECT =
+  "id, name, promotion, gender, active, image_url, logo_url, roster_year, event_id, is_custom, created_by, status";
+const ENTRANT_PAGE_SIZE = 1000;
+
+async function loadAllEntrants() {
+  const rows: EntrantRow[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("entrants")
+      .select(ENTRANT_SELECT)
+      .range(from, from + ENTRANT_PAGE_SIZE - 1)
+      .order("name", { ascending: true });
+
+    if (error) {
+      return { data: null, error };
+    }
+
+    const batch = (data ?? []) as EntrantRow[];
+    rows.push(...batch);
+
+    if (batch.length < ENTRANT_PAGE_SIZE) {
+      return { data: rows, error: null };
+    }
+
+    from += ENTRANT_PAGE_SIZE;
+  }
+}
+
 type ShowQuestionRow = {
   id: string;
   show_id: string | null;
@@ -844,12 +874,7 @@ export default function AdminPage() {
           .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index, winner_entrant_id")
           .order("order_index", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: false }),
-        supabase
-          .from("entrants")
-          .select(
-            "id, name, promotion, gender, active, image_url, logo_url, roster_year, event_id, is_custom, created_by, status"
-          )
-          .order("name", { ascending: true }),
+        loadAllEntrants(),
         (() => {
           const query = supabase
             .from("matches")
@@ -1051,12 +1076,7 @@ export default function AdminPage() {
           .select("id, name, status, roster_year, roster_gender, entrant_limit, show_id, order_index, winner_entrant_id")
           .order("order_index", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: false }),
-          supabase
-            .from("entrants")
-            .select(
-              "id, name, promotion, gender, active, image_url, logo_url, roster_year, event_id, is_custom, created_by, status"
-            )
-            .order("name", { ascending: true }),
+          loadAllEntrants(),
           supabase
             .from("rumble_entries")
             .select(
