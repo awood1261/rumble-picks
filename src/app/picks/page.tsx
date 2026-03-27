@@ -74,6 +74,77 @@ const emptyEliminatorPick: EliminatorPick = {
   most_eliminations: null,
 };
 
+const ENTRANT_SELECT =
+  "id, name, promotion, gender, image_url, logo_url, roster_year, event_id, is_custom, created_by, status";
+const ENTRANT_PAGE_SIZE = 1000;
+
+async function loadAllEntrants() {
+  const rows: EntrantRow[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("entrants")
+      .select(ENTRANT_SELECT)
+      .range(from, from + ENTRANT_PAGE_SIZE - 1)
+      .order("name", { ascending: true });
+
+    if (error) {
+      return { data: null, error };
+    }
+
+    const batch = (data ?? []) as EntrantRow[];
+    rows.push(...batch);
+
+    if (batch.length < ENTRANT_PAGE_SIZE) {
+      return { data: rows, error: null };
+    }
+
+    from += ENTRANT_PAGE_SIZE;
+  }
+}
+
+const hasPickProgress = (payload?: Partial<PicksPayload> | null) => {
+  if (!payload) return false;
+
+  const hasRumbleProgress = Object.values(payload.rumbles ?? {}).some((pick) =>
+    Boolean(
+      pick?.entrants?.length ||
+        pick?.final_four?.length ||
+        pick?.winner ||
+        pick?.entry_1 ||
+        pick?.entry_2 ||
+        pick?.entry_30 ||
+        pick?.iron_person ||
+        pick?.most_eliminations,
+    ),
+  );
+
+  const hasEliminatorProgress = Object.values(payload.eliminators ?? {}).some(
+    (pick) =>
+      Boolean(
+        Object.keys(pick?.entry_order ?? {}).length ||
+          Object.keys(pick?.elimination_order ?? {}).length ||
+          Object.keys(pick?.elimination_type ?? {}).length ||
+          Object.keys(pick?.eliminated_by ?? {}).length ||
+          pick?.winner_id ||
+          pick?.most_eliminations,
+      ),
+  );
+
+  return Boolean(
+    hasRumbleProgress ||
+      hasEliminatorProgress ||
+      Object.values(payload.question_picks ?? {}).some(Boolean) ||
+      Object.values(payload.match_picks ?? {}).some(Boolean) ||
+      Object.values(payload.match_finish_picks ?? {}).some(
+        (pick) => pick?.method || pick?.winner || pick?.loser,
+      ) ||
+      Object.values(payload.match_length_picks ?? {}).some(Boolean) ||
+      Object.values(payload.match_interference_picks ?? {}).some(Boolean),
+  );
+};
+
 const emptyActuals: EventActuals = {
   entrantSet: new Set(),
   confirmedSet: new Set(),
@@ -140,6 +211,7 @@ function PicksPageInner() {
   const lastLoadedShowIdRef = useRef<string | null>(null);
   const lastLoadedUserIdRef = useRef<string | null>(null);
   const picksLoadedForShowIdRef = useRef<string | null>(null);
+  const hasResumeableProgressRef = useRef(false);
   const isHydratingPayloadRef = useRef(false);
   const hasLocalEditsRef = useRef(false);
   const loadRumbleEntriesRef = useRef<() => void>(() => {});
@@ -228,6 +300,10 @@ function PicksPageInner() {
     if (!selectedShow?.starts_at) return false;
     return new Date() >= new Date(selectedShow.starts_at);
   }, [selectedShow?.starts_at, showLocksAtStart]);
+  const hasShowStarted = useMemo(() => {
+    if (!selectedShow?.starts_at) return false;
+    return new Date() >= new Date(selectedShow.starts_at);
+  }, [selectedShow?.starts_at]);
 
   const lockStatusText = useMemo(() => {
     if (!selectedShow?.starts_at) {
@@ -451,10 +527,11 @@ function PicksPageInner() {
 
   const availableMatches = useMemo(() => {
     if (isLocked) return matches;
+    if (!hasShowStarted) return matches;
     return matches.filter(
       (match) => !match.winner_side_id && !match.winner_entrant_id,
     );
-  }, [isLocked, matches]);
+  }, [hasShowStarted, isLocked, matches]);
 
   const getEliminationKey = (entry: RumbleEntryRow) =>
     entry.eliminated_at
@@ -933,6 +1010,7 @@ function PicksPageInner() {
       setEditSection(null);
       setFocusedEventId("");
       hasLocalEditsRef.current = false;
+      hasResumeableProgressRef.current = false;
     }
     if (needsSkeleton) {
       setIsPicksLoading(true);
@@ -950,12 +1028,7 @@ function PicksPageInner() {
             .eq("show_id", selectedShowId)
             .eq("user_id", userId)
             .maybeSingle(),
-            supabase
-              .from("entrants")
-              .select(
-                "id, name, promotion, gender, image_url, logo_url, roster_year, event_id, is_custom, created_by, status",
-              )
-              .order("name", { ascending: true }),
+            loadAllEntrants(),
           ]);
 
         if (entrantError) {
@@ -973,6 +1046,7 @@ function PicksPageInner() {
         loadMatchPickStatsRef.current();
         loadRankRef.current();
 
+        const hasServerPicks = Boolean(pickRows);
         let savedPayload = pickRows
           ? ({
               rumbles: pickRows.rumbles ?? {},
@@ -986,7 +1060,7 @@ function PicksPageInner() {
           : null;
         const savedUpdatedAt =
           pickRows?.updated_at ? Date.parse(pickRows.updated_at) : 0;
-        if (draftKey && typeof window !== "undefined") {
+        if (hasServerPicks && draftKey && typeof window !== "undefined") {
           try {
             const draftRaw = window.localStorage.getItem(draftKey);
             if (draftRaw) {
@@ -1003,6 +1077,14 @@ function PicksPageInner() {
             console.warn("Failed to restore draft picks", error);
           }
         }
+        if (!hasServerPicks && typeof window !== "undefined") {
+          if (draftKey) {
+            window.localStorage.removeItem(draftKey);
+          }
+          const resetLastStepKey = `picks:lastStep:${selectedShowId}:${userId}`;
+          window.localStorage.removeItem(resetLastStepKey);
+        }
+        hasResumeableProgressRef.current = hasPickProgress(savedPayload);
         const nextRumbles: Record<string, RumblePick> = {};
         const existingRumbles = savedPayload?.rumbles ?? {};
         showEvents.forEach((event) => {
@@ -1557,6 +1639,11 @@ function PicksPageInner() {
     if (!lastStepKey || totalSteps === 0) return;
     if (hasRestoredStepRef.current) return;
     if (typeof window === "undefined") return;
+    if (!hasResumeableProgressRef.current) {
+      setStepIndex(0);
+      hasRestoredStepRef.current = true;
+      return;
+    }
     const saved = window.localStorage.getItem(lastStepKey);
     if (!saved) {
       setStepIndex(0);
