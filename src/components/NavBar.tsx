@@ -76,6 +76,10 @@ export const NavBar = () => {
         : "hover:text-amber-200"
     }`;
 
+  if (pathname.startsWith("/play/premium") || pathname.startsWith("/picks/premium")) {
+    return null;
+  }
+
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-900/80 bg-zinc-950/80 backdrop-blur">
       <nav className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
