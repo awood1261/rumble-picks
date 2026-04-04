@@ -1,11 +1,25 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
+import { Press_Start_2P, VT323 } from "next/font/google";
 import { useEffect, useState } from "react";
 import { PREMIUM_ROUTES } from "../../../lib/premiumMode";
 
 const SPLASH_FADE_MS = 900;
 const SPLASH_HOLD_MS = 5000;
+const PREMIUM_PROMOTION_PLACEHOLDER =
+  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/8bit/lol-logo-pixelate.png";
+
+const pressStart2P = Press_Start_2P({
+  subsets: ["latin"],
+  weight: "400",
+});
+
+const vt323 = VT323({
+  subsets: ["latin"],
+  weight: "400",
+});
 
 type SplashPhase = "enter" | "visible" | "exit" | "title";
 
@@ -59,14 +73,20 @@ function PremiumSplashScreen({ phase }: { phase: SplashPhase }) {
                 <div className="absolute inset-[10%] rounded-full border border-[#ffd974]/40" />
               </div>
 
-              <h1 className="mt-4 text-balance font-mono text-4xl font-black uppercase tracking-[0.08em] text-[#fff5d1] drop-shadow-[0_3px_0_rgba(53,29,123,0.8)] sm:text-6xl">
-                "Wrestling Is For Everyone"
+              <h1
+                className={`${pressStart2P.className} mt-4 text-balance text-4xl font-black uppercase tracking-[0.08em] text-[#fff5d1] drop-shadow-[0_3px_0_rgba(53,29,123,0.8)] sm:text-6xl`}
+              >
+                &ldquo;Wrestling Is For Everyone&rdquo;
               </h1>
-              <p className="mt-4 font-mono text-sm font-semibold uppercase tracking-[0.16em] text-[#fff3b7] sm:text-xl">
+              <p
+                className={`${vt323.className} mt-4 text-2xl font-normal uppercase tracking-[0.12em] text-[#fff3b7] sm:text-4xl`}
+              >
                 Labor of Love GM Billy Avery
               </p>
               <div className="mx-auto mt-8 h-px w-4/5 max-w-xl bg-[linear-gradient(90deg,_transparent,_rgba(255,212,98,0.95),_transparent)] shadow-[0_0_20px_rgba(255,208,92,0.34)]" />
-              <p className="mt-8 font-mono text-lg font-black uppercase tracking-[0.14em] text-[#ffe28d] sm:text-3xl">
+              <p
+                className={`${pressStart2P.className} mt-8 text-[10px] font-black uppercase tracking-[0.18em] text-[#ffe28d]/75 sm:text-sm`}
+              >
                 An Experience Powered by BoutPick
               </p>
             </div>
@@ -78,32 +98,49 @@ function PremiumSplashScreen({ phase }: { phase: SplashPhase }) {
 }
 
 function PremiumTitleCardScreen() {
-  return (
-    <div className="relative min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,211,92,0.18),_transparent_24%),linear-gradient(180deg,_#0b0616_0%,_#190d28_55%,_#09050f_100%)]">
-      <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:6px_6px,6px_6px]" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_top,_rgba(110,88,255,0.38),_transparent_62%)]" />
+  const currentYear = new Date().getFullYear();
 
-      <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center justify-center px-6 py-12">
-        <div className="w-full max-w-4xl rounded-[2.4rem] border border-amber-300/20 bg-black/45 p-4 shadow-[0_0_0_1px_rgba(255,211,92,0.06),0_24px_90px_rgba(0,0,0,0.5)] backdrop-blur-sm sm:p-6">
-          <div className="rounded-[2rem] border border-amber-300/15 bg-[linear-gradient(180deg,_rgba(255,255,255,0.04),_rgba(255,255,255,0)_20%),repeating-linear-gradient(90deg,_rgba(255,255,255,0.02)_0px,_rgba(255,255,255,0.02)_2px,_transparent_2px,_transparent_16px)] px-6 py-10 text-center sm:px-10 sm:py-14">
-            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.45em] text-amber-200/80">
-              Title Card
-            </p>
-            <h1 className="mt-6 bg-gradient-to-b from-amber-50 via-amber-100 to-amber-300 bg-clip-text font-mono text-4xl font-black uppercase tracking-[0.18em] text-transparent drop-shadow-[0_0_18px_rgba(255,208,92,0.2)] sm:text-6xl">
-              THE EXHIBITION
-            </h1>
-            <p className="mx-auto mt-5 max-w-2xl font-mono text-sm uppercase tracking-[0.14em] text-amber-50/75 sm:text-base">
-              Choose your path, conquer the card, and make every prediction count.
-            </p>
-            <div className="mx-auto mt-8 h-px w-full max-w-2xl bg-[linear-gradient(90deg,_transparent,_rgba(255,212,98,0.95),_transparent)] shadow-[0_0_20px_rgba(255,208,92,0.25)]" />
-            <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link
-                href={PREMIUM_ROUTES.picks}
-                className="inline-flex h-12 items-center justify-center rounded-full border border-[#ffe28d]/60 bg-[#ffe28d] px-8 font-mono text-sm font-black uppercase tracking-[0.24em] text-[#28154f] transition hover:bg-[#fff0b8]"
-              >
-                Play
-              </Link>
+  return (
+    <div className="relative min-h-screen bg-black text-white">
+      <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center px-6 py-12 text-center">
+        <div className="w-full max-w-2xl">
+          <div className="mx-auto flex justify-center">
+            <div className="relative h-32 w-32 sm:h-40 sm:w-40">
+              <Image
+                src={PREMIUM_PROMOTION_PLACEHOLDER}
+                alt="Promotion logo"
+                fill
+                sizes="(max-width: 640px) 128px, 160px"
+                className="object-contain pixelated"
+                priority
+              />
             </div>
+          </div>
+
+          <div className="mt-8">
+            <p
+              className={`${pressStart2P.className} text-xl uppercase tracking-[0.14em] text-[#62d8ff] sm:text-2xl`}
+            >
+              The
+            </p>
+            <h1
+              className={`${pressStart2P.className} mt-4 text-4xl uppercase leading-[1.3] tracking-[0.08em] text-[#f6d83f] [text-shadow:4px_0_0_#cf5b1e] sm:text-6xl`}
+            >
+              Exhibition
+            </h1>
+          </div>
+
+          <div className="mt-14 flex flex-col items-center gap-4">
+            <Link
+              href={PREMIUM_ROUTES.picks}
+              className={`${pressStart2P.className} inline-flex items-center justify-center text-base uppercase tracking-[0.18em] text-white transition hover:text-[#f6d83f] sm:text-lg`}
+            >
+              Play
+            </Link>
+          </div>
+
+          <div className={`${pressStart2P.className} mt-20 space-y-2 text-[10px] uppercase tracking-[0.16em] text-white sm:text-xs`}>
+            <p>&copy;{currentYear} BoutPick</p>
           </div>
         </div>
       </main>
