@@ -1,66 +1,173 @@
 "use client";
 
-import Link from "next/link";
+import Image from "next/image";
+import { Press_Start_2P, VT323 } from "next/font/google";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { PremiumShell } from "../../../components/premium/PremiumShell";
+
+const pressStart2P = Press_Start_2P({
+  subsets: ["latin"],
+  weight: "400",
+});
+
+const vt323 = VT323({
+  subsets: ["latin"],
+  weight: "400",
+});
+
+const MAP_ART =
+  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/8bit/canvasmap.png";
+
+type DemoNode = {
+  id: string;
+  title: string;
+  type: "match" | "question";
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  status: "unanswered" | "active" | "answered";
+};
+
+const DEMO_NODES: DemoNode[] = [
+  {
+    id: "gallery-1",
+    title: "Opening Match",
+    type: "match",
+    left: 14.6,
+    top: 16.6,
+    width: 33.4,
+    height: 17.7,
+    status: "answered",
+  },
+  {
+    id: "gallery-2",
+    title: "Bonus Question",
+    type: "question",
+    left: 48.2,
+    top: 16.6,
+    width: 33.4,
+    height: 17.7,
+    status: "active",
+  },
+  {
+    id: "gallery-3",
+    title: "Tag Match",
+    type: "match",
+    left: 14.6,
+    top: 35.9,
+    width: 33.4,
+    height: 17.7,
+    status: "unanswered",
+  },
+  {
+    id: "gallery-4",
+    title: "Rivalry Match",
+    type: "match",
+    left: 48.2,
+    top: 35.9,
+    width: 33.4,
+    height: 17.7,
+    status: "unanswered",
+  },
+  {
+    id: "gallery-5",
+    title: "Semi Main Event",
+    type: "match",
+    left: 14.6,
+    top: 55.1,
+    width: 33.4,
+    height: 17.7,
+    status: "unanswered",
+  },
+  {
+    id: "gallery-6",
+    title: "Main Event",
+    type: "match",
+    left: 48.2,
+    top: 55.1,
+    width: 33.4,
+    height: 17.7,
+    status: "unanswered",
+  },
+];
+
+const statusClass = (status: DemoNode["status"], isSelected: boolean) => {
+  if (isSelected) {
+    return "border-amber-200 bg-amber-200/18 shadow-[0_0_0_2px_rgba(255,224,138,0.4),0_0_34px_rgba(255,191,0,0.22)]";
+  }
+  if (status === "answered") {
+    return "border-emerald-300/80 bg-emerald-300/10 shadow-[0_0_0_1px_rgba(110,231,183,0.2)]";
+  }
+  if (status === "active") {
+    return "border-sky-300/80 bg-sky-300/10 shadow-[0_0_0_1px_rgba(125,211,252,0.2)]";
+  }
+  return "border-white/15 bg-black/5 hover:border-amber-200/70 hover:bg-amber-200/8";
+};
 
 export default function PremiumPicksPage() {
   const searchParams = useSearchParams();
-  const showId = searchParams.get("show");
+  searchParams.get("show");
+  const [selectedNodeId, setSelectedNodeId] = useState<string>("gallery-2");
 
   return (
-    <PremiumShell
-      eyebrow="Premium Picks"
-      title="Retro Map Hub"
-      description="This route is the dedicated premium picks entry point. In Phase 0 it exists to lock in route structure and interaction direction before the map, sprites, and node navigation are built."
-    >
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <section className="rounded-[1.5rem] border border-amber-300/15 bg-black/40 p-5 sm:p-6">
-          <p className="font-mono text-[11px] uppercase tracking-[0.4em] text-amber-200/80">
-            Phase 0 Decisions In Code
-          </p>
-          <ul className="mt-4 space-y-3 text-sm text-amber-50/75">
-            <li>Premium picks stay on a separate route tree.</li>
-            <li>The future premium map will be driven by the existing step model.</li>
-            <li>Premium mode will keep the current picks payload and scoring.</li>
-            <li>Sprite-based match scenes will replace the current photo cards later.</li>
-          </ul>
-          <div className="mt-6 rounded-[1.25rem] border border-amber-300/10 bg-[linear-gradient(180deg,_rgba(255,255,255,0.04),_rgba(255,255,255,0)_100%)] p-4">
-            <p className="font-mono text-[11px] uppercase tracking-[0.35em] text-amber-200/80">
-              Show Context
-            </p>
-            <p className="mt-3 text-sm text-amber-50/75">
-              {showId
-                ? `Premium picks requested for show ${showId}.`
-                : "No show selected yet. Future map loading will use the same show query handling as standard picks."}
-            </p>
+    <div className="min-h-screen bg-black text-amber-50">
+      <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col px-4 py-6 sm:px-6 sm:py-8">
+        <h1
+          className={`${pressStart2P.className} text-center text-lg uppercase tracking-[0.3em] text-amber-100 sm:text-2xl`}
+        >
+          Map
+        </h1>
+        <div className="mt-5 flex flex-1 items-center justify-center">
+          <div className="relative aspect-[9/16] w-full max-w-[28rem] overflow-hidden rounded-[1.25rem] border border-amber-200/10 bg-black sm:max-w-[32rem]">
+            <Image
+              src={MAP_ART}
+              alt="Retro gallery map"
+              fill
+              priority
+              sizes="(max-width: 640px) 100vw, 32rem"
+              className="object-contain"
+            />
+            {DEMO_NODES.map((node) => {
+              const isSelected = node.id === selectedNodeId;
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  onClick={() => setSelectedNodeId(node.id)}
+                  className={`absolute rounded-[0.9rem] border-2 transition-all duration-200 ${statusClass(
+                    node.status,
+                    isSelected,
+                  )}`}
+                  style={{
+                    left: `${node.left}%`,
+                    top: `${node.top}%`,
+                    width: `${node.width}%`,
+                    height: `${node.height}%`,
+                  }}
+                  aria-label={`Open ${node.title}`}
+                >
+                  <span className="sr-only">{node.title}</span>
+                  {node.status === "answered" ? (
+                    <span
+                      className={`${pressStart2P.className} absolute right-2 top-2 rounded-full border border-emerald-300/70 bg-black/80 px-1.5 py-1 text-[8px] uppercase text-emerald-200`}
+                    >
+                      Done
+                    </span>
+                  ) : null}
+                  {isSelected ? (
+                    <span
+                      className={`${vt323.className} absolute bottom-2 left-1/2 -translate-x-1/2 rounded-md bg-black/80 px-2 py-1 text-xl uppercase tracking-[0.08em] text-amber-100`}
+                    >
+                      {node.title}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
-        </section>
-        <aside className="rounded-[1.5rem] border border-amber-300/15 bg-black/40 p-5 sm:p-6">
-          <p className="font-mono text-[11px] uppercase tracking-[0.4em] text-amber-200/80">
-            Next Build Target
-          </p>
-          <p className="mt-4 text-sm text-amber-50/75">
-            The next concrete step is replacing this placeholder with a node map
-            generated from the same ordered picks flow the standard page already
-            uses.
-          </p>
-          <div className="mt-6 flex flex-col gap-3">
-            <Link
-              href={showId ? `/picks?show=${showId}` : "/picks"}
-              className="inline-flex h-11 items-center justify-center rounded-full border border-amber-300/35 bg-black/40 px-5 font-mono text-xs font-bold uppercase tracking-[0.22em] text-amber-100 transition hover:border-amber-200/60 hover:text-amber-50"
-            >
-              Open Standard Picks
-            </Link>
-            <Link
-              href="/play/premium"
-              className="inline-flex h-11 items-center justify-center rounded-full border border-amber-300/35 bg-black/40 px-5 font-mono text-xs font-bold uppercase tracking-[0.22em] text-amber-100 transition hover:border-amber-200/60 hover:text-amber-50"
-            >
-              Back To Premium Entry
-            </Link>
-          </div>
-        </aside>
-      </div>
-    </PremiumShell>
+        </div>
+      </main>
+    </div>
   );
 }
