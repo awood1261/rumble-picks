@@ -155,13 +155,11 @@ export default function PremiumPicksPage() {
                       Done
                     </span>
                   ) : null}
-                  {isSelected ? (
-                    <span
-                      className={`${vt323.className} absolute bottom-2 left-1/2 -translate-x-1/2 rounded-md bg-black/80 px-2 py-1 text-xl uppercase tracking-[0.08em] text-amber-100`}
-                    >
-                      {node.title}
-                    </span>
-                  ) : null}
+                  <span
+                    className={`${vt323.className} absolute bottom-2 left-1/2 -translate-x-1/2 rounded-md bg-black/80 px-2 py-1 text-xl uppercase tracking-[0.08em] text-amber-100`}
+                  >
+                    {node.title}
+                  </span>
                 </button>
               );
             })}
