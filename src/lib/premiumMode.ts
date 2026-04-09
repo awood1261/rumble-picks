@@ -3,6 +3,9 @@ export const PREMIUM_ROUTES = {
   picks: "/picks/premium",
 } as const;
 
+export const PREMIUM_MATCHUP_BACKGROUND_URL =
+  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/8bit/ring-background.png";
+
 export const PREMIUM_AVATAR_OPTIONS = {
   skinTone: ["tone_1", "tone_2", "tone_3", "tone_4", "tone_5", "tone_6"],
   hairStyle: ["short_1", "short_2", "long_1", "long_2"],
