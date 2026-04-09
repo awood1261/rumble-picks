@@ -46,6 +46,9 @@ type EntrantRow = {
   name: string;
   promotion: string | null;
   image_url: string | null;
+  sprite_neutral_url?: string | null;
+  sprite_victory_url?: string | null;
+  sprite_defeat_url?: string | null;
 };
 
 type EventRow = {

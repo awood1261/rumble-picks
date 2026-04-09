@@ -1,3 +1,5 @@
+import type { EntrantRow } from "./picksTypes";
+
 export const PREMIUM_ROUTES = {
   play: "/play/premium",
   picks: "/picks/premium",
@@ -46,3 +48,25 @@ export type PremiumMapNodeType =
   | "match";
 
 export type PremiumMapNodeState = "unanswered" | "active" | "answered";
+
+export type PremiumSpriteState = "neutral" | "victory" | "defeat";
+
+export const getPremiumEntrantSpriteUrl = (
+  entrant: Pick<
+    EntrantRow,
+    "sprite_neutral_url" | "sprite_victory_url" | "sprite_defeat_url"
+  > | null | undefined,
+  state: PremiumSpriteState,
+) => {
+  if (!entrant) return null;
+
+  if (state === "victory") {
+    return entrant.sprite_victory_url ?? entrant.sprite_neutral_url ?? null;
+  }
+
+  if (state === "defeat") {
+    return entrant.sprite_defeat_url ?? entrant.sprite_neutral_url ?? null;
+  }
+
+  return entrant.sprite_neutral_url ?? null;
+};

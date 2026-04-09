@@ -3,8 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Press_Start_2P, VT323 } from "next/font/google";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { PREMIUM_DEMO_NODES, type PremiumDemoNode } from "../../../lib/premiumMapNodes";
+import { PremiumIntroSequence } from "../../../components/premium/PremiumIntroSequence";
+import { loadPremiumMapData } from "../../../lib/premiumPicksData";
+import type { PremiumMapMatchNode } from "../../../lib/premiumMapNodes";
+import { supabase } from "../../../lib/supabaseClient";
 
 const pressStart2P = Press_Start_2P({
   subsets: ["latin"],
@@ -18,7 +22,7 @@ const vt323 = VT323({
 
 const MAP_ART =
   "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/8bit/canvasmap.png";
-const statusClass = (status: PremiumDemoNode["status"]) => {
+const statusClass = (status: PremiumMapMatchNode["status"]) => {
   if (status === "answered") {
     return "border-emerald-300/80 bg-emerald-300/10 shadow-[0_0_0_1px_rgba(110,231,183,0.2)]";
   }
@@ -31,6 +35,77 @@ const statusClass = (status: PremiumDemoNode["status"]) => {
 export default function PremiumPicksPage() {
   const searchParams = useSearchParams();
   const showId = searchParams.get("show");
+  const [nodes, setNodes] = useState<PremiumMapMatchNode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<string | null>(null);
+  const [showIntro, setShowIntro] = useState(false);
+
+  useEffect(() => {
+    if (!showId || typeof window === "undefined") {
+      setShowIntro(false);
+      return;
+    }
+
+    const introKey = `premium:introSeen:${showId}`;
+    const hasSeenIntro = window.sessionStorage.getItem(introKey) === "1";
+    setShowIntro(!hasSeenIntro);
+  }, [showId]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const load = async () => {
+      if (!showId) {
+        if (isActive) {
+          setNodes([]);
+          setMessage("Open premium mode with a show selected.");
+          setLoading(false);
+        }
+        return;
+      }
+
+      setLoading(true);
+      setMessage(null);
+
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const data = await loadPremiumMapData(showId, session?.user?.id ?? null);
+
+        if (!isActive) return;
+        setNodes(data.nodes);
+        setMessage(data.nodes.length === 0 ? "No matches are configured for this show yet." : null);
+      } catch (error) {
+        if (!isActive) return;
+        setNodes([]);
+        setMessage(error instanceof Error ? error.message : "Unable to load premium map.");
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      isActive = false;
+    };
+  }, [showId]);
+
+  if (showIntro) {
+    return (
+      <PremiumIntroSequence
+        onComplete={() => {
+          if (typeof window !== "undefined" && showId) {
+            window.sessionStorage.setItem(`premium:introSeen:${showId}`, "1");
+          }
+          setShowIntro(false);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-amber-50">
@@ -49,11 +124,12 @@ export default function PremiumPicksPage() {
               priority
               sizes="(max-width: 640px) 100vw, 32rem"
               className="object-contain"
+              unoptimized
             />
-            {PREMIUM_DEMO_NODES.map((node) => {
+            {nodes.map((node) => {
               const href = showId
-                ? `/picks/premium/node/${node.id}?show=${showId}`
-                : `/picks/premium/node/${node.id}`;
+                ? `/picks/premium/match/${node.matchId}?show=${showId}`
+                : `/picks/premium/match/${node.matchId}`;
               return (
                 <Link
                   key={node.id}
@@ -85,6 +161,13 @@ export default function PremiumPicksPage() {
                 </Link>
               );
             })}
+            {!loading && nodes.length === 0 ? (
+              <div className="absolute inset-x-6 bottom-6 rounded-2xl border border-amber-200/20 bg-black/70 px-4 py-3 text-center shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
+                <p className={`${vt323.className} text-2xl uppercase tracking-[0.08em] text-amber-100`}>
+                  {message ?? "No premium map nodes available."}
+                </p>
+              </div>
+            ) : null}
           </div>
         </div>
       </main>

@@ -59,6 +59,9 @@ export type EntrantRow = {
   gender: string | null;
   image_url: string | null;
   logo_url: string | null;
+  sprite_neutral_url?: string | null;
+  sprite_victory_url?: string | null;
+  sprite_defeat_url?: string | null;
   roster_year: number | null;
   event_id: string | null;
   is_custom: boolean;
