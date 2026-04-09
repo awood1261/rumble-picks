@@ -155,8 +155,8 @@ export default function PremiumMatchPage() {
           </div>
         </div>
 
-        <div className="flex flex-1 flex-col justify-end">
-          <div className="mx-auto flex w-full max-w-6xl flex-1 items-end justify-center pb-10 pt-8">
+        <div className="flex flex-1 flex-col justify-start">
+          <div className="mx-auto flex w-full max-w-6xl flex-1 items-start justify-center pb-6 pt-24 sm:pt-28">
             {loading ? (
               <div className="rounded-full border border-amber-200/20 bg-black/65 px-5 py-3">
                 <p
@@ -166,7 +166,7 @@ export default function PremiumMatchPage() {
                 </p>
               </div>
             ) : scene && matchSides.length === 2 ? (
-              <div className="grid w-full grid-cols-[1fr_auto_1fr] items-end gap-2 sm:gap-6">
+              <div className="relative grid w-full grid-cols-2 items-end gap-2 sm:gap-6">
                 {matchSides.map((side, index) => {
                   const selectedSideId = scene.selectedSideId;
                   const spriteState = spriteStateForSide(selectedSideId, side.side.id);
@@ -180,52 +180,46 @@ export default function PremiumMatchPage() {
                       type="button"
                       disabled={saving}
                       onClick={() => void handleSelectSide(side.side.id)}
-                      className={`group relative flex min-h-[24rem] items-end justify-center rounded-[2rem] border px-3 pb-5 pt-4 transition sm:min-h-[32rem] ${
+                      className={`group relative flex min-h-[28rem] items-end justify-center overflow-visible rounded-[2rem] border px-2 pb-4 pt-2 transition sm:min-h-[38rem] ${
                         isSelected
-                          ? "border-amber-200 bg-amber-200/10 shadow-[0_0_0_2px_rgba(255,224,138,0.5),0_0_46px_rgba(255,191,0,0.24)]"
+                          ? "border-white/10 bg-black/25"
                           : "border-white/10 bg-black/25 hover:border-amber-200/60 hover:bg-black/35"
                       } ${index === 0 ? "text-left" : "text-right"}`}
                     >
+                      {isSelected ? (
+                        <div className="pointer-events-none absolute inset-x-2 inset-y-0 rounded-[1.6rem] border-2 border-amber-200 bg-amber-200/10 shadow-[0_0_0_2px_rgba(255,224,138,0.38),0_0_40px_rgba(255,191,0,0.18)] sm:inset-x-3" />
+                      ) : null}
                       {spriteUrl ? (
-                        <div className="pointer-events-none absolute inset-x-0 bottom-0 top-4">
+                        <div className="pointer-events-none absolute inset-x-[-4%] bottom-[1%] top-[1%] sm:bottom-[3%] sm:top-[-1%]">
                           <Image
                             src={spriteUrl}
                             alt={featuredEntrant?.name ?? side.displayName}
                             fill
                             unoptimized
                             sizes="(max-width: 640px) 45vw, 28vw"
-                            className={`object-contain object-bottom drop-shadow-[0_12px_30px_rgba(0,0,0,0.45)] ${
+                            className={`object-contain object-bottom pb-[30px] drop-shadow-[0_12px_30px_rgba(0,0,0,0.45)] scale-[1.28] sm:scale-[1.28] ${
                               index === 0 ? "scale-x-[-1]" : ""
                             }`}
                           />
                         </div>
                       ) : (
-                        <div className="pointer-events-none absolute inset-x-4 bottom-20 top-12 rounded-[2rem] border border-dashed border-amber-200/25 bg-black/30" />
+                        <div className="pointer-events-none absolute inset-x-2 bottom-16 top-6 rounded-[2rem] border border-dashed border-amber-200/25 bg-black/30" />
                       )}
 
-                      <div className="pointer-events-none relative z-10 flex w-full items-end justify-between gap-3">
-                        <div className="rounded-2xl border border-amber-200/20 bg-black/70 px-3 py-2 shadow-[0_14px_35px_rgba(0,0,0,0.32)]">
+                      <div className="pointer-events-none relative z-10 flex w-full justify-center">
+                        <div className="absolute bottom-[-3.35rem] rounded-2xl border border-amber-200/20 bg-black/78 px-3 py-2 shadow-[0_14px_35px_rgba(0,0,0,0.32)]">
                           <p
-                            className={`${vt323.className} text-[1.55rem] uppercase leading-none tracking-[0.08em] text-amber-50`}
+                            className={`${vt323.className} text-center text-[1.55rem] uppercase leading-none tracking-[0.08em] text-amber-50`}
                           >
                             {side.displayName}
                           </p>
                         </div>
-                        {isSelected ? (
-                          <div className="rounded-full border border-amber-200/60 bg-black/70 px-3 py-2">
-                            <p
-                              className={`${pressStart2P.className} text-[10px] uppercase tracking-[0.18em] text-amber-100`}
-                            >
-                              Picked
-                            </p>
-                          </div>
-                        ) : null}
                       </div>
                     </button>
                   );
                 })}
 
-                <div className="mb-10 flex items-center justify-center">
+                <div className="pointer-events-none absolute inset-x-0 bottom-[7.5rem] z-20 flex items-center justify-center sm:bottom-[9.5rem]">
                   <div className="rounded-full border border-amber-200/20 bg-black/70 px-5 py-3 shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
                     <p
                       className={`${pressStart2P.className} text-xs uppercase tracking-[0.22em] text-amber-100`}
