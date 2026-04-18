@@ -362,6 +362,8 @@ export default function AdminPage() {
 
   const formatMatchTypeLabel = (value: string) => {
     switch (value) {
+      case "ladder_6":
+        return "6-Man Ladder";
       case "tag_3":
         return "Trios";
       case "tag":
@@ -1960,6 +1962,7 @@ export default function AdminPage() {
       tag_3: 2,
       triple_threat: 3,
       fatal_4_way: 4,
+      ladder_6: 6,
       multi: 2,
     };
     const count = sideCounts[matchType] ?? 2;
@@ -3963,6 +3966,7 @@ export default function AdminPage() {
                 <option value="tag_3">Tag (3 vs 3)</option>
                 <option value="triple_threat">Triple Threat</option>
                 <option value="fatal_4_way">Fatal 4-Way</option>
+                <option value="ladder_6">6-Man Ladder</option>
                 <option value="multi">Multi-person</option>
               </select>
               <input
@@ -4087,8 +4091,10 @@ export default function AdminPage() {
                   finishState.method === "submission";
                 const matchType = match.match_type;
                 const isSingles = matchType === "singles";
-                const isTripleOrFatal =
-                  matchType === "triple_threat" || matchType === "fatal_4_way";
+                const isMultiSideSingles =
+                  matchType === "triple_threat" ||
+                  matchType === "fatal_4_way" ||
+                  matchType === "ladder_6";
                 const isTag = matchType === "tag" || matchType === "tag_3";
                 const winnerSideId = match.winner_side_id ?? "";
                 const isMainEventEdit =
@@ -4113,8 +4119,8 @@ export default function AdminPage() {
                 const losingSideEntrants = sideEntries
                   .filter((side) => side.side.id !== winnerSideId)
                   .flatMap((side) => side.entrants);
-                const showFinishWinner = !isSingles && !isTripleOrFatal;
-                const showFinishLoser = !isSingles;
+                const showFinishWinner = !isSingles && !isMultiSideSingles;
+                const showFinishLoser = !isSingles && !isMultiSideSingles;
                 const selection = matchEntrantSelection[match.id] ?? "";
                 const sideSelection = matchSideSelection[match.id] ?? "";
                 const participantsExist =

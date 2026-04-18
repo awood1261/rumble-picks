@@ -2027,10 +2027,12 @@ export const MatchPicksSection = ({
       const interferencePick =
         payload.match_interference_picks?.[match.id] ?? null;
       const isSingles = match.match_type === "singles";
-      const isTripleOrFatal =
-        match.match_type === "triple_threat" || match.match_type === "fatal_4_way";
-      const showFinishWinner = !isSingles && !isTripleOrFatal;
-      const showFinishLoser = !isSingles;
+      const isMultiSideSingles =
+        match.match_type === "triple_threat" ||
+        match.match_type === "fatal_4_way" ||
+        match.match_type === "ladder_6";
+      const showFinishWinner = !isSingles && !isMultiSideSingles;
+      const showFinishLoser = !isSingles && !isMultiSideSingles;
       const choiceCount =
         (lengthPick ? 1 : 0) +
         (finishPick.method ? 1 : 0) +
@@ -2149,7 +2151,11 @@ export const MatchPicksSection = ({
           const isSingles = matchType === "singles";
           const isTripleOrFatal =
             matchType === "triple_threat" || matchType === "fatal_4_way";
+          const isLadderSix = matchType === "ladder_6";
+          const isMultiSideSingles = isTripleOrFatal || isLadderSix;
           const isTag = matchType === "tag" || matchType === "tag_3";
+          const showFinishMethodBonus = !isLadderSix;
+          const showInterferenceBonus = !isLadderSix;
           const winningSideId = payload.match_picks[match.id] ?? null;
           const winningSideEntrants =
             sideEntries.find((side) => side.side.id === winningSideId)?.entrants ??
@@ -2159,8 +2165,8 @@ export const MatchPicksSection = ({
             .flatMap((side) => side.entrants);
           const finishRequiresEntrants =
             finishPick.method === "pinfall" || finishPick.method === "submission";
-          const showFinishWinner = !isSingles && !isTripleOrFatal;
-          const showFinishLoser = !isSingles;
+          const showFinishWinner = !isSingles && !isMultiSideSingles;
+          const showFinishLoser = !isSingles && !isMultiSideSingles;
           const hasWinnerPick = Boolean(payload.match_picks[match.id]);
           const matchStats = matchPickStats[match.id];
           const matchTotal = matchStats?.total ?? 0;
@@ -2169,10 +2175,13 @@ export const MatchPicksSection = ({
             const count = matchStats?.bySide?.[sideId] ?? 0;
             return Math.round((count / matchTotal) * 100);
           };
-          const matchupSides =
-            matchType === "triple_threat"
-              ? sideEntries.slice(0, 3)
-              : sideEntries.slice(0, 2);
+          const matchupSides = isLadderSix
+            ? sideEntries.slice(0, 6)
+            : matchType === "fatal_4_way"
+              ? sideEntries.slice(0, 4)
+              : matchType === "triple_threat"
+                ? sideEntries.slice(0, 3)
+                : sideEntries.slice(0, 2);
           const matchupSideTitles = matchupSides.map(({ side, label, entrants }, index) => {
             const trimmedLabel = label?.trim();
             const championSuffix =
@@ -2203,18 +2212,22 @@ export const MatchPicksSection = ({
           ];
           const hasBonusPick =
             Boolean(lengthPick) ||
-            Boolean(interferencePick) ||
-            Boolean(finishPick.method) ||
+            (showInterferenceBonus && Boolean(interferencePick)) ||
+            (showFinishMethodBonus && Boolean(finishPick.method)) ||
             Boolean(finishPick.winner) ||
             Boolean(finishPick.loser);
           const bonusChoiceCount =
             (lengthPick ? 1 : 0) +
-            (finishPick.method ? 1 : 0) +
-            (interferencePick ? 1 : 0) +
+            (showFinishMethodBonus && finishPick.method ? 1 : 0) +
+            (showInterferenceBonus && interferencePick ? 1 : 0) +
             (showFinishWinner && finishPick.winner ? 1 : 0) +
             (showFinishLoser && finishPick.loser ? 1 : 0);
           const bonusTotalChoices =
-            3 + (showFinishWinner ? 1 : 0) + (showFinishLoser ? 1 : 0);
+            1 +
+            (showFinishMethodBonus ? 1 : 0) +
+            (showInterferenceBonus ? 1 : 0) +
+            (showFinishWinner ? 1 : 0) +
+            (showFinishLoser ? 1 : 0);
           const bonusStatus =
             bonusChoiceCount === 0
               ? "none"
@@ -2223,8 +2236,8 @@ export const MatchPicksSection = ({
                 : "partial";
           const bonusPointsTotal =
             scoringRules.match_length +
-            scoringRules.match_finish_method +
-            scoringRules.match_interference +
+            (showFinishMethodBonus ? scoringRules.match_finish_method : 0) +
+            (showInterferenceBonus ? scoringRules.match_interference : 0) +
             (showFinishWinner ? scoringRules.match_finish_winner : 0) +
             (showFinishLoser ? scoringRules.match_finish_loser : 0);
           const bonusSectionId = `bonus-picks-${match.id}`;
@@ -2337,7 +2350,72 @@ export const MatchPicksSection = ({
                         onSelect={handleSelectWinner}
                       />
                     )}
-                    {!isTag && hasMatchup && (
+                    {!isTag && hasMatchup && isLadderSix && (
+                      <div>
+                        <div className="mb-3 grid grid-cols-3 gap-3">
+                          {matchupSides.map((sideEntry, index) => {
+                            const entrant = sideEntry.entrants?.[0] ?? null;
+                            const percent = getPercent(sideEntry.side.id ?? null);
+                            const isSelected =
+                              payload.match_picks[match.id] === sideEntry.side.id;
+                            const isDimmed = hasWinnerPick && !isSelected;
+
+                            return (
+                              <button
+                                key={`${match.id}-ladder-${sideEntry.side.id}`}
+                                type="button"
+                                disabled={isLocked || !sideEntry.side.id}
+                                onClick={() =>
+                                  sideEntry.side.id
+                                    ? handleSelectWinner(sideEntry.side.id)
+                                    : undefined
+                                }
+                                className={`relative overflow-hidden rounded-2xl border bg-black/45 text-left transition ${
+                                  isSelected
+                                    ? "border-amber-300 shadow-[0_0_24px_rgba(251,196,0,0.32)]"
+                                    : "border-zinc-800 hover:border-amber-400/60"
+                                } ${isDimmed ? "opacity-40" : "opacity-100"}`}
+                              >
+                                <div className="absolute left-2 top-2 z-20 flex items-center gap-2 rounded-full border border-amber-400/60 bg-black/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200 shadow-[0_0_18px_rgba(198,162,74,0.35)]">
+                                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/20 text-[11px]">
+                                    ★
+                                  </span>
+                                  {percent === null ? "—" : `${percent}% fans`}
+                                </div>
+                                {isSelected ? (
+                                  <div className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-amber-300 bg-black/80 text-amber-200">
+                                    ✓
+                                  </div>
+                                ) : null}
+                                <div className="relative h-52 overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(245,210,120,0.14),_transparent_42%),linear-gradient(180deg,_rgba(255,255,255,0.03),_rgba(255,255,255,0)_28%),repeating-linear-gradient(135deg,_rgba(255,255,255,0.028)_0px,_rgba(255,255,255,0.028)_2px,_transparent_2px,_transparent_12px)] sm:h-64">
+                                  {entrant?.image_url ? (
+                                    <Image
+                                      src={entrant.image_url}
+                                      alt={entrant.name}
+                                      fill
+                                      sizes="(min-width: 640px) 40vw, 90vw"
+                                      style={{ filter: WRESTLER_OUTLINE_FILTER }}
+                                      className="object-cover object-center md:object-top"
+                                    />
+                                  ) : (
+                                    <MatchupSilhouette />
+                                  )}
+                                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                                  <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center p-3 text-center">
+                                    <div className="mx-auto flex max-w-[11rem] flex-col items-center gap-1">
+                                      <span className="block text-[11px] font-semibold uppercase leading-[0.95] tracking-[0.14em] text-zinc-100 drop-shadow sm:text-[13px] sm:tracking-[0.18em]">
+                                        {matchupSideTitles[index]}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {!isTag && hasMatchup && !isLadderSix && (
                       <div>
                         <div
                           className={`mb-2 grid gap-3 ${
@@ -2649,147 +2727,156 @@ export const MatchPicksSection = ({
                         className="mt-2"
                       />
                     </div>
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                          Finish type
-                        </p>
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200/80">
-                          +{scoringRules.match_finish_method} pts
-                        </span>
-                      </div>
-                      <SegmentedPills
-                        options={finishOptions}
-                        selectedValue={finishPick.method}
-                        disabled={isLocked || !hasWinnerPick}
-                        onSelect={(value) => {
-                          const method = value;
-                          setPayload((prev) => ({
-                            ...prev,
-                            match_finish_picks: {
-                              ...prev.match_finish_picks,
-                              [match.id]: {
-                                method,
-                                winner:
-                                  !isSingles &&
-                                  (method === "pinfall" || method === "submission")
-                                    ? finishPick.winner
-                                    : null,
-                                loser:
-                                  !isSingles &&
-                                  (method === "pinfall" || method === "submission")
-                                    ? finishPick.loser
-                                    : null,
+                    {showFinishMethodBonus && (
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                            Finish type
+                          </p>
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200/80">
+                            +{scoringRules.match_finish_method} pts
+                          </span>
+                        </div>
+                        <SegmentedPills
+                          options={finishOptions}
+                          selectedValue={finishPick.method}
+                          disabled={isLocked || !hasWinnerPick}
+                          onSelect={(value) => {
+                            const method = value;
+                            setPayload((prev) => ({
+                              ...prev,
+                              match_finish_picks: {
+                                ...prev.match_finish_picks,
+                                [match.id]: {
+                                  method,
+                                  winner:
+                                    !isSingles &&
+                                    (method === "pinfall" || method === "submission")
+                                      ? finishPick.winner
+                                      : null,
+                                  loser:
+                                    !isSingles &&
+                                    (method === "pinfall" || method === "submission")
+                                      ? finishPick.loser
+                                      : null,
+                                },
                               },
-                            },
-                          }));
-                        }}
-                        className="mt-2"
-                      />
-                      <div className="mt-3 grid gap-3 md:grid-cols-3">
-                        {showFinishWinner && (
-                          <select
-                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                            value={finishPick.winner ?? ""}
-                            onChange={(event) =>
-                              setPayload((prev) => ({
-                                ...prev,
-                                match_finish_picks: {
-                                  ...prev.match_finish_picks,
-                                  [match.id]: {
-                                    ...finishPick,
-                                    winner: event.target.value || null,
-                                  },
-                                },
-                              }))
-                            }
-                            disabled={
-                              isLocked ||
-                              !hasWinnerPick ||
-                              !finishRequiresEntrants ||
-                              (isTag && !winningSideId)
-                            }
-                          >
-                            <option value="">Winner (pin/sub)</option>
-                            {(isTag ? winningSideEntrants : sortedEntrants).map(
-                              (entrant) => (
-                                <option key={entrant.id} value={entrant.id}>
-                                  {entrant.name}
-                                </option>
-                              )
-                            )}
-                          </select>
-                        )}
-                        {showFinishLoser && (
-                          <select
-                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                            value={finishPick.loser ?? ""}
-                            onChange={(event) =>
-                              setPayload((prev) => ({
-                                ...prev,
-                                match_finish_picks: {
-                                  ...prev.match_finish_picks,
-                                  [match.id]: {
-                                    ...finishPick,
-                                    loser: event.target.value || null,
-                                  },
-                                },
-                              }))
-                            }
-                            disabled={
-                              isLocked ||
-                              !hasWinnerPick ||
-                              !finishRequiresEntrants ||
-                              (isTag && !winningSideId)
-                            }
-                          >
-                            <option value="">Loser (pin/sub)</option>
-                            {(isTag ? losingSideEntrants : sortedEntrants).map(
-                              (entrant) => (
-                                <option key={entrant.id} value={entrant.id}>
-                                  {entrant.name}
-                                </option>
-                              )
-                            )}
-                          </select>
-                        )}
-                      </div>
-                      {finishRequiresEntrants && (showFinishWinner || showFinishLoser) && (
-                        <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200/80">
+                            }));
+                          }}
+                          className="mt-2"
+                        />
+                        <div className="mt-3 grid gap-3 md:grid-cols-3">
                           {showFinishWinner && (
-                            <span>Winner +{scoringRules.match_finish_winner} pts</span>
+                            <select
+                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                              value={finishPick.winner ?? ""}
+                              onChange={(event) =>
+                                setPayload((prev) => ({
+                                  ...prev,
+                                  match_finish_picks: {
+                                    ...prev.match_finish_picks,
+                                    [match.id]: {
+                                      ...finishPick,
+                                      winner: event.target.value || null,
+                                    },
+                                  },
+                                }))
+                              }
+                              disabled={
+                                isLocked ||
+                                !hasWinnerPick ||
+                                !finishRequiresEntrants ||
+                                (isTag && !winningSideId)
+                              }
+                            >
+                              <option value="">Winner (pin/sub)</option>
+                              {(isTag ? winningSideEntrants : sortedEntrants).map(
+                                (entrant) => (
+                                  <option key={entrant.id} value={entrant.id}>
+                                    {entrant.name}
+                                  </option>
+                                )
+                              )}
+                            </select>
                           )}
                           {showFinishLoser && (
-                            <span>Loser +{scoringRules.match_finish_loser} pts</span>
+                            <select
+                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                              value={finishPick.loser ?? ""}
+                              onChange={(event) =>
+                                setPayload((prev) => ({
+                                  ...prev,
+                                  match_finish_picks: {
+                                    ...prev.match_finish_picks,
+                                    [match.id]: {
+                                      ...finishPick,
+                                      loser: event.target.value || null,
+                                    },
+                                  },
+                                }))
+                              }
+                              disabled={
+                                isLocked ||
+                                !hasWinnerPick ||
+                                !finishRequiresEntrants ||
+                                (isTag && !winningSideId)
+                              }
+                            >
+                              <option value="">Loser (pin/sub)</option>
+                              {(isTag ? losingSideEntrants : sortedEntrants).map(
+                                (entrant) => (
+                                  <option key={entrant.id} value={entrant.id}>
+                                    {entrant.name}
+                                  </option>
+                                )
+                              )}
+                            </select>
                           )}
                         </div>
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                          Interference
-                        </p>
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200/80">
-                          +{scoringRules.match_interference} pts
-                        </span>
+                        {finishRequiresEntrants &&
+                          (showFinishWinner || showFinishLoser) && (
+                            <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200/80">
+                              {showFinishWinner && (
+                                <span>
+                                  Winner +{scoringRules.match_finish_winner} pts
+                                </span>
+                              )}
+                              {showFinishLoser && (
+                                <span>
+                                  Loser +{scoringRules.match_finish_loser} pts
+                                </span>
+                              )}
+                            </div>
+                          )}
                       </div>
-                      <SegmentedPills
-                        options={interferenceOptions}
-                        selectedValue={interferencePick}
-                        disabled={isLocked || !hasWinnerPick}
-                        onSelect={(value) =>
-                          setPayload((prev) => ({
-                            ...prev,
-                            match_interference_picks: {
-                              ...prev.match_interference_picks,
-                              [match.id]: value as "yes" | "no",
-                            },
-                          }))
-                        }
-                        className="mt-2"
-                      />
-                    </div>
+                    )}
+                    {showInterferenceBonus && (
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                            Interference
+                          </p>
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200/80">
+                            +{scoringRules.match_interference} pts
+                          </span>
+                        </div>
+                        <SegmentedPills
+                          options={interferenceOptions}
+                          selectedValue={interferencePick}
+                          disabled={isLocked || !hasWinnerPick}
+                          onSelect={(value) =>
+                            setPayload((prev) => ({
+                              ...prev,
+                              match_interference_picks: {
+                                ...prev.match_interference_picks,
+                                [match.id]: value as "yes" | "no",
+                              },
+                            }))
+                          }
+                          className="mt-2"
+                        />
+                      </div>
+                    )}
                   </div>
                   <p className="mt-3 text-xs text-zinc-500">
                     Bonus picks can earn extra points.
