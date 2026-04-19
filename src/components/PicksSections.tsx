@@ -2139,9 +2139,9 @@ export const MatchPicksSection = ({
             value: "sprint" | "standard" | "epic";
             label: string;
           }> = [
-            { value: "sprint", label: "UNDER 6 MINUTES" },
-            { value: "standard", label: "6-10 MINUTES" },
-            { value: "epic", label: "11+ MINUTES" },
+            { value: "sprint", label: "UNDER 12 MINUTES" },
+            { value: "standard", label: "12 - 18 MINUTES" },
+            { value: "epic", label: "18 + MINUTES" },
           ];
           const interferenceOptions = [
             { value: "yes", label: "Yes" },
