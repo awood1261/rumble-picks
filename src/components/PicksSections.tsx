@@ -2139,9 +2139,9 @@ export const MatchPicksSection = ({
             value: "sprint" | "standard" | "epic";
             label: string;
           }> = [
-            { value: "sprint", label: "UNDER 12 MINUTES" },
-            { value: "standard", label: "12 - 18 MINUTES" },
-            { value: "epic", label: "18 + MINUTES" },
+            { value: "sprint", label: "UNDER 8 MINUTES" },
+            { value: "standard", label: "8 - 15 MINUTES" },
+            { value: "epic", label: "15 + MINUTES" },
           ];
           const interferenceOptions = [
             { value: "yes", label: "Yes" },
@@ -2417,28 +2417,30 @@ export const MatchPicksSection = ({
                     )}
                     {!isTag && hasMatchup && !isLadderSix && (
                       <div>
-                        <div
-                          className={`mb-2 grid gap-3 ${
-                            matchupSides.length === 3
-                              ? "grid-cols-3"
-                              : "grid-cols-2"
-                          }`}
-                        >
-                          {matchupSideTitles.map((title, index) => (
-                            <span
-                              key={`${match.id}-title-${index}`}
-                              className={`text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200 ${
-                                matchupSides.length === 3
-                                  ? "text-center"
-                                  : index === 1
-                                    ? "text-right"
-                                    : "text-left"
-                              }`}
-                            >
-                              {title}
-                            </span>
-                          ))}
-                        </div>
+                        {matchType !== "fatal_4_way" && (
+                          <div
+                            className={`mb-2 grid gap-3 ${
+                              matchupSides.length === 3
+                                ? "grid-cols-3"
+                                : "grid-cols-2"
+                            }`}
+                          >
+                            {matchupSideTitles.map((title, index) => (
+                              <span
+                                key={`${match.id}-title-${index}`}
+                                className={`text-[12px] font-semibold uppercase tracking-[0.2em] text-amber-200 ${
+                                  matchupSides.length === 3
+                                    ? "text-center"
+                                    : index === 1
+                                      ? "text-right"
+                                      : "text-left"
+                                }`}
+                              >
+                                {title}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         <div
                           className={`relative z-10 h-96 overflow-hidden md:h-[28rem] lg:h-[34rem] ${
                             isPrestige
