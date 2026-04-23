@@ -4078,9 +4078,9 @@ export default function AdminPage() {
                 const matchInterferenceState =
                   matchInterferenceEdits[match.id] ?? match.match_interference ?? "";
                 const matchLengthOptions = [
-                  { value: "sprint", label: "UNDER 12 MINUTES" },
-                  { value: "standard", label: "12 - 18 MINUTES" },
-                  { value: "epic", label: "18 + MINUTES" },
+                  { value: "sprint", label: "UNDER 8 MINUTES" },
+                  { value: "standard", label: "8 - 15 MINUTES" },
+                  { value: "epic", label: "15 + MINUTES" },
                 ];
                 const matchInterferenceOptions = [
                   { value: "yes", label: "Yes" },
