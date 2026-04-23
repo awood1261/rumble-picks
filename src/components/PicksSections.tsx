@@ -1983,10 +1983,10 @@ const SegmentedPills = ({
           className={`relative flex-1 whitespace-nowrap border px-3 py-3 text-[9px] uppercase transition sm:px-5 sm:text-[10px] ${
             isSelected
               ? "z-10 border-amber-400/70 bg-amber-400/20 text-amber-100"
-              : "border-zinc-800 text-zinc-300 hover:text-amber-200"
+              : "border-zinc-800 text-zinc-100 hover:text-amber-200"
           } ${isFirst ? "rounded-l-full" : ""} ${isLast ? "rounded-r-full" : ""} ${
             !isFirst ? "-ml-px" : ""
-          } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+          } ${disabled ? "cursor-not-allowed opacity-85" : ""}`}
         >
           {option.label}
         </button>
@@ -2153,6 +2153,7 @@ export const MatchPicksSection = ({
             matchType === "triple_threat" || matchType === "fatal_4_way";
           const isLadderSix = matchType === "ladder_6";
           const isMultiSideSingles = isTripleOrFatal || isLadderSix;
+          const usesCardGridMatchup = isLadderSix || matchType === "fatal_4_way";
           const isTag = matchType === "tag" || matchType === "tag_3";
           const showFinishMethodBonus = !isLadderSix;
           const showInterferenceBonus = !isLadderSix;
@@ -2350,9 +2351,13 @@ export const MatchPicksSection = ({
                         onSelect={handleSelectWinner}
                       />
                     )}
-                    {!isTag && hasMatchup && isLadderSix && (
+                    {!isTag && hasMatchup && usesCardGridMatchup && (
                       <div>
-                        <div className="mb-3 grid grid-cols-3 gap-3">
+                        <div
+                          className={`mb-3 grid gap-3 ${
+                            isLadderSix ? "grid-cols-3" : "grid-cols-2"
+                          }`}
+                        >
                           {matchupSides.map((sideEntry, index) => {
                             const entrant = sideEntry.entrants?.[0] ?? null;
                             const percent = getPercent(sideEntry.side.id ?? null);
@@ -2415,7 +2420,7 @@ export const MatchPicksSection = ({
                         </div>
                       </div>
                     )}
-                    {!isTag && hasMatchup && !isLadderSix && (
+                    {!isTag && hasMatchup && !usesCardGridMatchup && (
                       <div>
                         {matchType !== "fatal_4_way" && (
                           <div
