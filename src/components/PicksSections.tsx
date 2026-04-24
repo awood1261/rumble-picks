@@ -159,6 +159,8 @@ type TeamStackMatchupPickerProps = {
 
 const WRESTLER_OUTLINE_FILTER =
   "drop-shadow(0 0 0 rgba(0,0,0,0.92)) drop-shadow(1px 0 0 rgba(245,210,120,0.28)) drop-shadow(-1px 0 0 rgba(245,210,120,0.28)) drop-shadow(0 1px 0 rgba(245,210,120,0.28)) drop-shadow(0 -1px 0 rgba(245,210,120,0.28)) drop-shadow(0 0 8px rgba(245,210,120,0.08))";
+const DEFAULT_WRESTLER_IMAGE_URL =
+  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/entrant-images/2026/default-wrestler.png";
 
 const MatchupSilhouette = ({
   className = "",
@@ -169,15 +171,14 @@ const MatchupSilhouette = ({
     className={`relative h-full w-full overflow-hidden bg-gradient-to-b from-zinc-800 via-zinc-900 to-black ${className}`}
   >
     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(245,210,120,0.12),_transparent_36%),linear-gradient(180deg,_rgba(255,255,255,0.04),_rgba(255,255,255,0)_30%)]" />
-    <svg
-      viewBox="0 0 240 320"
-      aria-hidden="true"
-      className="absolute inset-x-1/2 bottom-0 h-[92%] w-auto -translate-x-1/2 text-zinc-700/80"
-      fill="currentColor"
-    >
-      <circle cx="120" cy="72" r="44" />
-      <path d="M120 132c-46 0-84 36-84 82v106h168V214c0-46-38-82-84-82Z" />
-    </svg>
+    <Image
+      src={DEFAULT_WRESTLER_IMAGE_URL}
+      alt="Default wrestler"
+      fill
+      sizes="(min-width: 1024px) 220px, 33vw"
+      style={{ filter: WRESTLER_OUTLINE_FILTER }}
+      className="object-cover object-center md:object-top"
+    />
     <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black via-black/65 to-transparent" />
   </div>
 );
@@ -196,8 +197,9 @@ const TeamStackMatchupPicker = ({
       const isSelected = selectedSideId === sideEntry.side.id;
       const hasSelection = Boolean(selectedSideId);
       const isDimmed = hasSelection && !isSelected;
-      const visibleEntrants = (sideEntry.entrants ?? []).slice(0, 3);
+      const visibleEntrants = (sideEntry.entrants ?? []).slice(0, 4);
       const isThreeWide = visibleEntrants.length >= 3;
+      const isFourWide = visibleEntrants.length >= 4;
       const percent = getPercent(sideEntry.side.id ?? null);
       return (
         <div key={`${matchId}-team-${sideEntry.side.id}`} className="space-y-2">
@@ -227,74 +229,118 @@ const TeamStackMatchupPicker = ({
                   ✓
                 </div>
               )}
-              {visibleEntrants.map((entrant, entrantIndex) => {
-                const isCenterEntrant = isThreeWide && entrantIndex === 1;
-                return (
-                  <div
-                    key={`${matchId}-team-card-${entrant.id}`}
-                    className={`relative h-full shrink-0 overflow-visible ${
-                      isThreeWide ? "w-[52%] md:w-[40%]" : "w-[72%] md:w-1/2"
-                    } ${
+              {isFourWide ? (
+                <div className="absolute inset-0 z-10 grid grid-cols-2 grid-rows-2 gap-px bg-white/10">
+                  {visibleEntrants.map((entrant) => (
+                    <div
+                      key={`${matchId}-team-card-${entrant.id}`}
+                      className="relative overflow-hidden bg-black/20"
+                    >
+                      {entrant.image_url ? (
+                        <Image
+                          src={entrant.image_url}
+                          alt={entrant.name}
+                          fill
+                          sizes="(max-width: 640px) 40vw, 180px"
+                          style={{ filter: WRESTLER_OUTLINE_FILTER }}
+                          className="object-contain object-top scale-[1.26] md:scale-[1.14]"
+                        />
+                      ) : (
+                        <MatchupSilhouette />
+                      )}
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/78 via-black/12 to-transparent" />
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center p-1 text-center">
+                        {entrant.logo_url ? (
+                          <Image
+                            src={entrant.logo_url}
+                            alt={`${entrant.name} logo`}
+                            width={120}
+                            height={40}
+                            className="mx-auto h-9 w-auto object-contain"
+                          />
+                        ) : (
+                          <span className="inline-flex max-w-full rounded-md bg-black/75 px-2 py-1 line-clamp-2 text-[8px] font-semibold uppercase tracking-[0.1em] text-zinc-100 shadow-[0_4px_14px_rgba(0,0,0,0.45)]">
+                            {entrant.name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {visibleEntrants.map((entrant, entrantIndex) => {
+                    const isCenterEntrant = isThreeWide && entrantIndex === 1;
+                    const slotWidthClass = isThreeWide
+                      ? "w-[52%] md:w-[40%]"
+                      : "w-[72%] md:w-1/2";
+                    const slotOffsetClass =
                       entrantIndex === 1
                         ? "z-20"
                         : entrantIndex === 0
                           ? "z-10 -mr-14 md:-mr-7"
-                          : "z-10 -ml-14 md:-ml-7"
-                    }`}
-                  >
-                    {entrant.image_url ? (
-                      <Image
-                        src={entrant.image_url}
-                        alt={entrant.name}
-                        fill
-                        sizes="(max-width: 640px) 42vw, 200px"
-                        style={{ filter: WRESTLER_OUTLINE_FILTER }}
-                        className={`z-10 object-contain object-bottom md:object-top ${
-                          isThreeWide
-                            ? isCenterEntrant
-                              ? "-translate-y-5 scale-[1.72] md:-translate-y-2 md:scale-[1.2]"
-                              : "-translate-y-8 scale-[1.92] md:-translate-y-4 md:scale-[1.32]"
-                            : "scale-[1.45] md:scale-[1.08]"
-                        }`}
-                      />
-                    ) : (
-                      <MatchupSilhouette />
-                    )}
-                  </div>
-                );
-              })}
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40 flex items-end justify-center">
-                {visibleEntrants.map((entrant, entrantIndex) => {
-                  return (
-                    <div
-                      key={`${matchId}-team-label-${entrant.id}`}
-                      className={`relative shrink-0 p-1 text-center ${
-                        isThreeWide ? "w-[52%] md:w-[40%]" : "w-[72%] md:w-1/2"
-                      } ${
+                          : "z-10 -ml-14 md:-ml-7";
+                    return (
+                      <div
+                        key={`${matchId}-team-card-${entrant.id}`}
+                        className={`relative h-full shrink-0 overflow-visible ${slotWidthClass} ${slotOffsetClass}`}
+                      >
+                        {entrant.image_url ? (
+                          <Image
+                            src={entrant.image_url}
+                            alt={entrant.name}
+                            fill
+                            sizes="(max-width: 640px) 42vw, 200px"
+                            style={{ filter: WRESTLER_OUTLINE_FILTER }}
+                            className={`z-10 object-contain object-bottom md:object-top ${
+                              isThreeWide
+                                ? isCenterEntrant
+                                  ? "-translate-y-5 scale-[1.72] md:-translate-y-2 md:scale-[1.2]"
+                                  : "-translate-y-8 scale-[1.92] md:-translate-y-4 md:scale-[1.32]"
+                                : "scale-[1.45] md:scale-[1.08]"
+                            }`}
+                          />
+                        ) : (
+                          <MatchupSilhouette />
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40 flex items-end justify-center">
+                    {visibleEntrants.map((entrant, entrantIndex) => {
+                      const slotWidthClass = isThreeWide
+                        ? "w-[52%] md:w-[40%]"
+                        : "w-[72%] md:w-1/2";
+                      const slotOffsetClass =
                         entrantIndex === 1
                           ? "z-20"
                           : entrantIndex === 0
                             ? "z-10 -mr-14 md:-mr-7"
-                            : "z-10 -ml-14 md:-ml-7"
-                      }`}
-                    >
-                      {entrant.logo_url ? (
-                        <Image
-                          src={entrant.logo_url}
-                          alt={`${entrant.name} logo`}
-                          width={220}
-                          height={72}
-                          className="mx-auto h-16 w-auto object-contain"
-                        />
-                      ) : (
-                        <span className="inline-flex max-w-full rounded-md bg-black/75 px-2 py-1 line-clamp-2 text-[9px] font-semibold uppercase tracking-[0.13em] text-zinc-100 shadow-[0_4px_14px_rgba(0,0,0,0.45)]">
-                          {entrant.name}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                            : "z-10 -ml-14 md:-ml-7";
+                      return (
+                        <div
+                          key={`${matchId}-team-label-${entrant.id}`}
+                          className={`relative shrink-0 p-1 text-center ${slotWidthClass} ${slotOffsetClass}`}
+                        >
+                          {entrant.logo_url ? (
+                            <Image
+                              src={entrant.logo_url}
+                              alt={`${entrant.name} logo`}
+                              width={220}
+                              height={72}
+                              className="mx-auto h-16 w-auto object-contain"
+                            />
+                          ) : (
+                            <span className="inline-flex max-w-full rounded-md bg-black/75 px-2 py-1 line-clamp-2 text-[9px] font-semibold uppercase tracking-[0.13em] text-zinc-100 shadow-[0_4px_14px_rgba(0,0,0,0.45)]">
+                              {entrant.name}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </button>
           {index === 0 ? (
@@ -2154,7 +2200,10 @@ export const MatchPicksSection = ({
           const isLadderSix = matchType === "ladder_6";
           const isMultiSideSingles = isTripleOrFatal || isLadderSix;
           const usesCardGridMatchup = isLadderSix || matchType === "fatal_4_way";
-          const isTag = matchType === "tag" || matchType === "tag_3";
+          const isTag =
+            matchType === "tag" ||
+            matchType === "tag_3" ||
+            matchType === "tag_4";
           const showFinishMethodBonus = !isLadderSix;
           const showInterferenceBonus = !isLadderSix;
           const winningSideId = payload.match_picks[match.id] ?? null;
