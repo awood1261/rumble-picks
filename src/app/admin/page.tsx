@@ -2712,6 +2712,11 @@ export default function AdminPage() {
       return {
         user_id: pick.user_id,
         event_id: activeEvent.id,
+        show_id:
+          activeEvent.show_id ??
+          activeShow?.id ??
+          selectedShowId ??
+          null,
         points,
         breakdown,
         updated_at: new Date().toISOString(),

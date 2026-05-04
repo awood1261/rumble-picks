@@ -1,13 +1,16 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import {
   AVATAR_OPTIONS,
   DEFAULT_AVATAR_KEY,
+  avatarSrcForKey,
 } from "../../lib/avatarOptions";
 import { containsProfanity } from "../../lib/profanityFilter";
+import type { ChampionProfileClaim } from "../../lib/championTypes";
 import posthog from "posthog-js";
 
 export default function ProfilePage() {
@@ -21,6 +24,7 @@ export default function ProfilePage() {
   const [upgradePassword, setUpgradePassword] = useState("");
   const [upgradeMarketingOptIn, setUpgradeMarketingOptIn] = useState(false);
   const [upgradeBusy, setUpgradeBusy] = useState(false);
+  const [championClaims, setChampionClaims] = useState<ChampionProfileClaim[]>([]);
 
   useEffect(() => {
     let ignore = false;
@@ -41,6 +45,19 @@ export default function ProfilePage() {
       if (!ignore) {
         setDisplayName(profile?.display_name ?? "");
         setAvatarKey(profile?.avatar_key ?? DEFAULT_AVATAR_KEY);
+      }
+
+      const response = await fetch("/api/champion/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: session.user.id }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        claims?: ChampionProfileClaim[];
+      };
+      if (!ignore && response.ok) {
+        setChampionClaims(payload.claims ?? []);
       }
     };
     load();
@@ -128,6 +145,67 @@ export default function ProfilePage() {
           {email && (
             <p className="mt-2 text-xs text-zinc-500">Signed in as {email}</p>
           )}
+
+          {championClaims.length > 0 ? (
+            <section className="mt-6 rounded-2xl border border-amber-400/25 bg-amber-400/5 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.28em] text-amber-300">
+                    Championship History
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-300">
+                    This profile has claimed champion recognition.
+                  </p>
+                </div>
+                <span className="inline-flex items-center rounded-full border border-amber-400/30 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-amber-200">
+                  Champion
+                </span>
+              </div>
+              <div className="mt-4 space-y-3">
+                {championClaims.map((claim) => (
+                  <div
+                    key={claim.id}
+                    className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-3 py-3"
+                  >
+                    {claim.promotion_image_url ? (
+                      <Image
+                        src={claim.promotion_image_url}
+                        alt={`${claim.promotion_name} logo`}
+                        width={40}
+                        height={40}
+                        className="h-10 w-10 rounded-xl border border-zinc-800 bg-zinc-900 object-contain p-1"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">
+                        C
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-zinc-100">
+                        {claim.promotion_name}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-400">
+                        {claim.show_name
+                          ? `${claim.show_name}${
+                              claim.show_starts_at
+                                ? ` • ${new Date(claim.show_starts_at).toLocaleDateString()}`
+                                : ""
+                            }`
+                          : "Champion profile"}
+                      </p>
+                    </div>
+                    <Image
+                      src={avatarSrcForKey(claim.claimed_avatar)}
+                      alt={`${claim.claimed_username} avatar`}
+                      width={36}
+                      height={36}
+                      className="h-9 w-9 rounded-full border border-zinc-700 bg-zinc-900"
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <div className="mt-8 space-y-3">
             <label className="text-sm text-zinc-300" htmlFor="displayName">

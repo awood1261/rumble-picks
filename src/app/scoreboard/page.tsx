@@ -10,6 +10,7 @@ import { avatarSrcForKey } from "../../lib/avatarOptions";
 import { ScoreboardCountdown } from "../../components/ScoreboardCountdown";
 import { scoringRules } from "../../lib/scoringRules";
 import { calculateScore } from "../../lib/scoring";
+import type { ChampionParticipant } from "../../lib/championTypes";
 
 const BOUTPICK_BELT_URL =
   "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/boutpick-belt.png";
@@ -196,6 +197,12 @@ const UpdateProgress = () => (
   </div>
 );
 
+const ChampionBadge = () => (
+  <span className="inline-flex items-center rounded-full border border-[color:var(--bp-gold-30)] bg-[color:var(--bp-gold-15)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.28em] text-[color:var(--bp-gold)]">
+    Champion
+  </span>
+);
+
 function ScoreboardPageInner() {
   const searchParams = useSearchParams();
   const queryShowId = searchParams.get("show");
@@ -233,6 +240,9 @@ function ScoreboardPageInner() {
   const [now, setNow] = useState(() => Date.now());
   const [progressOpen, setProgressOpen] = useState(false);
   const [refreshingScores, setRefreshingScores] = useState(false);
+  const [championParticipants, setChampionParticipants] = useState<
+    ChampionParticipant[]
+  >([]);
   const loadScoresRef = useRef<(overrides?: ScoreDataOverrides) => Promise<void>>(
     async () => {}
   );
@@ -251,6 +261,11 @@ function ScoreboardPageInner() {
     if (!selectedShow?.promotion_id) return null;
     return promotions.find((promotion) => promotion.id === selectedShow.promotion_id) ?? null;
   }, [promotions, selectedShow?.promotion_id]);
+
+  const championUserIds = useMemo(
+    () => new Set(championParticipants.map((participant) => participant.user_id)),
+    [championParticipants]
+  );
 
   const scoreboard = useMemo(() => {
     const profileMap = new Map(
@@ -839,6 +854,40 @@ function ScoreboardPageInner() {
     loadShows();
     loadEvents();
   }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    if (!selectedShowId || !selectedShow?.promotion_id) {
+      setChampionParticipants([]);
+      return;
+    }
+
+    const loadChampionParticipants = async () => {
+      const response = await fetch("/api/champion/participants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showId: selectedShowId,
+          promotionId: selectedShow.promotion_id,
+        }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        participants?: ChampionParticipant[];
+      };
+      if (ignore) return;
+      if (!response.ok) {
+        setChampionParticipants([]);
+        return;
+      }
+      setChampionParticipants(payload.participants ?? []);
+    };
+
+    void loadChampionParticipants();
+    return () => {
+      ignore = true;
+    };
+  }, [selectedShow?.promotion_id, selectedShowId]);
 
   useEffect(() => {
     if (!selectedShowId || typeof window === "undefined") return;
@@ -1517,6 +1566,11 @@ function ScoreboardPageInner() {
                       <p className="text-2xl font-semibold text-[color:var(--bp-text)] sm:text-3xl">
                         {topThree[0]?.display_name ?? "TBD"}
                       </p>
+                      {topThree[0] && championUserIds.has(topThree[0].user_id) ? (
+                        <div className="mt-2">
+                          <ChampionBadge />
+                        </div>
+                      ) : null}
                       {currentUserId && topThree[0]?.user_id === currentUserId ? (
                         <span className="mt-2 inline-flex items-center rounded-full border border-[color:var(--bp-gold-30)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)]">
                           You
@@ -1597,6 +1651,11 @@ function ScoreboardPageInner() {
                           <p className="truncate text-base font-semibold text-[color:var(--bp-text)]">
                             {row.display_name}
                           </p>
+                          {championUserIds.has(row.user_id) ? (
+                            <div className="mt-2 flex justify-center">
+                              <ChampionBadge />
+                            </div>
+                          ) : null}
                           {isCurrentUserPodium ? (
                             <span className="mt-1 inline-flex items-center rounded-full border border-[color:var(--bp-gold-30)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-[color:var(--bp-gold)]">
                               You
@@ -1652,6 +1711,11 @@ function ScoreboardPageInner() {
                                   </span>
                                 )}
                               </p>
+                              {championUserIds.has(row.user_id) ? (
+                                <div className="mt-2">
+                                  <ChampionBadge />
+                                </div>
+                              ) : null}
                               <p className="text-xs text-[color:var(--bp-dim)]">
                                 Updated{" "}
                                 {new Date(row.updated_at).toLocaleTimeString([], {
