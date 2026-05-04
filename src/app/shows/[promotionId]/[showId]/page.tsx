@@ -5,7 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabaseClient";
+import { avatarSrcForKey } from "../../../../lib/avatarOptions";
 import type { PromotionRow, ShowRow } from "../../../../lib/picksTypes";
+import type { ChampionParticipant } from "../../../../lib/championTypes";
 import posthog from "posthog-js";
 
 export default function ShowDetailPage() {
@@ -16,6 +18,9 @@ export default function ShowDetailPage() {
   const [show, setShow] = useState<ShowRow | null>(null);
   const [promotion, setPromotion] = useState<PromotionRow | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [championParticipants, setChampionParticipants] = useState<
+    ChampionParticipant[]
+  >([]);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -116,6 +121,37 @@ export default function ShowDetailPage() {
 
   useEffect(() => {
     let ignore = false;
+    if (!showId || !promotionId) return;
+
+    const loadChampionParticipants = async () => {
+      const response = await fetch("/api/champion/participants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showId,
+          promotionId,
+        }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        participants?: ChampionParticipant[];
+      };
+      if (ignore) return;
+      if (!response.ok) {
+        setChampionParticipants([]);
+        return;
+      }
+      setChampionParticipants(payload.participants ?? []);
+    };
+
+    void loadChampionParticipants();
+    return () => {
+      ignore = true;
+    };
+  }, [promotionId, showId]);
+
+  useEffect(() => {
+    let ignore = false;
     const loadUser = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (ignore) return;
@@ -208,6 +244,37 @@ export default function ShowDetailPage() {
               <p className="mt-4 text-sm text-amber-100 sm:text-base">
                 {show.tagline}
               </p>
+            ) : null}
+            {championParticipants.length > 0 ? (
+              <section className="mt-6 rounded-3xl border border-amber-400/25 bg-black/45 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-[0.28em] text-amber-200">
+                  Previous Champions Playing Tonight
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {championParticipants.map((participant) => (
+                    <div
+                      key={participant.user_id}
+                      className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-black/40 px-3 py-3"
+                    >
+                      <Image
+                        src={avatarSrcForKey(participant.avatar_key)}
+                        alt={`${participant.display_name} avatar`}
+                        width={40}
+                        height={40}
+                        className="h-10 w-10 rounded-full border border-zinc-700 bg-black/40"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-100">
+                          {participant.display_name}
+                        </p>
+                        <p className="mt-1 text-[11px] uppercase tracking-[0.24em] text-amber-200">
+                          Champion
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
             ) : null}
             {authChecked && !isSignedIn && lockStatusText !== "Show is locked" ? (
               <div className="mt-6 space-y-3">
