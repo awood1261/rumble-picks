@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   calculateScore,
+  type RumbleEntryRow as ScoringRumbleEntryRow,
   type EliminatorEliminationRow,
   type EliminatorEntryRow,
   type EliminatorRow,
@@ -9,7 +10,6 @@ import {
   type MatchRow,
   type MatchSideRow,
   type PicksPayload,
-  type RumbleEntryRow,
   type ShowQuestionRow,
 } from "./scoring";
 import { scoringRules } from "./scoringRules";
@@ -53,6 +53,10 @@ type EventRow = {
   iron_person_entrant_id: string | null;
 };
 
+type RumbleEntryDbRow = ScoringRumbleEntryRow & {
+  event_id: string;
+};
+
 type ScoredWinner = {
   user_id: string;
   points: number;
@@ -62,6 +66,12 @@ type ScoredWinner = {
 const withoutShowId = <T extends { show_id: string | null }>(row: T): Omit<T, "show_id"> => {
   const { show_id, ...rest } = row;
   void show_id;
+  return rest;
+};
+
+const withoutEventId = <T extends { event_id: string }>(row: T): Omit<T, "event_id"> => {
+  const { event_id, ...rest } = row;
+  void event_id;
   return rest;
 };
 
@@ -204,7 +214,7 @@ export const getChampionWinnerForShow = async (
   if (questionError) throw new Error(questionError.message);
 
   const picks = (pickData ?? []) as PickRow[];
-  const rumbleEntries = (rumbleEntryData ?? []) as RumbleEntryRow[];
+  const rumbleEntries = (rumbleEntryData ?? []) as RumbleEntryDbRow[];
   const matchesByShow = (matchData ?? []) as (MatchRow & { show_id: string | null })[];
   const eliminatorsByShow = (eliminatorData ?? []) as (EliminatorRow & {
     show_id: string | null;
@@ -276,7 +286,9 @@ export const getChampionWinnerForShow = async (
     const payload = (pick.payload ?? {}) as PicksPayload;
     const { points } = calculateScore(
       payload,
-      rumbleEntries.filter((entry) => showEventIds.includes(entry.event_id)),
+      rumbleEntries
+        .filter((entry) => showEventIds.includes(entry.event_id))
+        .map(withoutEventId),
       scoringRules,
       showMatches,
       matchEntrants.filter((entry) => showMatchIds.has(entry.match_id)),
