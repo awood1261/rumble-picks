@@ -33,6 +33,7 @@ type PicksPayload = {
   >;
   question_picks?: Record<string, string | null>;
   match_picks?: Record<string, string | null>;
+  match_confidence_picks?: Record<string, number | null>;
   match_finish_picks?: Record<
     string,
     { method: string | null; winner: string | null; loser: string | null }
@@ -61,6 +62,7 @@ type ShowRow = {
   id: string;
   name: string;
   tagline?: string | null;
+  use_confidence_points?: boolean | null;
 };
 
 type ShowQuestionRow = {
@@ -671,7 +673,14 @@ export default function ScoreboardPicksPage() {
     matches.forEach((match) => {
       const pick = payload?.match_picks?.[match.id] ?? null;
       if (match.winner_side_id && pick && pick === match.winner_side_id) {
-        summary.winner += scoringRules.match_winner;
+        if (show?.use_confidence_points) {
+          const confidence = payload?.match_confidence_picks?.[match.id] ?? null;
+          if (typeof confidence === "number" && confidence > 0) {
+            summary.winner += confidence;
+          }
+        } else {
+          summary.winner += scoringRules.match_winner;
+        }
       }
       const lengthPick = payload?.match_length_picks?.[match.id] ?? null;
       if (match.match_length && lengthPick === match.match_length) {
@@ -718,7 +727,7 @@ export default function ScoreboardPicksPage() {
       summary.matchLength +
       summary.matchInterference;
     return summary;
-  }, [matchEntrants, matches, payload]);
+  }, [matchEntrants, matches, payload, show?.use_confidence_points]);
 
   const totalShowPoints = useMemo(() => {
     return (
@@ -754,14 +763,14 @@ export default function ScoreboardPicksPage() {
       supabase
         .from("picks")
         .select(
-          "rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+          "rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_confidence_picks:payload->match_confidence_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
         )
         .eq("show_id", validShowId)
         .eq("user_id", userId)
         .maybeSingle(),
       supabase
         .from("shows")
-        .select("id, name, image_url, promotion_id, status, starts_at")
+        .select("id, name, image_url, promotion_id, status, starts_at, use_confidence_points")
         .eq("id", validShowId)
         .maybeSingle(),
       supabase
@@ -842,6 +851,7 @@ export default function ScoreboardPicksPage() {
           eliminators: pickRow.eliminators ?? {},
           question_picks: pickRow.question_picks ?? {},
           match_picks: pickRow.match_picks ?? {},
+          match_confidence_picks: pickRow.match_confidence_picks ?? {},
           match_finish_picks: pickRow.match_finish_picks ?? {},
           match_length_picks: pickRow.match_length_picks ?? {},
           match_interference_picks: pickRow.match_interference_picks ?? {},
@@ -1739,8 +1749,14 @@ export default function ScoreboardPicksPage() {
                     ? match.match_interference === interferencePick
                     : false;
                 const isCorrect = winner && pick ? winner === pick : false;
+                const winnerPoints =
+                  isCorrect && show?.use_confidence_points
+                    ? payload.match_confidence_picks?.[match.id] ?? 0
+                    : isCorrect
+                      ? scoringRules.match_winner
+                      : 0;
                 const matchTotalPoints =
-                  (isCorrect ? scoringRules.match_winner : 0) +
+                  winnerPoints +
                   (finishMethodCorrect ? scoringRules.match_finish_method : 0) +
                   (finishWinnerCorrect ? scoringRules.match_finish_winner : 0) +
                   (finishLoserCorrect ? scoringRules.match_finish_loser : 0) +
@@ -1787,7 +1803,7 @@ export default function ScoreboardPicksPage() {
                                   isCorrect ? "text-emerald-200" : "text-red-200"
                                 }`}
                               >
-                                {isCorrect ? `+${scoringRules.match_winner} pts` : "0 pts"}
+                                {isCorrect ? `+${winnerPoints} pts` : "0 pts"}
                               </span>
                             )}
                           </div>
@@ -1803,6 +1819,14 @@ export default function ScoreboardPicksPage() {
                                   : "Not set")}
                             </span>
                           </div>
+                          {show?.use_confidence_points && (
+                            <div className="text-xs font-semibold text-zinc-200">
+                              Confidence:{" "}
+                              <span className="font-semibold text-zinc-400">
+                                {payload.match_confidence_picks?.[match.id] ?? "Not set"}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
                           <ChevronIcon />

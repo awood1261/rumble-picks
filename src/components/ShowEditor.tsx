@@ -19,6 +19,8 @@ type ShowEditorProps = {
   setIsFeaturedPlayShow: (value: boolean) => void;
   isOver: boolean;
   setIsOver: (value: boolean) => void;
+  useConfidencePoints: boolean;
+  setUseConfidencePoints: (value: boolean) => void;
   startsAt: string;
   setStartsAt: (value: string) => void;
   saving: boolean;
@@ -46,6 +48,8 @@ export const ShowEditor = ({
   setIsFeaturedPlayShow,
   isOver,
   setIsOver,
+  useConfidencePoints,
+  setUseConfidencePoints,
   startsAt,
   setStartsAt,
   saving,
@@ -162,6 +166,16 @@ export const ShowEditor = ({
         disabled={disabled}
       />
       Mark show as over
+    </label>
+    <label className="mt-2 flex items-center gap-3 text-sm text-zinc-300">
+      <input
+        type="checkbox"
+        className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+        checked={useConfidencePoints}
+        onChange={(event) => setUseConfidencePoints(event.target.checked)}
+        disabled={disabled}
+      />
+      Use confidence points for match winners
     </label>
   </div>
 );

@@ -30,6 +30,7 @@ type ShowRow = {
   starts_at: string | null;
   promotion_id: string | null;
   is_over?: boolean | null;
+  use_confidence_points?: boolean | null;
 };
 
 type PickRow = {
@@ -120,7 +121,7 @@ export const getCompletedShowsForPromotion = async (
 ): Promise<ChampionCompletedShow[]> => {
   const { data, error } = await supabaseAdmin
     .from("shows")
-    .select("id, name, starts_at, promotion_id, is_over")
+    .select("id, name, starts_at, promotion_id, is_over, use_confidence_points")
     .eq("promotion_id", promotionId)
     .eq("is_over", true)
     .order("starts_at", { ascending: false, nullsFirst: false });
@@ -147,7 +148,7 @@ export const getChampionWinnerForShow = async (
 ): Promise<ChampionCompletedShow | null> => {
   const { data, error } = await supabaseAdmin
     .from("shows")
-    .select("id, name, starts_at, promotion_id, is_over")
+    .select("id, name, starts_at, promotion_id, is_over, use_confidence_points")
     .eq("id", showId)
     .eq("promotion_id", promotionId)
     .eq("is_over", true)
@@ -293,7 +294,10 @@ export const getChampionWinnerForShow = async (
       showMatches,
       matchEntrants.filter((entry) => showMatchIds.has(entry.match_id)),
       matchSides.filter((side) => showMatchIds.has(side.match_id)),
-      { ironPersonId: showIronPersonId },
+      {
+        ironPersonId: showIronPersonId,
+        useConfidencePoints: show.use_confidence_points ?? false,
+      },
       eliminatorEntries.filter((entry) => showEliminatorIds.has(entry.eliminator_id)),
       eliminatorEliminations.filter((entry) =>
         showEliminatorIds.has(entry.eliminator_id)

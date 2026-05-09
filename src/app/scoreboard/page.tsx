@@ -50,6 +50,7 @@ type PickRow = {
     }
   >;
   match_picks?: Record<string, string | null>;
+  match_confidence_picks?: Record<string, number | null>;
   match_finish_picks?: Record<
     string,
     { method: string | null; winner: string | null; loser: string | null }
@@ -68,6 +69,7 @@ type ShowRow = {
   promotion_id: string | null;
   starts_at?: string | null;
   is_over?: boolean | null;
+  use_confidence_points?: boolean | null;
 };
 
 type PromotionRow = {
@@ -567,7 +569,7 @@ function ScoreboardPageInner() {
     const { data: pickRows, error: pickError } = await supabase
       .from("picks")
       .select(
-        "id, user_id, updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+        "id, user_id, updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_confidence_picks:payload->match_confidence_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
       )
       .eq("show_id", selectedShowId);
 
@@ -631,6 +633,7 @@ function ScoreboardPageInner() {
       const matchPayload = {
         eliminators: pick.eliminators ?? {},
         match_picks: pick.match_picks ?? {},
+        match_confidence_picks: pick.match_confidence_picks ?? {},
         match_finish_picks: pick.match_finish_picks ?? {},
         match_length_picks: pick.match_length_picks ?? {},
         match_interference_picks: pick.match_interference_picks ?? {},
@@ -642,7 +645,7 @@ function ScoreboardPageInner() {
         effectiveMatches,
         effectiveMatchEntrants,
         effectiveMatchSides,
-        undefined,
+        { useConfidencePoints: selectedShow?.use_confidence_points ?? false },
         effectiveEliminatorEntries,
         effectiveEliminatorEliminations,
         effectiveEliminators
@@ -696,6 +699,7 @@ function ScoreboardPageInner() {
     matches,
     rumbleEntries,
     selectedShowId,
+    selectedShow?.use_confidence_points,
     showEvents,
     eliminatorEliminations,
     eliminatorEntries,
@@ -803,7 +807,7 @@ function ScoreboardPageInner() {
       ] = await Promise.all([
         supabase
           .from("shows")
-          .select("id, name, image_url, promotion_id, status, starts_at, is_over")
+          .select("id, name, image_url, promotion_id, status, starts_at, is_over, use_confidence_points")
           .order("starts_at", { ascending: true }),
         supabase
           .from("promotions")
@@ -1059,7 +1063,7 @@ function ScoreboardPageInner() {
     if (!selectedShowId) return;
     const { data, error } = await supabase
       .from("shows")
-      .select("id, name, image_url, promotion_id, status, starts_at, is_over")
+      .select("id, name, image_url, promotion_id, status, starts_at, is_over, use_confidence_points")
       .eq("id", selectedShowId)
       .single();
     if (error) {

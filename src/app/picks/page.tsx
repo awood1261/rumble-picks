@@ -60,6 +60,7 @@ const emptyPayload: PicksPayload = {
   eliminators: {},
   question_picks: {},
   match_picks: {},
+  match_confidence_picks: {},
   match_finish_picks: {},
   match_length_picks: {},
   match_interference_picks: {},
@@ -137,6 +138,9 @@ const hasPickProgress = (payload?: Partial<PicksPayload> | null) => {
       hasEliminatorProgress ||
       Object.values(payload.question_picks ?? {}).some(Boolean) ||
       Object.values(payload.match_picks ?? {}).some(Boolean) ||
+      Object.values(payload.match_confidence_picks ?? {}).some(
+        (value) => typeof value === "number",
+      ) ||
       Object.values(payload.match_finish_picks ?? {}).some(
         (pick) => pick?.method || pick?.winner || pick?.loser,
       ) ||
@@ -236,6 +240,7 @@ function PicksPageInner() {
     () => shows.find((show) => show.id === selectedShowId) ?? null,
     [shows, selectedShowId],
   );
+  const showUsesConfidencePoints = selectedShow?.use_confidence_points ?? false;
   const showLocksAtStart = selectedShow?.lock_picks_at_start ?? true;
   const showEvents = useMemo(() => {
     return events
@@ -629,7 +634,14 @@ function PicksPageInner() {
     return matches.reduce((total, match) => {
       const pick = payload.match_picks[match.id];
       if (match.winner_side_id && pick && pick === match.winner_side_id) {
-        total += scoringRules.match_winner;
+        if (showUsesConfidencePoints) {
+          const confidence = payload.match_confidence_picks?.[match.id];
+          if (typeof confidence === "number" && confidence > 0) {
+            total += confidence;
+          }
+        } else {
+          total += scoringRules.match_winner;
+        }
       }
       const entrantCount = (matchEntrantsByMatch[match.id] ?? []).length;
       if (match.finish_method) {
@@ -662,8 +674,10 @@ function PicksPageInner() {
   }, [
     matches,
     payload.match_finish_picks,
+    payload.match_confidence_picks,
     payload.match_picks,
     matchEntrantsByMatch,
+    showUsesConfidencePoints,
   ]);
 
   const sectionPointsByEvent = useMemo(() => {
@@ -756,7 +770,7 @@ function PicksPageInner() {
     Promise.all([
           supabase
             .from("shows")
-            .select("id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start")
+            .select("id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start, use_confidence_points")
             .order("name", { ascending: true }),
       supabase
         .from("promotions")
@@ -1023,7 +1037,7 @@ function PicksPageInner() {
           supabase
             .from("picks")
             .select(
-              "updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+              "updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_confidence_picks:payload->match_confidence_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
             )
             .eq("show_id", selectedShowId)
             .eq("user_id", userId)
@@ -1053,6 +1067,7 @@ function PicksPageInner() {
               eliminators: pickRows.eliminators ?? {},
               question_picks: pickRows.question_picks ?? {},
               match_picks: pickRows.match_picks ?? {},
+              match_confidence_picks: pickRows.match_confidence_picks ?? {},
               match_finish_picks: pickRows.match_finish_picks ?? {},
               match_length_picks: pickRows.match_length_picks ?? {},
               match_interference_picks: pickRows.match_interference_picks ?? {},
@@ -1118,6 +1133,11 @@ function PicksPageInner() {
               (savedPayload.question_picks as Record<string, string | null>) ?? {},
             match_picks:
               (savedPayload.match_picks as Record<string, string | null>) ?? {},
+            match_confidence_picks:
+              (savedPayload.match_confidence_picks as Record<
+                string,
+                number | null
+              >) ?? {},
             match_finish_picks:
               (savedPayload.match_finish_picks as Record<
                 string,
@@ -1148,6 +1168,7 @@ function PicksPageInner() {
             eliminators: nextEliminators,
             question_picks: {},
             match_picks: {},
+            match_confidence_picks: {},
             match_finish_picks: {},
             match_length_picks: {},
             match_interference_picks: {},
@@ -1459,6 +1480,34 @@ function PicksPageInner() {
       setMessage("Picks are locked for this show.");
       return false;
     }
+    if (showUsesConfidencePoints) {
+      const matchIds = availableMatches.map((match) => match.id);
+      const pickedMatchIds = matchIds.filter((id) => Boolean(payload.match_picks[id]));
+      const confidenceRanks = pickedMatchIds.map(
+        (id) => payload.match_confidence_picks?.[id] ?? null
+      );
+      const hasMissingConfidence = confidenceRanks.some(
+        (rank) => !(typeof rank === "number" && Number.isInteger(rank) && rank > 0)
+      );
+      if (hasMissingConfidence) {
+        setMessage(
+          "Assign a unique confidence rank to each selected match winner before saving."
+        );
+        return false;
+      }
+      const uniqueRanks = new Set(confidenceRanks);
+      if (uniqueRanks.size !== confidenceRanks.length) {
+        setMessage("Each confidence rank can only be used once per show.");
+        return false;
+      }
+      const hasOutOfRangeRank = confidenceRanks.some(
+        (rank) => typeof rank === "number" && rank > matchIds.length
+      );
+      if (hasOutOfRangeRank) {
+        setMessage("Confidence ranks must stay within the number of matches on the show.");
+        return false;
+      }
+    }
     setSaving(true);
     setMessage(null);
     const { error } = await supabase.from("picks").upsert(
@@ -1626,14 +1675,32 @@ function PicksPageInner() {
 
   const currentStepMatchReady =
     currentStep?.type !== "match" ||
-    Boolean(payload.match_picks[currentStep.id]);
+    (Boolean(payload.match_picks[currentStep.id]) &&
+      (!showUsesConfidencePoints ||
+        (typeof payload.match_confidence_picks?.[currentStep.id] === "number" &&
+          (payload.match_confidence_picks?.[currentStep.id] ?? 0) > 0)));
 
   const allMatchWinnersPicked = useMemo(() => {
     if (!selectedShowId || stepItems.length === 0) return false;
     const matchSteps = stepItems.filter((item) => item.type === "match");
     if (matchSteps.length === 0) return false;
-    return matchSteps.every((item) => Boolean(payload.match_picks[item.id]));
-  }, [payload.match_picks, selectedShowId, stepItems]);
+    return matchSteps.every((item) => {
+      if (!payload.match_picks[item.id]) {
+        return false;
+      }
+      if (!showUsesConfidencePoints) {
+        return true;
+      }
+      const confidence = payload.match_confidence_picks?.[item.id];
+      return typeof confidence === "number" && confidence > 0;
+    });
+  }, [
+    payload.match_confidence_picks,
+    payload.match_picks,
+    selectedShowId,
+    showUsesConfidencePoints,
+    stepItems,
+  ]);
 
   useEffect(() => {
     if (!lastStepKey || totalSteps === 0) return;
@@ -2439,6 +2506,8 @@ function PicksPageInner() {
                         selectedShowId={selectedShowId}
                         selectedShowName={selectedShow?.name}
                         selectedPromotionId={selectedShow?.promotion_id}
+                        useConfidencePoints={showUsesConfidencePoints}
+                        confidenceMatchIds={availableMatches.map((item) => item.id)}
                         matchSidesByMatch={matchSidesByMatch}
                         matchEntrantsByMatch={matchEntrantsByMatch}
                         entrantByIdAll={entrantByIdAll}
