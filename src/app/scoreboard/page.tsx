@@ -13,7 +13,7 @@ import { calculateScore } from "../../lib/scoring";
 import type { ChampionParticipant } from "../../lib/championTypes";
 
 const BOUTPICK_BELT_URL =
-  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/boutpick-belt.png";
+  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/boutpick-fpc-belt.png";
 
 type ScoreRow = {
   id: string;
