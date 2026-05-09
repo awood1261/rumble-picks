@@ -1264,6 +1264,8 @@ type MatchPicksSectionProps = {
   selectedShowId: string;
   selectedShowName?: string | null;
   selectedPromotionId?: string | null;
+  useConfidencePoints: boolean;
+  confidenceMatchIds: string[];
   matchSidesByMatch: Record<string, MatchSideRow[]>;
   matchEntrantsByMatch: Record<string, MatchEntrantRow[]>;
   entrantByIdAll: Map<string, EntrantRow>;
@@ -2046,6 +2048,8 @@ export const MatchPicksSection = ({
   selectedShowId,
   selectedShowName,
   selectedPromotionId,
+  useConfidencePoints,
+  confidenceMatchIds,
   matchSidesByMatch,
   matchEntrantsByMatch,
   entrantByIdAll,
@@ -2207,6 +2211,26 @@ export const MatchPicksSection = ({
           const showFinishMethodBonus = !isLadderSix;
           const showInterferenceBonus = !isLadderSix;
           const winningSideId = payload.match_picks[match.id] ?? null;
+          const currentConfidencePick =
+            payload.match_confidence_picks?.[match.id] ?? null;
+          const usedConfidenceRanks = new Set(
+            confidenceMatchIds
+              .filter((id) => id !== match.id)
+              .map((id) => payload.match_confidence_picks?.[id])
+              .filter(
+                (rank): rank is number =>
+                  typeof rank === "number" && Number.isInteger(rank) && rank > 0
+              )
+          );
+          const confidenceRankOptions = useConfidencePoints
+            ? Array.from(
+                { length: Math.max(confidenceMatchIds.length, 0) },
+                (_, index) => index + 1
+              ).filter(
+                (rank) =>
+                  !usedConfidenceRanks.has(rank) || currentConfidencePick === rank
+              )
+            : [];
           const winningSideEntrants =
             sideEntries.find((side) => side.side.id === winningSideId)?.entrants ??
             [];
@@ -2378,7 +2402,9 @@ export const MatchPicksSection = ({
                       Tap a side to select the winner.
                     </p>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-100">
-                      +{scoringRules.match_winner} pts for correct winner
+                      {useConfidencePoints
+                        ? "Correct winner earns its confidence value"
+                        : `+${scoringRules.match_winner} pts for correct winner`}
                     </p>
                   </div>
                 </div>
@@ -2737,6 +2763,63 @@ export const MatchPicksSection = ({
                                 />
                               );
                             })}
+                        </div>
+                      </div>
+                    )}
+                    {useConfidencePoints && (
+                      <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-3">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-100">
+                              Confidence points
+                            </p>
+                            <p className="mt-1 text-xs text-zinc-400">
+                              Rank this winner pick. Higher ranks earn more points if the pick is correct.
+                            </p>
+                          </div>
+                          {currentConfidencePick ? (
+                            <span className="rounded-full border border-amber-300/40 bg-black/40 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-200">
+                              Rank {currentConfidencePick}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-3">
+                          <select
+                            className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            value={currentConfidencePick ?? ""}
+                            disabled={isLocked || !hasWinnerPick}
+                            onChange={(event) => {
+                              const nextValue = event.target.value
+                                ? Number(event.target.value)
+                                : null;
+                              posthog.capture("match_confidence_selected", {
+                                show_id: selectedShowId,
+                                show_name: selectedShowName ?? null,
+                                promotion_id: selectedPromotionId ?? null,
+                                match_id: match.id,
+                                match_name: match.name,
+                                confidence_value: nextValue,
+                              });
+                              setPayload((prev) => ({
+                                ...prev,
+                                match_confidence_picks: {
+                                  ...(prev.match_confidence_picks ?? {}),
+                                  [match.id]: nextValue,
+                                },
+                              }));
+                            }}
+                          >
+                            <option value="">
+                              {hasWinnerPick
+                                ? "Select confidence rank"
+                                : "Pick a winner first"}
+                            </option>
+                            {confidenceRankOptions.map((rank) => (
+                              <option key={`${match.id}-confidence-${rank}`} value={rank}>
+                                {rank} point{rank === 1 ? "" : "s"}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     )}

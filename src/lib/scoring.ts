@@ -22,6 +22,7 @@ export type PicksPayload = {
   >;
   question_picks?: Record<string, string | null>;
   match_picks?: Record<string, string | null>;
+  match_confidence_picks?: Record<string, number | null>;
   match_finish_picks?: Record<
     string,
     { method: string | null; winner: string | null; loser: string | null }
@@ -95,7 +96,7 @@ export const calculateScore = (
   matches: MatchRow[] = [],
   matchEntrants: MatchEntrantRow[] = [],
   matchSides: MatchSideRow[] = [],
-  options?: { ironPersonId?: string | null },
+  options?: { ironPersonId?: string | null; useConfidencePoints?: boolean },
   eliminatorEntries: EliminatorEntryRow[] = [],
   eliminatorEliminations: EliminatorEliminationRow[] = [],
   eliminators: EliminatorRow[] = [],
@@ -197,6 +198,7 @@ export const calculateScore = (
   }, {} as Record<string, Set<string>>);
 
   const matchPicks = payload.match_picks ?? {};
+  const matchConfidencePicks = payload.match_confidence_picks ?? {};
   const matchFinishPicks = payload.match_finish_picks ?? {};
   const matchLengthPicks = payload.match_length_picks ?? {};
   const matchInterferencePicks = payload.match_interference_picks ?? {};
@@ -209,7 +211,14 @@ export const calculateScore = (
     if (!match.winner_side_id || !pick) return total;
     const allowed = matchSideSet[match.id];
     if (allowed && !allowed.has(pick)) return total;
-    return pick === match.winner_side_id ? total + rules.match_winner : total;
+    if (pick !== match.winner_side_id) return total;
+    if (!options?.useConfidencePoints) {
+      return total + rules.match_winner;
+    }
+    const confidence = matchConfidencePicks[match.id];
+    return Number.isInteger(confidence) && (confidence ?? 0) > 0
+      ? total + (confidence as number)
+      : total;
   }, 0);
 
   const matchFinishPoints = matches.reduce((total, match) => {

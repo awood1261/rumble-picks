@@ -43,6 +43,7 @@ type ShowRow = {
   lock_picks_at_start?: boolean | null;
   is_featured_play_show?: boolean | null;
   is_over?: boolean | null;
+  use_confidence_points?: boolean | null;
 };
 
 type PromotionRow = {
@@ -240,6 +241,7 @@ export default function AdminPage() {
   const [showLockPicksAtStart, setShowLockPicksAtStart] = useState(true);
   const [showIsFeaturedPlayShow, setShowIsFeaturedPlayShow] = useState(false);
   const [showIsOver, setShowIsOver] = useState(false);
+  const [showUseConfidencePoints, setShowUseConfidencePoints] = useState(false);
   const [showModalOpen, setShowModalOpen] = useState(false);
   const [promotionModalOpen, setPromotionModalOpen] = useState(false);
   const [promotionName, setPromotionName] = useState("");
@@ -253,6 +255,8 @@ export default function AdminPage() {
   const [showEditLockPicksAtStart, setShowEditLockPicksAtStart] = useState(true);
   const [showEditIsFeaturedPlayShow, setShowEditIsFeaturedPlayShow] = useState(false);
   const [showEditIsOver, setShowEditIsOver] = useState(false);
+  const [showEditUseConfidencePoints, setShowEditUseConfidencePoints] =
+    useState(false);
   const [showEditBusy, setShowEditBusy] = useState(false);
   const [showDeleteBusy, setShowDeleteBusy] = useState(false);
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
@@ -499,6 +503,7 @@ export default function AdminPage() {
       setShowEditLockPicksAtStart(true);
       setShowEditIsFeaturedPlayShow(false);
       setShowEditIsOver(false);
+      setShowEditUseConfidencePoints(false);
       return;
     }
     setShowEditName(activeShow.name ?? "");
@@ -510,6 +515,7 @@ export default function AdminPage() {
     setShowEditLockPicksAtStart(activeShow.lock_picks_at_start ?? true);
     setShowEditIsFeaturedPlayShow(activeShow.is_featured_play_show ?? false);
     setShowEditIsOver(activeShow.is_over ?? false);
+    setShowEditUseConfidencePoints(activeShow.use_confidence_points ?? false);
   }, [
     activeShow?.id,
     activeShow?.name,
@@ -521,6 +527,7 @@ export default function AdminPage() {
     activeShow?.lock_picks_at_start,
     activeShow?.is_featured_play_show,
     activeShow?.is_over,
+    activeShow?.use_confidence_points,
   ]);
   useEffect(() => {
     if (!selectedShowId && activeShow?.id) {
@@ -861,7 +868,7 @@ export default function AdminPage() {
         supabase
           .from("shows")
           .select(
-            "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over"
+            "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points"
           )
           .order("created_at", { ascending: false }),
         supabase
@@ -1063,7 +1070,7 @@ export default function AdminPage() {
           supabase
             .from("shows")
             .select(
-              "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over"
+              "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points"
             )
             .order("created_at", { ascending: false }),
           supabase
@@ -1516,9 +1523,10 @@ export default function AdminPage() {
         lock_picks_at_start: showLockPicksAtStart,
         is_featured_play_show: showIsFeaturedPlayShow,
         is_over: showIsOver,
+        use_confidence_points: showUseConfidencePoints,
       })
       .select(
-        "id, name, tagline, image_url, promotion_id, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over"
+        "id, name, tagline, image_url, promotion_id, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points"
       )
       .single();
     if (error || !newShow) {
@@ -1534,6 +1542,7 @@ export default function AdminPage() {
     setShowLockPicksAtStart(true);
     setShowIsFeaturedPlayShow(false);
     setShowIsOver(false);
+    setShowUseConfidencePoints(false);
     setSelectedShowId(newShow.id);
     setEventShowId(newShow.id);
     setShowModalOpen(false);
@@ -1605,13 +1614,14 @@ export default function AdminPage() {
       lock_picks_at_start: showEditLockPicksAtStart,
       is_featured_play_show: showEditIsFeaturedPlayShow,
       is_over: showEditIsOver,
+      use_confidence_points: showEditUseConfidencePoints,
     };
     const { data: updatedShow, error } = await supabase
       .from("shows")
       .update(payload)
       .eq("id", activeShow.id)
       .select(
-        "id, name, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over"
+        "id, name, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points"
       )
       .single();
     if (error || !updatedShow) {
@@ -2703,7 +2713,10 @@ export default function AdminPage() {
         matchList,
         matchEntrantList,
         matchSideList,
-        { ironPersonId: activeEvent.iron_person_entrant_id ?? null },
+        {
+          ironPersonId: activeEvent.iron_person_entrant_id ?? null,
+          useConfidencePoints: activeShow?.use_confidence_points ?? false,
+        },
         eliminatorEntries,
         eliminatorEliminations,
         eliminatorList,
@@ -2896,6 +2909,8 @@ export default function AdminPage() {
             setIsFeaturedPlayShow={setShowEditIsFeaturedPlayShow}
             isOver={showEditIsOver}
             setIsOver={setShowEditIsOver}
+            useConfidencePoints={showEditUseConfidencePoints}
+            setUseConfidencePoints={setShowEditUseConfidencePoints}
             startsAt={showEditStartsAt}
             setStartsAt={setShowEditStartsAt}
             saving={showEditBusy}
@@ -5011,6 +5026,17 @@ export default function AdminPage() {
                     onChange={(event) => setShowIsOver(event.target.checked)}
                   />
                   Mark show as over
+                </label>
+                <label className="flex items-center gap-3 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                    checked={showUseConfidencePoints}
+                    onChange={(event) =>
+                      setShowUseConfidencePoints(event.target.checked)
+                    }
+                  />
+                  Use confidence points for match winners
                 </label>
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-400">

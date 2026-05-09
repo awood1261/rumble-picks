@@ -44,6 +44,7 @@ export type ShowRow = {
   lock_picks_at_start?: boolean | null;
   is_featured_play_show?: boolean | null;
   is_over?: boolean | null;
+  use_confidence_points?: boolean | null;
 };
 
 export type PromotionRow = {
@@ -91,6 +92,7 @@ export type PicksPayload = {
   eliminators?: Record<string, EliminatorPick>;
   question_picks?: Record<string, string | null>;
   match_picks: Record<string, string | null>;
+  match_confidence_picks?: Record<string, number | null>;
   match_finish_picks: Record<
     string,
     { method: string | null; winner: string | null; loser: string | null }
