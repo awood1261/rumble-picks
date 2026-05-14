@@ -696,7 +696,7 @@ export const getPromotionChampionshipStatus = async ({
   const isRegistered = ((registrationData ?? []) as { user_id: string }[]).length > 0;
 
   return {
-    status: isRegistered ? "defended" : "vacant",
+    status: isRegistered ? "defending" : "vacant",
     previous_show_id: previousShow.id,
     previous_show_name: previousShow.name,
     champion_user_id: reigningChampionUserId,

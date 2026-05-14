@@ -29,6 +29,8 @@ export default function ShowDetailPage() {
   >([]);
   const [championshipStatus, setChampionshipStatus] =
     useState<PromotionChampionshipStatus | null>(null);
+  const [championshipStatusLoading, setChampionshipStatusLoading] =
+    useState(false);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -163,24 +165,33 @@ export default function ShowDetailPage() {
     if (!showId || !promotionId) return;
 
     const loadChampionshipStatus = async () => {
-      const response = await fetch("/api/champion/status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          showId,
-          promotionId,
-        }),
-      });
-      const payload = (await response.json()) as {
-        error?: string;
-        championship?: PromotionChampionshipStatus;
-      };
-      if (ignore) return;
-      if (!response.ok) {
+      setChampionshipStatusLoading(true);
+      try {
+        const response = await fetch("/api/champion/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            showId,
+            promotionId,
+          }),
+        });
+        const payload = (await response.json()) as {
+          error?: string;
+          championship?: PromotionChampionshipStatus;
+        };
+        if (ignore) return;
+        if (!response.ok) {
+          setChampionshipStatus(null);
+          return;
+        }
+        setChampionshipStatus(payload.championship ?? null);
+      } catch {
         setChampionshipStatus(null);
-        return;
+      } finally {
+        if (!ignore) {
+          setChampionshipStatusLoading(false);
+        }
       }
-      setChampionshipStatus(payload.championship ?? null);
     };
 
     void loadChampionshipStatus();
@@ -300,9 +311,46 @@ export default function ShowDetailPage() {
                 View scores
               </Link>
             </div>
-            {championshipStatus ? (
+            {championshipStatusLoading ? (
+              <section className="mt-6 overflow-hidden rounded-3xl border border-amber-400/20 bg-black/40 p-5 backdrop-blur-sm sm:p-6">
+                <div className="grid gap-4 sm:grid-cols-[9rem_1fr] sm:items-center">
+                  <div className="mx-auto h-40 w-full animate-pulse rounded-3xl bg-amber-200/10 sm:h-36 sm:w-36" />
+                  <div>
+                    <div className="h-3 w-32 animate-pulse rounded-full bg-amber-200/15" />
+                    <div className="mt-3 h-8 w-44 animate-pulse rounded-full bg-amber-200/20" />
+                    <div className="mt-4 h-16 animate-pulse rounded-2xl bg-zinc-200/10" />
+                    <div className="mt-3 h-3 w-36 animate-pulse rounded-full bg-zinc-200/10" />
+                  </div>
+                </div>
+              </section>
+            ) : championshipStatus ? (
               <section className="mt-6 overflow-hidden rounded-3xl border border-amber-400/35 bg-black/55 shadow-[0_0_40px_rgba(251,196,0,0.08)] backdrop-blur-sm">
-                <div className="grid gap-4 p-5 sm:grid-cols-[9rem_1fr] sm:items-center sm:p-6">
+                <div className="px-5 pb-1 pt-4 sm:px-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300/40 bg-amber-300/10 text-base text-amber-200">
+                      🏆
+                    </span>
+                    <p className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-100">
+                      Title Status:
+                    </p>
+                    <span
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold uppercase tracking-[0.18em] ${
+                        championshipStatus.status === "inaugural"
+                          ? "border border-sky-300/40 bg-sky-300/12 text-sky-100"
+                          : championshipStatus.status === "defending"
+                            ? "border border-amber-300/40 bg-amber-300/12 text-amber-100"
+                            : "border border-zinc-300/30 bg-zinc-300/10 text-zinc-100"
+                      }`}
+                    >
+                      {championshipStatus.status === "inaugural"
+                        ? "Inaugural"
+                        : championshipStatus.status === "defending"
+                          ? "Defending"
+                          : "Vacant"}
+                    </span>
+                  </div>
+                </div>
+                <div className="grid gap-2 px-5 pb-4 pt-1 sm:grid-cols-[9rem_1fr] sm:items-center sm:px-6 sm:pb-5 sm:pt-2">
                   <div className="relative mx-auto h-40 w-full max-w-none sm:h-36 sm:w-36 sm:max-w-[9rem]">
                     <Image
                       src={BOUTPICK_FPC_BELT_URL}
@@ -313,30 +361,35 @@ export default function ShowDetailPage() {
                     />
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
-                      Championship status
-                    </p>
-                    <h2 className="mt-2 text-2xl font-semibold text-amber-100 sm:text-3xl">
-                      {championshipStatus.status === "inaugural"
-                        ? "Inaugural"
-                        : championshipStatus.status === "defended"
-                          ? "Defended"
-                          : "Vacant"}
-                    </h2>
+                    {championshipStatus.status === "defending" &&
+                    championshipStatus.champion_username ? (
+                      <div className="mt-4 flex items-center gap-3 rounded-2xl border border-amber-300/25 bg-black/40 px-3 py-3">
+                        <Image
+                          src={avatarSrcForKey(championshipStatus.champion_avatar)}
+                          alt={`${championshipStatus.champion_username} avatar`}
+                          width={56}
+                          height={56}
+                          className="h-14 w-14 rounded-full border border-amber-300/40 bg-black/40"
+                        />
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-amber-200">
+                            Reigning champion
+                          </p>
+                          <p className="mt-1 text-lg font-semibold text-zinc-100">
+                            {championshipStatus.champion_username}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
                     <p className="mt-3 text-sm text-zinc-200 sm:text-base">
                       {championshipStatus.status === "inaugural"
                         ? "This is the first championship opportunity for this promotion."
-                        : championshipStatus.status === "defended"
-                          ? `${championshipStatus.champion_username ?? "The reigning champion"} is registered for tonight and the title is being defended.`
+                        : championshipStatus.status === "defending"
+                          ? "The title is on line tonight, will the champion retain or will a new contender bring down the champ? Play now!"
                           : `${
                               championshipStatus.champion_username ?? "The previous champion"
                             } is not registered for tonight, so the championship is vacant.`}
                     </p>
-                    {championshipStatus.previous_show_name ? (
-                      <p className="mt-3 text-xs uppercase tracking-[0.22em] text-zinc-400">
-                        Previous show: {championshipStatus.previous_show_name}
-                      </p>
-                    ) : null}
                   </div>
                 </div>
               </section>

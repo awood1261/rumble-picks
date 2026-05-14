@@ -60,7 +60,7 @@ export type ChampionProfileClaim = {
 };
 
 export type PromotionChampionshipStatus = {
-  status: "inaugural" | "defended" | "vacant";
+  status: "inaugural" | "defending" | "vacant";
   previous_show_id: string | null;
   previous_show_name: string | null;
   champion_user_id: string | null;
