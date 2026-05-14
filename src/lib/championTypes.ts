@@ -58,3 +58,12 @@ export type ChampionProfileClaim = {
   claimed_avatar: string | null;
   created_at: string;
 };
+
+export type PromotionChampionshipStatus = {
+  status: "inaugural" | "defended" | "vacant";
+  previous_show_id: string | null;
+  previous_show_name: string | null;
+  champion_user_id: string | null;
+  champion_username: string | null;
+  champion_avatar: string | null;
+};

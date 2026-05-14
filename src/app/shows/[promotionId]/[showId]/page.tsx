@@ -7,8 +7,14 @@ import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabaseClient";
 import { avatarSrcForKey } from "../../../../lib/avatarOptions";
 import type { PromotionRow, ShowRow } from "../../../../lib/picksTypes";
-import type { ChampionParticipant } from "../../../../lib/championTypes";
+import type {
+  ChampionParticipant,
+  PromotionChampionshipStatus,
+} from "../../../../lib/championTypes";
 import posthog from "posthog-js";
+
+const BOUTPICK_FPC_BELT_URL =
+  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/boutpick-fpc-belt.png";
 
 export default function ShowDetailPage() {
   const params = useParams();
@@ -21,6 +27,8 @@ export default function ShowDetailPage() {
   const [championParticipants, setChampionParticipants] = useState<
     ChampionParticipant[]
   >([]);
+  const [championshipStatus, setChampionshipStatus] =
+    useState<PromotionChampionshipStatus | null>(null);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -152,6 +160,37 @@ export default function ShowDetailPage() {
 
   useEffect(() => {
     let ignore = false;
+    if (!showId || !promotionId) return;
+
+    const loadChampionshipStatus = async () => {
+      const response = await fetch("/api/champion/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showId,
+          promotionId,
+        }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        championship?: PromotionChampionshipStatus;
+      };
+      if (ignore) return;
+      if (!response.ok) {
+        setChampionshipStatus(null);
+        return;
+      }
+      setChampionshipStatus(payload.championship ?? null);
+    };
+
+    void loadChampionshipStatus();
+    return () => {
+      ignore = true;
+    };
+  }, [promotionId, showId]);
+
+  useEffect(() => {
+    let ignore = false;
     const loadUser = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (ignore) return;
@@ -245,6 +284,63 @@ export default function ShowDetailPage() {
                 {show.tagline}
               </p>
             ) : null}
+            <div className="mt-6 flex flex-wrap gap-3">
+              {lockStatusText !== "Show is locked" && isSignedIn ? (
+                <Link
+                  href={`/picks?show=${show.id}`}
+                  className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
+                >
+                  Make picks
+                </Link>
+              ) : null}
+              <Link
+                href={`/scoreboard?show=${show.id}`}
+                className="inline-flex h-12 items-center justify-center rounded-full border border-amber-400/70 px-6 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
+              >
+                View scores
+              </Link>
+            </div>
+            {championshipStatus ? (
+              <section className="mt-6 overflow-hidden rounded-3xl border border-amber-400/35 bg-black/55 shadow-[0_0_40px_rgba(251,196,0,0.08)] backdrop-blur-sm">
+                <div className="grid gap-4 p-5 sm:grid-cols-[9rem_1fr] sm:items-center sm:p-6">
+                  <div className="relative mx-auto h-40 w-full max-w-none sm:h-36 sm:w-36 sm:max-w-[9rem]">
+                    <Image
+                      src={BOUTPICK_FPC_BELT_URL}
+                      alt="BoutPick championship belt"
+                      fill
+                      sizes="(min-width: 640px) 9rem, 100vw"
+                      className="object-contain drop-shadow-[0_0_26px_rgba(251,196,0,0.28)]"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
+                      Championship status
+                    </p>
+                    <h2 className="mt-2 text-2xl font-semibold text-amber-100 sm:text-3xl">
+                      {championshipStatus.status === "inaugural"
+                        ? "Inaugural"
+                        : championshipStatus.status === "defended"
+                          ? "Defended"
+                          : "Vacant"}
+                    </h2>
+                    <p className="mt-3 text-sm text-zinc-200 sm:text-base">
+                      {championshipStatus.status === "inaugural"
+                        ? "This is the first championship opportunity for this promotion."
+                        : championshipStatus.status === "defended"
+                          ? `${championshipStatus.champion_username ?? "The reigning champion"} is registered for tonight and the title is being defended.`
+                          : `${
+                              championshipStatus.champion_username ?? "The previous champion"
+                            } is not registered for tonight, so the championship is vacant.`}
+                    </p>
+                    {championshipStatus.previous_show_name ? (
+                      <p className="mt-3 text-xs uppercase tracking-[0.22em] text-zinc-400">
+                        Previous show: {championshipStatus.previous_show_name}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </section>
+            ) : null}
             {championParticipants.length > 0 ? (
               <section className="mt-6 rounded-3xl border border-amber-400/25 bg-black/45 p-4 backdrop-blur-sm">
                 <p className="text-xs uppercase tracking-[0.28em] text-amber-200">
@@ -293,22 +389,6 @@ export default function ShowDetailPage() {
                 </Link>
               </div>
             ) : null}
-            <div className="mt-6 flex flex-wrap gap-3">
-              {lockStatusText !== "Show is locked" && isSignedIn ? (
-                <Link
-                  href={`/picks?show=${show.id}`}
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
-                >
-                  Make picks
-                </Link>
-              ) : null}
-              <Link
-                href={`/scoreboard?show=${show.id}`}
-                className="inline-flex h-12 items-center justify-center rounded-full border border-amber-400/70 px-6 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
-              >
-                View scores
-              </Link>
-            </div>
           </div>
         )}
 
