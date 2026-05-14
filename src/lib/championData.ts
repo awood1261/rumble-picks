@@ -22,6 +22,7 @@ import type {
   ChampionParticipant,
   ChampionProfileClaim,
   ChampionPromotion,
+  PromotionChampionshipStatus,
 } from "./championTypes";
 
 type ShowRow = {
@@ -573,4 +574,133 @@ export const getChampionClaimsForUser = async (
       created_at: claim.created_at,
     };
   });
+};
+
+export const getPromotionChampionshipStatus = async ({
+  promotionId,
+  showId,
+}: {
+  promotionId: string;
+  showId: string;
+}): Promise<PromotionChampionshipStatus> => {
+  const { data: currentShowData, error: currentShowError } = await supabaseAdmin
+    .from("shows")
+    .select("id, starts_at, promotion_id")
+    .eq("id", showId)
+    .eq("promotion_id", promotionId)
+    .maybeSingle();
+
+  if (currentShowError) {
+    throw new Error(currentShowError.message);
+  }
+
+  const currentShow = currentShowData as
+    | { id: string; starts_at: string | null; promotion_id: string | null }
+    | null;
+
+  if (!currentShow) {
+    throw new Error("Show not found for promotion.");
+  }
+
+  let previousShowsQuery = supabaseAdmin
+    .from("shows")
+    .select("id, name, starts_at")
+    .eq("promotion_id", promotionId)
+    .eq("is_over", true)
+    .neq("id", showId)
+    .order("starts_at", { ascending: false, nullsFirst: false })
+    .limit(1);
+
+  if (currentShow.starts_at) {
+    previousShowsQuery = previousShowsQuery.lt("starts_at", currentShow.starts_at);
+  }
+
+  const { data: previousShowData, error: previousShowError } =
+    await previousShowsQuery;
+
+  if (previousShowError) {
+    throw new Error(previousShowError.message);
+  }
+
+  const previousShow = (
+    (previousShowData ?? []) as { id: string; name: string; starts_at: string | null }[]
+  )[0];
+
+  if (!previousShow) {
+    return {
+      status: "inaugural",
+      previous_show_id: null,
+      previous_show_name: null,
+      champion_user_id: null,
+      champion_username: null,
+      champion_avatar: null,
+    };
+  }
+
+  const previousWinner = await getChampionWinnerForShow(promotionId, previousShow.id);
+
+  const { data: claimData, error: claimError } = await supabaseAdmin
+    .from("champion_claims")
+    .select(
+      "claimed_by_user_id, claimed_username, claimed_avatar, created_at"
+    )
+    .eq("promotion_id", promotionId)
+    .eq("claim_type", "show_winner")
+    .eq("show_id", previousShow.id)
+    .not("claimed_by_user_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (claimError) {
+    throw new Error(claimError.message);
+  }
+
+  const claimedChampion = (
+    (claimData ?? []) as {
+      claimed_by_user_id: string | null;
+      claimed_username: string;
+      claimed_avatar: string | null;
+      created_at: string;
+    }[]
+  )[0] ?? null;
+
+  const reigningChampionUserId =
+    claimedChampion?.claimed_by_user_id ?? previousWinner?.winner_user_id ?? null;
+  const reigningChampionUsername =
+    claimedChampion?.claimed_username ?? previousWinner?.winner_username ?? null;
+  const reigningChampionAvatar =
+    claimedChampion?.claimed_avatar ?? previousWinner?.winner_avatar ?? null;
+
+  if (!reigningChampionUserId) {
+    return {
+      status: "vacant",
+      previous_show_id: previousShow.id,
+      previous_show_name: previousShow.name,
+      champion_user_id: null,
+      champion_username: null,
+      champion_avatar: null,
+    };
+  }
+
+  const { data: registrationData, error: registrationError } = await supabaseAdmin
+    .from("picks")
+    .select("user_id")
+    .eq("show_id", showId)
+    .eq("user_id", reigningChampionUserId)
+    .limit(1);
+
+  if (registrationError) {
+    throw new Error(registrationError.message);
+  }
+
+  const isRegistered = ((registrationData ?? []) as { user_id: string }[]).length > 0;
+
+  return {
+    status: isRegistered ? "defending" : "vacant",
+    previous_show_id: previousShow.id,
+    previous_show_name: previousShow.name,
+    champion_user_id: reigningChampionUserId,
+    champion_username: reigningChampionUsername,
+    champion_avatar: reigningChampionAvatar,
+  };
 };

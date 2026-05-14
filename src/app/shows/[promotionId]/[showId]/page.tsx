@@ -7,8 +7,14 @@ import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabaseClient";
 import { avatarSrcForKey } from "../../../../lib/avatarOptions";
 import type { PromotionRow, ShowRow } from "../../../../lib/picksTypes";
-import type { ChampionParticipant } from "../../../../lib/championTypes";
+import type {
+  ChampionParticipant,
+  PromotionChampionshipStatus,
+} from "../../../../lib/championTypes";
 import posthog from "posthog-js";
+
+const BOUTPICK_FPC_BELT_URL =
+  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/boutpick-fpc-belt.png";
 
 export default function ShowDetailPage() {
   const params = useParams();
@@ -21,6 +27,10 @@ export default function ShowDetailPage() {
   const [championParticipants, setChampionParticipants] = useState<
     ChampionParticipant[]
   >([]);
+  const [championshipStatus, setChampionshipStatus] =
+    useState<PromotionChampionshipStatus | null>(null);
+  const [championshipStatusLoading, setChampionshipStatusLoading] =
+    useState(false);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -152,6 +162,46 @@ export default function ShowDetailPage() {
 
   useEffect(() => {
     let ignore = false;
+    if (!showId || !promotionId) return;
+
+    const loadChampionshipStatus = async () => {
+      setChampionshipStatusLoading(true);
+      try {
+        const response = await fetch("/api/champion/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            showId,
+            promotionId,
+          }),
+        });
+        const payload = (await response.json()) as {
+          error?: string;
+          championship?: PromotionChampionshipStatus;
+        };
+        if (ignore) return;
+        if (!response.ok) {
+          setChampionshipStatus(null);
+          return;
+        }
+        setChampionshipStatus(payload.championship ?? null);
+      } catch {
+        setChampionshipStatus(null);
+      } finally {
+        if (!ignore) {
+          setChampionshipStatusLoading(false);
+        }
+      }
+    };
+
+    void loadChampionshipStatus();
+    return () => {
+      ignore = true;
+    };
+  }, [promotionId, showId]);
+
+  useEffect(() => {
+    let ignore = false;
     const loadUser = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (ignore) return;
@@ -245,6 +295,105 @@ export default function ShowDetailPage() {
                 {show.tagline}
               </p>
             ) : null}
+            <div className="mt-6 flex flex-wrap gap-3">
+              {lockStatusText !== "Show is locked" && isSignedIn ? (
+                <Link
+                  href={`/picks?show=${show.id}`}
+                  className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
+                >
+                  Make picks
+                </Link>
+              ) : null}
+              <Link
+                href={`/scoreboard?show=${show.id}`}
+                className="inline-flex h-12 items-center justify-center rounded-full border border-amber-400/70 px-6 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
+              >
+                View scores
+              </Link>
+            </div>
+            {championshipStatusLoading ? (
+              <section className="mt-6 overflow-hidden rounded-3xl border border-amber-400/20 bg-black/40 p-5 backdrop-blur-sm sm:p-6">
+                <div className="grid gap-4 sm:grid-cols-[9rem_1fr] sm:items-center">
+                  <div className="mx-auto h-40 w-full animate-pulse rounded-3xl bg-amber-200/10 sm:h-36 sm:w-36" />
+                  <div>
+                    <div className="h-3 w-32 animate-pulse rounded-full bg-amber-200/15" />
+                    <div className="mt-3 h-8 w-44 animate-pulse rounded-full bg-amber-200/20" />
+                    <div className="mt-4 h-16 animate-pulse rounded-2xl bg-zinc-200/10" />
+                    <div className="mt-3 h-3 w-36 animate-pulse rounded-full bg-zinc-200/10" />
+                  </div>
+                </div>
+              </section>
+            ) : championshipStatus ? (
+              <section className="mt-6 overflow-hidden rounded-3xl border border-amber-400/35 bg-black/55 shadow-[0_0_40px_rgba(251,196,0,0.08)] backdrop-blur-sm">
+                <div className="px-5 pb-1 pt-4 sm:px-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300/40 bg-amber-300/10 text-base text-amber-200">
+                      🏆
+                    </span>
+                    <p className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-100">
+                      Title Status:
+                    </p>
+                    <span
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold uppercase tracking-[0.18em] ${
+                        championshipStatus.status === "inaugural"
+                          ? "border border-sky-300/40 bg-sky-300/12 text-sky-100"
+                          : championshipStatus.status === "defending"
+                            ? "border border-amber-300/40 bg-amber-300/12 text-amber-100"
+                            : "border border-zinc-300/30 bg-zinc-300/10 text-zinc-100"
+                      }`}
+                    >
+                      {championshipStatus.status === "inaugural"
+                        ? "Inaugural"
+                        : championshipStatus.status === "defending"
+                          ? "Defending"
+                          : "Vacant"}
+                    </span>
+                  </div>
+                </div>
+                <div className="grid gap-2 px-5 pb-4 pt-1 sm:grid-cols-[9rem_1fr] sm:items-center sm:px-6 sm:pb-5 sm:pt-2">
+                  <div className="relative mx-auto h-40 w-full max-w-none sm:h-36 sm:w-36 sm:max-w-[9rem]">
+                    <Image
+                      src={BOUTPICK_FPC_BELT_URL}
+                      alt="BoutPick championship belt"
+                      fill
+                      sizes="(min-width: 640px) 9rem, 100vw"
+                      className="object-contain drop-shadow-[0_0_26px_rgba(251,196,0,0.28)]"
+                    />
+                  </div>
+                  <div>
+                    {championshipStatus.status === "defending" &&
+                    championshipStatus.champion_username ? (
+                      <div className="mt-4 flex items-center gap-3 rounded-2xl border border-amber-300/25 bg-black/40 px-3 py-3">
+                        <Image
+                          src={avatarSrcForKey(championshipStatus.champion_avatar)}
+                          alt={`${championshipStatus.champion_username} avatar`}
+                          width={56}
+                          height={56}
+                          className="h-14 w-14 rounded-full border border-amber-300/40 bg-black/40"
+                        />
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-amber-200">
+                            Reigning champion
+                          </p>
+                          <p className="mt-1 text-lg font-semibold text-zinc-100">
+                            {championshipStatus.champion_username}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                    <p className="mt-3 text-sm text-zinc-200 sm:text-base">
+                      {championshipStatus.status === "inaugural"
+                        ? "This is the first championship opportunity for this promotion."
+                        : championshipStatus.status === "defending"
+                          ? "The title is on line tonight, will the champion retain or will a new contender bring down the champ? Play now!"
+                          : `${
+                              championshipStatus.champion_username ?? "The previous champion"
+                            } is not registered for tonight, so the championship is vacant.`}
+                    </p>
+                  </div>
+                </div>
+              </section>
+            ) : null}
             {championParticipants.length > 0 ? (
               <section className="mt-6 rounded-3xl border border-amber-400/25 bg-black/45 p-4 backdrop-blur-sm">
                 <p className="text-xs uppercase tracking-[0.28em] text-amber-200">
@@ -293,22 +442,6 @@ export default function ShowDetailPage() {
                 </Link>
               </div>
             ) : null}
-            <div className="mt-6 flex flex-wrap gap-3">
-              {lockStatusText !== "Show is locked" && isSignedIn ? (
-                <Link
-                  href={`/picks?show=${show.id}`}
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
-                >
-                  Make picks
-                </Link>
-              ) : null}
-              <Link
-                href={`/scoreboard?show=${show.id}`}
-                className="inline-flex h-12 items-center justify-center rounded-full border border-amber-400/70 px-6 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
-              >
-                View scores
-              </Link>
-            </div>
           </div>
         )}
 
