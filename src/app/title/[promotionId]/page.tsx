@@ -1,10 +1,18 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Cinzel } from "next/font/google";
 import { avatarSrcForKey } from "../../../lib/avatarOptions";
 import { getPromotionLineagePageData } from "../../../lib/championData";
 
 const BOUTPICK_TITLE_URL =
   "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/boutpick-title.png";
+const BOUTPICK_TITLE_HERO_BG_URL =
+  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/hero-bg.png";
+
+const cinzel = Cinzel({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+});
 
 const formatWonDate = (value: string | null) => {
   if (!value) return "Date TBD";
@@ -138,7 +146,28 @@ export default async function TitleLineagePage({
           </Link>
         </div>
 
-        <section className="overflow-hidden rounded-[1.85rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(15,18,22,0.96),rgba(8,8,8,0.98))] shadow-[0_32px_90px_rgba(0,0,0,0.55)] sm:border-amber-300/12">
+        <div className="mb-5 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-amber-200/70">
+            BoutPick Hall of Champions
+          </p>
+          <h1
+            className={`${cinzel.className} mt-2 text-2xl font-semibold uppercase tracking-[0.14em] text-amber-50 drop-shadow-[0_2px_18px_rgba(255,214,122,0.12)] sm:text-3xl`}
+          >
+            Championship Lineage
+          </h1>
+          <div className="mx-auto mt-3 h-px w-32 bg-gradient-to-r from-transparent via-amber-300/55 to-transparent" />
+        </div>
+
+        <section className="relative overflow-hidden rounded-[1.85rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(15,18,22,0.96),rgba(8,8,8,0.98))] shadow-[0_32px_90px_rgba(0,0,0,0.55)] sm:border-amber-300/12">
+          <Image
+            src={BOUTPICK_TITLE_HERO_BG_URL}
+            alt=""
+            fill
+            priority
+            sizes="(min-width: 1024px) 80rem, 100vw"
+            className="object-cover object-center opacity-45"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,5,5,0.84)_0%,rgba(8,8,8,0.72)_34%,rgba(6,6,6,0.36)_68%,rgba(5,5,5,0.6)_100%)]" />
           <div className="relative flex flex-nowrap items-center gap-2 px-3 py-1.5 sm:gap-4 sm:px-5 sm:py-4 lg:px-6 lg:py-5">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,214,122,0.09),transparent_32%),radial-gradient(circle_at_60%_0%,rgba(80,150,255,0.10),transparent_28%)]" />
 
