@@ -132,20 +132,20 @@ export default async function TitleLineagePage({
           </Link>
           <Link
             href={playHref}
-            className="rounded-full border border-amber-300/35 bg-amber-300/12 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-amber-100 transition hover:border-amber-200 hover:bg-amber-200/18"
+            className="rounded-full border border-zinc-700/70 bg-[linear-gradient(180deg,rgba(34,27,18,0.72),rgba(15,12,10,0.72))] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-amber-100 transition hover:border-amber-200 hover:bg-amber-200/18 sm:border-amber-300/35 sm:bg-amber-300/12"
           >
             Play
           </Link>
         </div>
 
-        <section className="overflow-hidden rounded-[1.85rem] border border-amber-300/12 bg-[linear-gradient(145deg,rgba(15,18,22,0.96),rgba(8,8,8,0.98))] shadow-[0_32px_90px_rgba(0,0,0,0.55)]">
+        <section className="overflow-hidden rounded-[1.85rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(15,18,22,0.96),rgba(8,8,8,0.98))] shadow-[0_32px_90px_rgba(0,0,0,0.55)] sm:border-amber-300/12">
           <div className="relative grid gap-6 px-5 py-5 lg:grid-cols-[0.88fr_1.12fr] lg:px-6 lg:py-6">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,214,122,0.09),transparent_32%),radial-gradient(circle_at_60%_0%,rgba(80,150,255,0.10),transparent_28%)]" />
 
             <div className="relative z-10 flex flex-col justify-center">
               <div className="flex items-start gap-4">
                 {promotion.image_url ? (
-                  <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-[1.5rem] border border-amber-300/16 bg-black/30 sm:h-28 sm:w-28">
+                  <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-[1.5rem] border border-zinc-800/80 bg-black/30 sm:h-28 sm:w-28 sm:border-amber-300/16">
                     <Image
                       src={promotion.image_url}
                       alt={`${promotion.name} logo`}
@@ -169,7 +169,7 @@ export default async function TitleLineagePage({
                   <div className="mt-4">
                     <Link
                       href={`/shows/${promotionId}`}
-                      className="inline-flex rounded-full border border-zinc-700/60 bg-[linear-gradient(180deg,rgba(33,33,33,0.65),rgba(14,14,14,0.65))] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-zinc-100 transition hover:border-amber-300/25 hover:bg-amber-300/10 hover:text-amber-100"
+                      className="inline-flex rounded-full border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(33,33,33,0.65),rgba(14,14,14,0.65))] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-zinc-100 transition hover:border-amber-300/25 hover:bg-amber-300/10 hover:text-amber-100 sm:border-zinc-700/60"
                     >
                       About {promotion.name}
                     </Link>
@@ -179,7 +179,7 @@ export default async function TitleLineagePage({
             </div>
 
             <div className="relative z-10">
-              <div className="relative aspect-[1.38/1] w-full overflow-hidden rounded-[1.6rem] border border-amber-300/10 bg-[linear-gradient(180deg,rgba(84,62,28,0.12),rgba(10,10,10,0.22))]">
+              <div className="relative aspect-[1.38/1] w-full overflow-hidden rounded-[1.6rem] border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(84,62,28,0.08),rgba(10,10,10,0.24))] sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(84,62,28,0.12),rgba(10,10,10,0.22))]">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,214,122,0.14),transparent_42%),radial-gradient(circle_at_top,rgba(90,160,255,0.10),transparent_36%)]" />
                 <Image
                   src={BOUTPICK_TITLE_URL}
@@ -195,7 +195,7 @@ export default async function TitleLineagePage({
         </section>
 
         <section className="mt-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <div className="flex min-w-[44rem] flex-nowrap gap-[1px] overflow-hidden rounded-[1.3rem] border border-amber-300/10 bg-[linear-gradient(180deg,rgba(80,60,28,0.16),rgba(28,24,18,0.12))]">
+          <div className="flex min-w-[44rem] flex-nowrap gap-[1px] overflow-hidden rounded-[1.3rem] border border-zinc-800/80 bg-zinc-800/80 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(80,60,28,0.16),rgba(28,24,18,0.12))]">
             {statCards.map((stat) => (
               <div
                 key={stat.label}
@@ -213,8 +213,8 @@ export default async function TitleLineagePage({
           </div>
         </section>
 
-        <section className="mt-4 overflow-hidden rounded-[1.5rem] border border-amber-300/14 bg-[linear-gradient(145deg,rgba(16,18,20,0.98),rgba(9,9,9,0.98))] shadow-[0_0_36px_rgba(255,196,90,0.08)]">
-          <div className="border-b border-amber-300/8 px-5 py-4">
+        <section className="mt-4 overflow-hidden rounded-[1.5rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(16,18,20,0.98),rgba(9,9,9,0.98))] shadow-[0_0_36px_rgba(255,196,90,0.08)] sm:border-amber-300/14">
+          <div className="border-b border-zinc-800/80 px-5 py-4 sm:border-amber-300/8">
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm font-black uppercase tracking-[0.2em] text-amber-50">
                 Title status
@@ -235,14 +235,14 @@ export default async function TitleLineagePage({
 
           <div className="grid gap-4 px-5 py-5 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             {status.champion_username ? (
-              <div className="rounded-[1.35rem] border border-emerald-300/16 bg-[linear-gradient(145deg,rgba(15,28,21,0.88),rgba(8,11,9,0.98))] p-4">
+              <div className="rounded-[1.35rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(15,28,21,0.88),rgba(8,11,9,0.98))] p-4 sm:border-emerald-300/16">
                 <div className="flex items-center gap-4">
                   <Image
                     src={avatarSrcForKey(status.champion_avatar)}
                     alt={`${status.champion_username} avatar`}
                     width={96}
                     height={96}
-                    className="h-24 w-24 rounded-2xl border border-amber-200/14 bg-zinc-900 object-cover"
+                    className="h-24 w-24 rounded-2xl border border-zinc-800/80 bg-zinc-900 object-cover sm:border-amber-200/14"
                   />
                   <div className="min-w-0">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-emerald-300/80">
@@ -271,7 +271,7 @@ export default async function TitleLineagePage({
             <div>
               <p className="text-sm leading-7 text-zinc-300">{statusDescription}</p>
               <div className="mt-4 flex flex-wrap gap-3">
-                <div className="rounded-2xl border border-amber-300/10 bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))] px-4 py-3">
+                <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
                   <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
                     Defenses
                   </p>
@@ -279,7 +279,7 @@ export default async function TitleLineagePage({
                     {status.successful_defenses ?? 0}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-amber-300/10 bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))] px-4 py-3">
+                <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
                   <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
                     Days held
                   </p>
@@ -288,7 +288,7 @@ export default async function TitleLineagePage({
                   </p>
                 </div>
                 {status.active_show_name ? (
-                  <div className="rounded-2xl border border-amber-300/10 bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))] px-4 py-3">
+                  <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
                     <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
                       Next show
                     </p>
@@ -307,7 +307,7 @@ export default async function TitleLineagePage({
             <h2 className="text-xl font-black uppercase tracking-[0.08em] text-amber-50">
               {promotion.name} Championship Lineage
             </h2>
-            <div className="rounded-full border border-zinc-700/60 bg-[linear-gradient(180deg,rgba(30,30,30,0.75),rgba(12,12,12,0.75))] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-400">
+            <div className="rounded-full border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(30,30,30,0.75),rgba(12,12,12,0.75))] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-400 sm:border-zinc-700/60">
               All reigns
             </div>
           </div>
@@ -323,8 +323,8 @@ export default async function TitleLineagePage({
                   key={`${reign.won_show_id}-${reign.lineage_number}`}
                   className={`relative overflow-hidden rounded-[1.4rem] border px-4 py-4 ${
                     index % 2 === 0
-                      ? "border-amber-300/14 bg-[linear-gradient(145deg,rgba(16,18,20,0.98),rgba(8,8,8,0.98))]"
-                      : "border-zinc-700/55 bg-[linear-gradient(145deg,rgba(19,19,19,0.98),rgba(9,9,9,0.98))]"
+                      ? "border-zinc-800/80 bg-[linear-gradient(145deg,rgba(16,18,20,0.98),rgba(8,8,8,0.98))] sm:border-amber-300/14"
+                      : "border-zinc-800/80 bg-[linear-gradient(145deg,rgba(19,19,19,0.98),rgba(9,9,9,0.98))] sm:border-zinc-700/55"
                   }`}
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -337,7 +337,7 @@ export default async function TitleLineagePage({
                         alt={`${reign.champion_username} avatar`}
                         width={72}
                         height={72}
-                        className="h-[72px] w-[72px] rounded-2xl border border-amber-200/14 bg-zinc-900 object-cover"
+                        className="h-[72px] w-[72px] rounded-2xl border border-zinc-800/80 bg-zinc-900 object-cover sm:border-amber-200/14"
                       />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -359,7 +359,7 @@ export default async function TitleLineagePage({
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      <div className="rounded-2xl border border-amber-300/10 bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))] px-4 py-3">
+                      <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
                         <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
                           Reign
                         </p>
@@ -367,7 +367,7 @@ export default async function TitleLineagePage({
                           #{reign.reign_number}
                         </p>
                       </div>
-                      <div className="rounded-2xl border border-amber-300/10 bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))] px-4 py-3">
+                      <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
                         <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
                           Defenses
                         </p>
@@ -375,7 +375,7 @@ export default async function TitleLineagePage({
                           {reign.successful_defenses}
                         </p>
                       </div>
-                      <div className="rounded-2xl border border-amber-300/10 bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))] px-4 py-3 col-span-2 sm:col-span-1">
+                      <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 col-span-2 sm:col-span-1 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
                         <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
                           Duration
                         </p>
@@ -391,7 +391,7 @@ export default async function TitleLineagePage({
           )}
         </section>
 
-        <section className="mt-6 rounded-[1.5rem] border border-amber-400/20 bg-[linear-gradient(145deg,rgba(32,26,18,0.98),rgba(13,12,10,0.98))] px-5 py-5 shadow-[0_0_32px_rgba(255,196,90,0.12)]">
+        <section className="mt-6 rounded-[1.5rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(32,26,18,0.98),rgba(13,12,10,0.98))] px-5 py-5 shadow-[0_0_32px_rgba(255,196,90,0.12)] sm:border-amber-400/20">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-amber-300/18 bg-amber-300/10 text-lg text-amber-100">
