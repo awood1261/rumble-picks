@@ -5,7 +5,7 @@ import { avatarSrcForKey } from "../../../lib/avatarOptions";
 import { getPromotionLineagePageData } from "../../../lib/championData";
 
 const BOUTPICK_TITLE_URL =
-  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/boutpick-title.png";
+  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/bout-pick-prediction-title.png";
 const BOUTPICK_TITLE_HERO_BG_URL =
   "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/hero-bg.png";
 
@@ -205,7 +205,7 @@ export default async function TitleLineagePage({
             </div>
 
             <div className="relative z-0 min-w-0 flex-1">
-              <div className="relative flex min-h-[78px] items-center justify-center overflow-visible sm:min-h-[180px]">
+              <div className="relative flex min-h-[120px] items-center justify-center overflow-visible sm:min-h-[180px]">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,214,122,0.16),transparent_42%),radial-gradient(circle_at_top,rgba(90,160,255,0.10),transparent_36%)]" />
                 <Image
                   src={BOUTPICK_TITLE_URL}
@@ -213,7 +213,7 @@ export default async function TitleLineagePage({
                   width={1400}
                   height={980}
                   priority
-                  className="relative z-0 block h-auto w-[220px] max-w-none translate-x-0 drop-shadow-[0_28px_48px_rgba(0,0,0,0.72)] sm:w-[112%] sm:-translate-x-[4%] lg:w-[110%] lg:-translate-x-[3%]"
+                  className="relative z-0 block h-auto w-[320px] max-w-none translate-x-0 drop-shadow-[0_28px_48px_rgba(0,0,0,0.72)] sm:w-[112%] sm:-translate-x-[4%] lg:w-[110%] lg:-translate-x-[3%]"
                 />
               </div>
             </div>
