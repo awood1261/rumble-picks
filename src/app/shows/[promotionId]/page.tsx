@@ -14,6 +14,7 @@ export default function PromotionShowsPage() {
   const [promotion, setPromotion] = useState<PromotionRow | null>(null);
   const [shows, setShows] = useState<ShowRow[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [initialNow] = useState(() => Date.now());
   const formatShowDate = (value: string | null) => {
     if (!value) return "Show date TBD";
     const date = new Date(value);
@@ -28,9 +29,8 @@ export default function PromotionShowsPage() {
   const sortedShows = [...shows].sort((a, b) => {
     const aTime = a.starts_at ? new Date(a.starts_at).getTime() : Number.MAX_SAFE_INTEGER;
     const bTime = b.starts_at ? new Date(b.starts_at).getTime() : Number.MAX_SAFE_INTEGER;
-    const now = Date.now();
-    const aLocked = aTime <= now;
-    const bLocked = bTime <= now;
+    const aLocked = aTime <= initialNow;
+    const bLocked = bTime <= initialNow;
     if (aLocked !== bLocked) {
       return aLocked ? 1 : -1;
     }
@@ -126,6 +126,12 @@ export default function PromotionShowsPage() {
               </h1>
             </div>
           </div>
+          <Link
+            href={`/title/${promotionId}`}
+            className="rounded-full border border-amber-300/35 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-amber-100 transition hover:border-amber-200 hover:bg-amber-200/15"
+          >
+            View title lineage
+          </Link>
         </div>
 
         {shows.length === 0 ? (

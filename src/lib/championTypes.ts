@@ -67,3 +67,35 @@ export type PromotionChampionshipStatus = {
   champion_username: string | null;
   champion_avatar: string | null;
 };
+
+export type PromotionLineageReign = {
+  lineage_number: number;
+  reign_number: number;
+  champion_user_id: string | null;
+  champion_username: string;
+  champion_avatar: string | null;
+  won_show_id: string;
+  won_show_name: string;
+  won_at: string | null;
+  ended_at: string | null;
+  successful_defenses: number;
+  is_current: boolean;
+};
+
+export type PromotionLineageStatus = {
+  status: "inaugural" | "defending" | "vacant";
+  champion_user_id: string | null;
+  champion_username: string | null;
+  champion_avatar: string | null;
+  reign_number: number | null;
+  successful_defenses: number | null;
+  active_show_id: string | null;
+  active_show_name: string | null;
+};
+
+export type PromotionLineagePageData = {
+  promotion: ChampionPromotion | null;
+  status: PromotionLineageStatus;
+  lineage: PromotionLineageReign[];
+  call_to_action_show_id: string | null;
+};
