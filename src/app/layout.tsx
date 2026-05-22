@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { NavBar } from "../components/NavBar";
 import "./globals.css";
@@ -45,6 +45,13 @@ export const metadata: Metadata = {
     description: "BoutPick predictions and live scoreboard.",
     images: ["/images/boutpick-og-image.png"],
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#060606",
 };
 
 export default function RootLayout({
