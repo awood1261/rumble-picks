@@ -248,22 +248,22 @@ export default async function TitleLineagePage({
                   <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-emerald-300/80">
                     Current champ
                   </p>
-                  <h2 className="mt-2 truncate text-3xl font-black leading-none text-amber-50">
+                  <h2 className="mt-2 truncate text-xl font-black leading-none text-amber-50">
                     {status.champion_username}
                   </h2>
                 </div>
-                <div className="uppercase text-sm text-zinc-400">
-                  <div>
-                    <span className="text-emerald-200">
+                <div className="shrink-0 space-y-1 text-right uppercase text-[12px] tracking-[0.08em] text-zinc-400">
+                  <div className="whitespace-nowrap">
+                    <span className="font-semibold tabular-nums text-emerald-200">
                       {currentDaysHeld ?? 0}
                     </span>{" "}
-                    Days held
+                    <span>Days held</span>
                   </div>
-                  <div>
-                    <span className="text-emerald-200">
+                  <div className="whitespace-nowrap">
+                    <span className="font-semibold tabular-nums text-emerald-200">
                       {status.successful_defenses ?? 0}
                     </span>{" "}
-                    Defenses
+                    <span>Defenses</span>
                   </div>
                 </div>
               </div>
@@ -302,11 +302,8 @@ export default async function TitleLineagePage({
         <section data-component="TitleLineage" className="mt-5">
           <div className="mb-3 flex items-center justify-between gap-3 px-1">
             <h2 className="text-xl font-black uppercase tracking-[0.08em] text-amber-50">
-              {promotion.name} Championship Lineage
+              Lineage
             </h2>
-            <div className="rounded-full border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(30,30,30,0.75),rgba(12,12,12,0.75))] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-400 sm:border-zinc-700/60">
-              All reigns
-            </div>
           </div>
 
           {pageData.lineage.length === 0 ? (

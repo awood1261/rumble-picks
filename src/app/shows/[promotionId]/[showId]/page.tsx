@@ -14,7 +14,7 @@ import type {
 import posthog from "posthog-js";
 
 const BOUTPICK_FPC_BELT_URL =
-  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/boutpick-fpc-belt.png";
+  "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/bout-pick-prediction-title.png";
 
 export default function ShowDetailPage() {
   const params = useParams();
