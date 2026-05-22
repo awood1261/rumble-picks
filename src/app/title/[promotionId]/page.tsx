@@ -171,7 +171,7 @@ export default async function TitleLineagePage({
           <div className="relative flex flex-nowrap items-center gap-2 px-3 py-1.5 sm:gap-4 sm:px-5 sm:py-4 lg:px-6 lg:py-5">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,214,122,0.09),transparent_32%),radial-gradient(circle_at_60%_0%,rgba(80,150,255,0.10),transparent_28%)]" />
 
-            <div className="relative z-20 w-[120px] shrink-0 sm:basis-[40%] sm:w-auto">
+            <div className="relative z-20 basis-[30%] w-[30%] min-w-0 shrink-0">
               <div className="flex flex-col items-start">
                 {promotion.image_url ? (
                   <div className="relative flex aspect-square w-[92px] shrink-0 items-center justify-center overflow-hidden rounded-[0.8rem] bg-black/10 sm:w-full sm:max-w-[10rem] sm:rounded-[1.4rem]">
