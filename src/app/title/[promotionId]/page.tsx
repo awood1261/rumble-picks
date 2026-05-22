@@ -76,12 +76,12 @@ export default async function TitleLineagePage({
     pageData.lineage.map((reign) =>
       reign.champion_user_id
         ? `user:${reign.champion_user_id}`
-        : `name:${reign.champion_username.toLowerCase()}`
-    )
+        : `name:${reign.champion_username.toLowerCase()}`,
+    ),
   ).size;
   const totalDefenses = pageData.lineage.reduce(
     (sum, reign) => sum + reign.successful_defenses,
-    0
+    0,
   );
   const currentDaysHeld = currentReign
     ? durationInDays(currentReign.won_at, currentReign.ended_at)
@@ -136,20 +136,11 @@ export default async function TitleLineagePage({
             href={`/shows/${promotionId}`}
             className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200 hover:text-amber-100"
           >
-            ← Back to {promotion.name}
-          </Link>
-          <Link
-            href={playHref}
-            className="rounded-full border border-zinc-700/70 bg-[linear-gradient(180deg,rgba(34,27,18,0.72),rgba(15,12,10,0.72))] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-amber-100 transition hover:border-amber-200 hover:bg-amber-200/18 sm:border-amber-300/35 sm:bg-amber-300/12"
-          >
-            Play
+            ← Back to Shows
           </Link>
         </div>
 
         <div className="mb-5 text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-amber-200/70">
-            BoutPick Hall of Champions
-          </p>
           <h1
             className={`${cinzel.className} mt-2 text-2xl font-semibold uppercase tracking-[0.14em] text-amber-50 drop-shadow-[0_2px_18px_rgba(255,214,122,0.12)] sm:text-3xl`}
           >
@@ -158,7 +149,10 @@ export default async function TitleLineagePage({
           <div className="mx-auto mt-3 h-px w-32 bg-gradient-to-r from-transparent via-amber-300/55 to-transparent" />
         </div>
 
-        <section className="relative overflow-hidden rounded-[1.85rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(15,18,22,0.96),rgba(8,8,8,0.98))] shadow-[0_32px_90px_rgba(0,0,0,0.55)] sm:border-amber-300/12">
+        <section
+          data-component="TitleHero"
+          className="relative overflow-hidden rounded-[1.85rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(15,18,22,0.96),rgba(8,8,8,0.98))] shadow-[0_32px_90px_rgba(0,0,0,0.55)] sm:border-amber-300/12"
+        >
           <Image
             src={BOUTPICK_TITLE_HERO_BG_URL}
             alt=""
@@ -171,10 +165,10 @@ export default async function TitleLineagePage({
           <div className="relative flex flex-nowrap items-center gap-2 px-3 py-1.5 sm:gap-4 sm:px-5 sm:py-4 lg:px-6 lg:py-5">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,214,122,0.09),transparent_32%),radial-gradient(circle_at_60%_0%,rgba(80,150,255,0.10),transparent_28%)]" />
 
-            <div className="relative z-20 basis-[30%] w-[30%] min-w-0 shrink-0">
+            <div className="relative z-20 basis-[50%] w-[50%] min-w-0 shrink-0">
               <div className="flex flex-col items-start">
                 {promotion.image_url ? (
-                  <div className="relative flex aspect-square w-[92px] shrink-0 items-center justify-center overflow-hidden rounded-[0.8rem] bg-black/10 sm:w-full sm:max-w-[10rem] sm:rounded-[1.4rem]">
+                  <div className="relative right-0 flex aspect-square shrink-0 items-center justify-center overflow-hidden rounded-[0.8rem] bg-black/10 sm:w-full sm:max-w-[10rem] sm:rounded-[1.4rem]">
                     <Image
                       src={promotion.image_url}
                       alt={`${promotion.name} logo`}
@@ -186,20 +180,12 @@ export default async function TitleLineagePage({
                   </div>
                 ) : null}
                 <div className="mt-2 min-w-0">
-                  <h1 className="max-w-[110px] text-[0.92rem] font-black uppercase leading-[0.92] text-amber-50 sm:max-w-none sm:text-4xl">
+                  <h1 className=" text-[0.92rem] font-black uppercase leading-[0.92] text-amber-50 sm:max-w-none sm:text-4xl">
                     {promotion.name}
                   </h1>
                   <p className="mt-1.5 max-w-[98px] text-[8px] leading-3.5 text-zinc-300 sm:mt-3 sm:max-w-sm sm:text-sm sm:leading-6">
                     Every reign and defense.
                   </p>
-                  <div className="mt-2 sm:mt-4">
-                    <Link
-                      href={`/shows/${promotionId}`}
-                      className="inline-flex rounded-full border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(33,33,33,0.65),rgba(14,14,14,0.65))] px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-zinc-100 transition hover:border-amber-300/25 hover:bg-amber-300/10 hover:text-amber-100 sm:border-zinc-700/60 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.22em]"
-                    >
-                      About
-                    </Link>
-                  </div>
                 </div>
               </div>
             </div>
@@ -220,18 +206,23 @@ export default async function TitleLineagePage({
           </div>
         </section>
 
-        <section className="mt-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <section
+          data-component="StatCards"
+          className="mt-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           <div className="flex min-w-[44rem] flex-nowrap gap-[1px] overflow-hidden rounded-[1.3rem] border border-zinc-800/80 bg-zinc-800/80 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(80,60,28,0.16),rgba(28,24,18,0.12))]">
             {statCards.map((stat) => (
               <div
                 key={stat.label}
-                className="min-w-0 flex-1 bg-[linear-gradient(180deg,rgba(14,16,18,0.98),rgba(8,8,8,0.98))] px-4 py-4 text-center"
+                className="min-w-0 flex-1 bg-[linear-gradient(180deg,rgba(14,16,18,0.98),rgba(8,8,8,0.98))] sm:px-4 sm:py-4 px-1 py-1 text-center"
               >
                 <div className="mx-auto inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300/16 bg-amber-300/8 text-sm text-amber-100">
                   {stat.icon}
                 </div>
-                <p className="mt-3 text-2xl font-black text-amber-50">{stat.value}</p>
-                <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-400">
+                <p className="mt-0 text-2xl font-black text-amber-50">
+                  {stat.value}
+                </p>
+                <p className="mt-0 text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-400">
                   {stat.label}
                 </p>
               </div>
@@ -239,96 +230,76 @@ export default async function TitleLineagePage({
           </div>
         </section>
 
-        <section className="mt-4 overflow-hidden rounded-[1.5rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(16,18,20,0.98),rgba(9,9,9,0.98))] shadow-[0_0_36px_rgba(255,196,90,0.08)] sm:border-amber-300/14">
-          <div className="border-b border-zinc-800/80 px-5 py-4 sm:border-amber-300/8">
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-sm font-black uppercase tracking-[0.2em] text-amber-50">
-                Title status
-              </p>
-              <span
-                className={`inline-flex rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] ${
-                  status.status === "defending"
-                    ? "bg-emerald-500/12 text-emerald-200 ring-1 ring-emerald-300/20"
-                    : status.status === "vacant"
-                      ? "bg-amber-400/14 text-amber-100 ring-1 ring-amber-300/20"
-                      : "bg-sky-400/12 text-sky-100 ring-1 ring-sky-300/20"
-                }`}
-              >
-                {statusLabel}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid gap-4 px-5 py-5 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-            {status.champion_username ? (
-              <div className="rounded-[1.35rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(15,28,21,0.88),rgba(8,11,9,0.98))] p-4 sm:border-emerald-300/16">
-                <div className="flex items-center gap-4">
-                  <Image
-                    src={avatarSrcForKey(status.champion_avatar)}
-                    alt={`${status.champion_username} avatar`}
-                    width={96}
-                    height={96}
-                    className="h-24 w-24 rounded-2xl border border-zinc-800/80 bg-zinc-900 object-cover sm:border-amber-200/14"
-                  />
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-emerald-300/80">
-                      {status.status === "defending"
-                        ? "Current champion"
-                        : "Most recent champion"}
-                    </p>
-                    <h2 className="mt-2 truncate text-3xl font-black leading-none text-amber-50">
-                      {status.champion_username}
-                    </h2>
-                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">
-                      Reign #{status.reign_number ?? 1}
-                    </p>
-                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">
-                      {status.status === "defending" ? "Defending tonight" : "Awaiting next title match"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-[1.35rem] border border-dashed border-amber-300/14 bg-black/18 px-5 py-6 text-sm text-zinc-400">
-                No champion is recorded yet.
-              </div>
-            )}
-
-            <div>
-              <p className="text-sm leading-7 text-zinc-300">{statusDescription}</p>
-              <div className="mt-4 flex flex-wrap gap-3">
-                <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
-                    Defenses
+        <section
+          data-component="CurrentChampion"
+          className="grid gap-2 py-2 lg:grid-cols-[0.9fr_1.1fr] lg:items-center"
+        >
+          {status.champion_username ? (
+            <div className="rounded-[1.35rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(15,28,21,0.88),rgba(8,11,9,0.98))] p-4 sm:border-emerald-300/16">
+              <div className="flex items-center gap-4">
+                <Image
+                  src={avatarSrcForKey(status.champion_avatar)}
+                  alt={`${status.champion_username} avatar`}
+                  width={96}
+                  height={96}
+                  className="h-24 w-24 rounded-2xl border border-zinc-800/80 bg-zinc-900 object-cover sm:border-amber-200/14"
+                />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-emerald-300/80">
+                    Current champ
                   </p>
-                  <p className="mt-1 text-lg font-black text-amber-50">
-                    {status.successful_defenses ?? 0}
-                  </p>
+                  <h2 className="mt-2 truncate text-3xl font-black leading-none text-amber-50">
+                    {status.champion_username}
+                  </h2>
                 </div>
-                <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+                <div className="uppercase text-sm text-zinc-400">
+                  <div>
+                    <span className="text-emerald-200">
+                      {currentDaysHeld ?? 0}
+                    </span>{" "}
                     Days held
-                  </p>
-                  <p className="mt-1 text-lg font-black text-amber-50">
-                    {currentDaysHeld ?? 0}
-                  </p>
-                </div>
-                {status.active_show_name ? (
-                  <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
-                      Next show
-                    </p>
-                    <p className="mt-1 text-sm font-black text-amber-50">
-                      {status.active_show_name}
-                    </p>
                   </div>
-                ) : null}
+                  <div>
+                    <span className="text-emerald-200">
+                      {status.successful_defenses ?? 0}
+                    </span>{" "}
+                    Defenses
+                  </div>
+                </div>
               </div>
             </div>
+          ) : (
+            <div className="rounded-[1.35rem] border border-dashed border-amber-300/14 bg-black/18 px-5 py-6 text-sm text-zinc-400">
+              No champion is recorded yet.
+            </div>
+          )}
+        </section>
+
+        <section data-component="play-cta" className="mt-2 rounded-[1.5rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(32,26,18,0.98),rgba(13,12,10,0.98))] px-5 py-5 shadow-[0_0_32px_rgba(255,196,90,0.12)] sm:border-amber-400/20">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-amber-300/18 bg-amber-300/10 text-lg text-amber-100">
+                🏆
+              </span>
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.08em] text-amber-50">
+                  Think you can take the title?
+                </p>
+                <p className="mt-1 text-sm text-zinc-300">
+                  Join the next show and make your predictions.
+                </p>
+              </div>
+            </div>
+            <Link
+              href={playHref}
+              className="inline-flex items-center justify-center rounded-xl border border-amber-200/20 bg-amber-300 px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-black transition hover:bg-amber-200"
+            >
+              Play
+            </Link>
           </div>
         </section>
 
-        <section className="mt-5">
+        <section data-component="TitleLineage" className="mt-5">
           <div className="mb-3 flex items-center justify-between gap-3 px-1">
             <h2 className="text-xl font-black uppercase tracking-[0.08em] text-amber-50">
               {promotion.name} Championship Lineage
@@ -376,10 +347,14 @@ export default async function TitleLineagePage({
                             </span>
                           ) : null}
                         </div>
-                        <p className="mt-2 text-sm text-zinc-300">{reign.won_show_name}</p>
+                        <p className="mt-2 text-sm text-zinc-300">
+                          {reign.won_show_name}
+                        </p>
                         <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
                           {formatWonDate(reign.won_at)}
-                          {reign.ended_at ? ` - ${formatWonDate(reign.ended_at)}` : " - Present"}
+                          {reign.ended_at
+                            ? ` - ${formatWonDate(reign.ended_at)}`
+                            : " - Present"}
                         </p>
                       </div>
                     </div>
@@ -415,30 +390,6 @@ export default async function TitleLineagePage({
               ))}
             </div>
           )}
-        </section>
-
-        <section className="mt-6 rounded-[1.5rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(32,26,18,0.98),rgba(13,12,10,0.98))] px-5 py-5 shadow-[0_0_32px_rgba(255,196,90,0.12)] sm:border-amber-400/20">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-amber-300/18 bg-amber-300/10 text-lg text-amber-100">
-                🏆
-              </span>
-              <div>
-                <p className="text-sm font-black uppercase tracking-[0.08em] text-amber-50">
-                  Think you can take the title?
-                </p>
-                <p className="mt-1 text-sm text-zinc-300">
-                  Join the next show and make your predictions.
-                </p>
-              </div>
-            </div>
-            <Link
-              href={playHref}
-              className="inline-flex items-center justify-center rounded-xl border border-amber-200/20 bg-amber-300 px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-black transition hover:bg-amber-200"
-            >
-              Play
-            </Link>
-          </div>
         </section>
       </main>
     </div>
