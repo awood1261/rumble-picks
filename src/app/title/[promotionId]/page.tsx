@@ -139,55 +139,52 @@ export default async function TitleLineagePage({
         </div>
 
         <section className="overflow-hidden rounded-[1.85rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(15,18,22,0.96),rgba(8,8,8,0.98))] shadow-[0_32px_90px_rgba(0,0,0,0.55)] sm:border-amber-300/12">
-          <div className="relative grid gap-6 px-5 py-5 lg:grid-cols-[0.88fr_1.12fr] lg:px-6 lg:py-6">
+          <div className="relative flex flex-nowrap items-center gap-2 px-3 py-1.5 sm:gap-4 sm:px-5 sm:py-4 lg:px-6 lg:py-5">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,214,122,0.09),transparent_32%),radial-gradient(circle_at_60%_0%,rgba(80,150,255,0.10),transparent_28%)]" />
 
-            <div className="relative z-10 flex flex-col justify-center">
-              <div className="flex items-start gap-4">
+            <div className="relative z-20 w-[120px] shrink-0 sm:basis-[40%] sm:w-auto">
+              <div className="flex flex-col items-start">
                 {promotion.image_url ? (
-                  <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-[1.5rem] border border-zinc-800/80 bg-black/30 sm:h-28 sm:w-28 sm:border-amber-300/16">
+                  <div className="relative flex aspect-square w-[92px] shrink-0 items-center justify-center overflow-hidden rounded-[0.8rem] bg-black/10 sm:w-full sm:max-w-[10rem] sm:rounded-[1.4rem]">
                     <Image
                       src={promotion.image_url}
                       alt={`${promotion.name} logo`}
-                      fill
-                      sizes="112px"
-                      className="object-cover"
+                      width={220}
+                      height={220}
+                      sizes="(min-width: 640px) 160px, 92px"
+                      className="block h-auto w-full object-contain p-2 sm:p-3"
                     />
                   </div>
                 ) : null}
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-amber-200/70">
-                    BoutPick title lineage
-                  </p>
-                  <h1 className="mt-3 text-3xl font-black uppercase leading-none text-amber-50 sm:text-4xl">
+                <div className="mt-2 min-w-0">
+                  <h1 className="max-w-[110px] text-[0.92rem] font-black uppercase leading-[0.92] text-amber-50 sm:max-w-none sm:text-4xl">
                     {promotion.name}
                   </h1>
-                  <p className="mt-3 max-w-sm text-sm leading-6 text-zinc-300">
-                    The official prediction championship lineage for {promotion.name}.
-                    Follow every reign, defense, and title change.
+                  <p className="mt-1.5 max-w-[98px] text-[8px] leading-3.5 text-zinc-300 sm:mt-3 sm:max-w-sm sm:text-sm sm:leading-6">
+                    Every reign and defense.
                   </p>
-                  <div className="mt-4">
+                  <div className="mt-2 sm:mt-4">
                     <Link
                       href={`/shows/${promotionId}`}
-                      className="inline-flex rounded-full border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(33,33,33,0.65),rgba(14,14,14,0.65))] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-zinc-100 transition hover:border-amber-300/25 hover:bg-amber-300/10 hover:text-amber-100 sm:border-zinc-700/60"
+                      className="inline-flex rounded-full border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(33,33,33,0.65),rgba(14,14,14,0.65))] px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-zinc-100 transition hover:border-amber-300/25 hover:bg-amber-300/10 hover:text-amber-100 sm:border-zinc-700/60 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.22em]"
                     >
-                      About {promotion.name}
+                      About
                     </Link>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="relative z-10">
-              <div className="relative aspect-[1.38/1] w-full overflow-hidden rounded-[1.6rem] border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(84,62,28,0.08),rgba(10,10,10,0.24))] sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(84,62,28,0.12),rgba(10,10,10,0.22))]">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,214,122,0.14),transparent_42%),radial-gradient(circle_at_top,rgba(90,160,255,0.10),transparent_36%)]" />
+            <div className="relative z-0 min-w-0 flex-1">
+              <div className="relative flex min-h-[78px] items-center justify-center overflow-visible sm:min-h-[180px]">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,214,122,0.16),transparent_42%),radial-gradient(circle_at_top,rgba(90,160,255,0.10),transparent_36%)]" />
                 <Image
                   src={BOUTPICK_TITLE_URL}
                   alt="BoutPick title"
-                  fill
+                  width={1400}
+                  height={980}
                   priority
-                  sizes="(min-width: 1024px) 42rem, 100vw"
-                  className="object-contain p-3 drop-shadow-[0_22px_40px_rgba(0,0,0,0.68)]"
+                  className="relative z-0 block h-auto w-[220px] max-w-none translate-x-0 drop-shadow-[0_28px_48px_rgba(0,0,0,0.72)] sm:w-[112%] sm:-translate-x-[4%] lg:w-[110%] lg:-translate-x-[3%]"
                 />
               </div>
             </div>
