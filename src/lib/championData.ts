@@ -23,6 +23,7 @@ import type {
   PromotionLineagePageData,
   PromotionLineageReign,
   PromotionLineageStatus,
+  TitleLandingPromotionCard,
   ChampionProfileClaim,
   ChampionPromotion,
   PromotionChampionshipStatus,
@@ -807,6 +808,61 @@ export const getPromotionLineagePageData = async (
     lineage,
     call_to_action_show_id: activeShow?.id ?? null,
   };
+};
+
+export const getFeaturedTitlePromotionId = async (): Promise<string | null> => {
+  const { data, error } = await supabaseAdmin
+    .from("shows")
+    .select("promotion_id, starts_at")
+    .eq("is_featured_play_show", true)
+    .order("starts_at", { ascending: true, nullsFirst: false })
+    .limit(1);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const featuredShow = (
+    (data ?? []) as { promotion_id: string | null; starts_at: string | null }[]
+  )[0] ?? null;
+
+  return featuredShow?.promotion_id ?? null;
+};
+
+export const getTitleLandingPromotionCards = async (): Promise<
+  TitleLandingPromotionCard[]
+> => {
+  const { data, error } = await supabaseAdmin
+    .from("promotions")
+    .select("id, name, image_url")
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const promotions = (data ?? []) as PromotionRow[];
+  const cardData = await Promise.all(
+    promotions.map(async (promotion) => {
+      const lineageData = await getPromotionLineagePageData(promotion.id);
+      const reigningChampion = lineageData.lineage[0] ?? null;
+      return {
+        promotion_id: promotion.id,
+        promotion_name: promotion.name,
+        promotion_image_url: promotion.image_url,
+        reigning_champion_username: reigningChampion?.champion_username ?? null,
+        reigning_champion_avatar: reigningChampion?.champion_avatar ?? null,
+        status: lineageData.status.status,
+        reign_count: lineageData.lineage.length,
+        total_defenses: lineageData.lineage.reduce(
+          (sum, reign) => sum + reign.successful_defenses,
+          0
+        ),
+      } satisfies TitleLandingPromotionCard;
+    })
+  );
+
+  return cardData;
 };
 
 export const getPromotionChampionshipStatus = async ({
