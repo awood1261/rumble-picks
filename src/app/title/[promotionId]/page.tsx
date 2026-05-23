@@ -4,6 +4,8 @@ import { Cinzel } from "next/font/google";
 import { avatarSrcForKey } from "../../../lib/avatarOptions";
 import { getPromotionLineagePageData } from "../../../lib/championData";
 
+export const revalidate = 300;
+
 const BOUTPICK_TITLE_URL =
   "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/bout-pick-prediction-title.png";
 const BOUTPICK_TITLE_HERO_BG_URL =
@@ -94,18 +96,6 @@ export default async function TitleLineagePage({
   const currentDaysHeld = currentReign
     ? durationInDays(currentReign.won_at, currentReign.ended_at)
     : null;
-  const statusLabel =
-    status.status === "defending"
-      ? "Defending"
-      : status.status === "vacant"
-        ? "Vacant"
-        : "Inaugural";
-  const statusDescription =
-    status.status === "defending"
-      ? "The title is on the line. The reigning champion is entered and the next challenger has to take the belt from them."
-      : status.status === "vacant"
-        ? "The most recent champion is not entered for the next show, so the title is open for a new holder to seize it."
-        : "No champion has been crowned for this promotion yet. The next winner will begin the lineage.";
   const statCards = [
     {
       icon: "⌛",
@@ -326,7 +316,7 @@ export default async function TitleLineagePage({
             </div>
           ) : (
             <div className="space-y-3">
-              {pageData.lineage.map((reign, index) => (
+              {pageData.lineage.map((reign) => (
                 <div
                   key={`${reign.won_show_id}-${reign.lineage_number}`}
                   className="relative overflow-hidden px-0 py-1"
