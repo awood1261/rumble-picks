@@ -19,9 +19,9 @@ const formatWonDate = (value: string | null) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Date TBD";
   return date.toLocaleDateString(undefined, {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    year: "2-digit",
   });
 };
 
@@ -36,8 +36,16 @@ const durationInDays = (wonAt: string | null, endedAt: string | null) => {
 
 const formatDuration = (wonAt: string | null, endedAt: string | null) => {
   const days = durationInDays(wonAt, endedAt);
-  if (!days) return "Duration TBD";
-  return `${days} day${days === 1 ? "" : "s"} held`;
+  if (!days) {
+    return {
+      value: "TBD",
+      label: "Days held",
+    };
+  }
+  return {
+    value: String(days),
+    label: "Days held",
+  };
 };
 
 type TitleLineagePageProps = {
@@ -236,7 +244,7 @@ export default async function TitleLineagePage({
         >
           {status.champion_username ? (
             <div className="rounded-[1.35rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(15,28,21,0.88),rgba(8,11,9,0.98))] p-4 sm:border-emerald-300/16">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <Image
                   src={avatarSrcForKey(status.champion_avatar)}
                   alt={`${status.champion_username} avatar`}
@@ -251,6 +259,9 @@ export default async function TitleLineagePage({
                   <h2 className="mt-2 truncate text-xl font-black leading-none text-amber-50">
                     {status.champion_username}
                   </h2>
+                  <span className="mt-1 text-xs tracking-tighter font-semibold uppercase text-zinc-500">
+                    05/02/26 - PRESENT
+                  </span>
                 </div>
                 <div className="shrink-0 space-y-1 text-right uppercase text-[12px] tracking-[0.08em] text-zinc-400">
                   <div className="whitespace-nowrap">
@@ -275,7 +286,10 @@ export default async function TitleLineagePage({
           )}
         </section>
 
-        <section data-component="play-cta" className="mt-2 rounded-[1.5rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(32,26,18,0.98),rgba(13,12,10,0.98))] px-5 py-5 shadow-[0_0_32px_rgba(255,196,90,0.12)] sm:border-amber-400/20">
+        <section
+          data-component="play-cta"
+          className="mt-2 rounded-[1.5rem] border border-zinc-800/80 bg-[linear-gradient(145deg,rgba(32,26,18,0.98),rgba(13,12,10,0.98))] px-5 py-5 shadow-[0_0_32px_rgba(255,196,90,0.12)] sm:border-amber-400/20"
+        >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-amber-300/18 bg-amber-300/10 text-lg text-amber-100">
@@ -302,7 +316,7 @@ export default async function TitleLineagePage({
         <section data-component="TitleLineage" className="mt-5">
           <div className="mb-3 flex items-center justify-between gap-3 px-1">
             <h2 className="text-xl font-black uppercase tracking-[0.08em] text-amber-50">
-              Lineage
+              Lineage Timeline
             </h2>
           </div>
 
@@ -315,14 +329,10 @@ export default async function TitleLineagePage({
               {pageData.lineage.map((reign, index) => (
                 <div
                   key={`${reign.won_show_id}-${reign.lineage_number}`}
-                  className={`relative overflow-hidden rounded-[1.4rem] border px-4 py-4 ${
-                    index % 2 === 0
-                      ? "border-zinc-800/80 bg-[linear-gradient(145deg,rgba(16,18,20,0.98),rgba(8,8,8,0.98))] sm:border-amber-300/14"
-                      : "border-zinc-800/80 bg-[linear-gradient(145deg,rgba(19,19,19,0.98),rgba(9,9,9,0.98))] sm:border-zinc-700/55"
-                  }`}
+                  className="relative overflow-hidden px-0 py-1"
                 >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
                       <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-300/20 bg-black/20 text-sm font-black text-amber-50">
                         {reign.lineage_number}
                       </div>
@@ -335,7 +345,7 @@ export default async function TitleLineagePage({
                       />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="truncate text-2xl font-black text-amber-50">
+                          <h3 className="truncate text-lg font-black text-amber-50">
                             {reign.champion_username}
                           </h3>
                           {reign.is_current ? (
@@ -344,10 +354,10 @@ export default async function TitleLineagePage({
                             </span>
                           ) : null}
                         </div>
-                        <p className="mt-2 text-sm text-zinc-300">
+                        <p className="mt-0 text-sm text-zinc-300">
                           {reign.won_show_name}
                         </p>
-                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        <p className="mt-1 text-xs font-semibold uppercase tracking-tighter text-zinc-500">
                           {formatWonDate(reign.won_at)}
                           {reign.ended_at
                             ? ` - ${formatWonDate(reign.ended_at)}`
@@ -355,31 +365,13 @@ export default async function TitleLineagePage({
                         </p>
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
-                        <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
-                          Reign
-                        </p>
-                        <p className="mt-1 text-lg font-black text-amber-50">
-                          #{reign.reign_number}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
-                        <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
-                          Defenses
-                        </p>
-                        <p className="mt-1 text-lg font-black text-amber-50">
-                          {reign.successful_defenses}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-zinc-800/80 bg-[linear-gradient(180deg,rgba(28,28,28,0.42),rgba(0,0,0,0.18))] px-4 py-3 col-span-2 sm:col-span-1 sm:border-amber-300/10 sm:bg-[linear-gradient(180deg,rgba(40,31,18,0.12),rgba(0,0,0,0.18))]">
-                        <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
-                          Duration
-                        </p>
-                        <p className="mt-1 text-sm font-black text-amber-50">
-                          {formatDuration(reign.won_at, reign.ended_at)}
-                        </p>
+                    <div className="ml-auto shrink-0 text-right text-xs uppercase tracking-tighter text-zinc-400">
+                      <div><span className="text-emerald-200">{reign.successful_defenses}</span> Defenses</div>
+                      <div>
+                        <span className="text-emerald-200">
+                          {formatDuration(reign.won_at, reign.ended_at).value}
+                        </span>{" "}
+                        {formatDuration(reign.won_at, reign.ended_at).label}
                       </div>
                     </div>
                   </div>
