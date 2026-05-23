@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { getFeaturedTitlePromotionId, getTitleLandingPromotionCards } from "../../lib/championData";
 import { avatarSrcForKey } from "../../lib/avatarOptions";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const statusLabel = (status: "inaugural" | "defending" | "vacant") => {
   switch (status) {
     case "defending":
