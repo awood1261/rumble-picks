@@ -99,3 +99,14 @@ export type PromotionLineagePageData = {
   lineage: PromotionLineageReign[];
   call_to_action_show_id: string | null;
 };
+
+export type TitleLandingPromotionCard = {
+  promotion_id: string;
+  promotion_name: string;
+  promotion_image_url: string | null;
+  reigning_champion_username: string | null;
+  reigning_champion_avatar: string | null;
+  status: PromotionLineageStatus["status"];
+  reign_count: number;
+  total_defenses: number;
+};
