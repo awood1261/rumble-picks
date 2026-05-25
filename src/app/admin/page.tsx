@@ -366,6 +366,8 @@ export default function AdminPage() {
 
   const formatMatchTypeLabel = (value: string) => {
     switch (value) {
+      case "tag_4_way":
+        return "4-Way Tag";
       case "tag_4":
         return "4v4 Tag";
       case "ladder_6":
@@ -1973,6 +1975,7 @@ export default function AdminPage() {
       tag: 2,
       tag_3: 2,
       tag_4: 2,
+      tag_4_way: 4,
       triple_threat: 3,
       fatal_4_way: 4,
       ladder_6: 6,
@@ -3988,6 +3991,7 @@ export default function AdminPage() {
                 <option value="tag">Tag (2 vs 2)</option>
                 <option value="tag_3">Tag (3 vs 3)</option>
                 <option value="tag_4">Tag (4 vs 4)</option>
+                <option value="tag_4_way">4-Way Tag (2 v 2 v 2 v 2)</option>
                 <option value="triple_threat">Triple Threat</option>
                 <option value="fatal_4_way">Fatal 4-Way</option>
                 <option value="ladder_6">6-Man Ladder</option>
@@ -4122,7 +4126,8 @@ export default function AdminPage() {
                 const isTag =
                   matchType === "tag" ||
                   matchType === "tag_3" ||
-                  matchType === "tag_4";
+                  matchType === "tag_4" ||
+                  matchType === "tag_4_way";
                 const winnerSideId = match.winner_side_id ?? "";
                 const isMainEventEdit =
                   matchMainEventEdits[match.id] ?? Boolean(match.is_main_event);

@@ -155,6 +155,7 @@ type TeamStackMatchupPickerProps = {
   getPercent: (sideId?: string | null) => number | null;
   isLocked: boolean;
   onSelect: (sideId: string | null) => void;
+  maxVisibleEntrants?: number;
 };
 
 const WRESTLER_OUTLINE_FILTER =
@@ -191,13 +192,14 @@ const TeamStackMatchupPicker = ({
   getPercent,
   isLocked,
   onSelect,
+  maxVisibleEntrants = 4,
 }: TeamStackMatchupPickerProps) => (
   <div className="space-y-4">
-    {sides.slice(0, 2).map((sideEntry, index) => {
+    {sides.map((sideEntry, index) => {
       const isSelected = selectedSideId === sideEntry.side.id;
       const hasSelection = Boolean(selectedSideId);
       const isDimmed = hasSelection && !isSelected;
-      const visibleEntrants = (sideEntry.entrants ?? []).slice(0, 4);
+      const visibleEntrants = (sideEntry.entrants ?? []).slice(0, maxVisibleEntrants);
       const isThreeWide = visibleEntrants.length >= 3;
       const isFourWide = visibleEntrants.length >= 4;
       const percent = getPercent(sideEntry.side.id ?? null);
@@ -343,7 +345,7 @@ const TeamStackMatchupPicker = ({
               )}
             </div>
           </button>
-          {index === 0 ? (
+          {index < sides.length - 1 ? (
             <div className="flex items-center justify-center gap-3 py-1">
               <span className="h-px w-14 bg-amber-300/45" />
               <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200">
@@ -2207,7 +2209,8 @@ export const MatchPicksSection = ({
           const isTag =
             matchType === "tag" ||
             matchType === "tag_3" ||
-            matchType === "tag_4";
+            matchType === "tag_4" ||
+            matchType === "tag_4_way";
           const showFinishMethodBonus = !isLadderSix;
           const showInterferenceBonus = !isLadderSix;
           const winningSideId = payload.match_picks[match.id] ?? null;
@@ -2251,6 +2254,8 @@ export const MatchPicksSection = ({
           };
           const matchupSides = isLadderSix
             ? sideEntries.slice(0, 6)
+            : matchType === "tag_4_way"
+              ? sideEntries.slice(0, 4)
             : matchType === "fatal_4_way"
               ? sideEntries.slice(0, 4)
               : matchType === "triple_threat"
@@ -2415,7 +2420,7 @@ export const MatchPicksSection = ({
                 )}
                 {sideEntries.length > 0 && (
                   <div className="mt-3 space-y-3">
-                    {isTag && hasMatchup && matchupSides.length === 2 && (
+                    {isTag && hasMatchup && matchupSides.length >= 2 && (
                       <TeamStackMatchupPicker
                         matchId={match.id}
                         sides={matchupSides}
@@ -2424,6 +2429,7 @@ export const MatchPicksSection = ({
                         getPercent={getPercent}
                         isLocked={isLocked}
                         onSelect={handleSelectWinner}
+                        maxVisibleEntrants={matchType === "tag_4_way" ? 2 : 4}
                       />
                     )}
                     {!isTag && hasMatchup && usesCardGridMatchup && (
