@@ -174,6 +174,9 @@ create table if not exists public.matches (
   status text not null default 'scheduled',
   winner_entrant_id uuid references public.entrants(id),
   winner_side_id uuid,
+  known_wrestler_id uuid references public.entrants(id) on delete set null,
+  gauntlet_survival_result boolean,
+  gauntlet_final_entrant_id uuid references public.entrants(id) on delete set null,
   champion_side_id uuid,
   finish_method text,
   finish_winner_entrant_id uuid references public.entrants(id),
@@ -222,6 +225,31 @@ alter table public.matches
 
 alter table public.matches
   add column if not exists champion_side_id uuid;
+
+alter table public.matches
+  add column if not exists known_wrestler_id uuid references public.entrants(id) on delete set null;
+
+alter table public.matches
+  add column if not exists gauntlet_survival_result boolean;
+
+alter table public.matches
+  add column if not exists gauntlet_final_entrant_id uuid references public.entrants(id) on delete set null;
+
+create table if not exists public.gauntlet_candidate_entrants (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.matches(id) on delete cascade,
+  entrant_id uuid not null references public.entrants(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (match_id, entrant_id)
+);
+
+create table if not exists public.gauntlet_actual_entrants (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.matches(id) on delete cascade,
+  entrant_id uuid not null references public.entrants(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (match_id, entrant_id)
+);
 
 create table if not exists public.rumble_entries (
   id uuid primary key default gen_random_uuid(),
@@ -338,6 +366,8 @@ alter table public.rumble_entries enable row level security;
 alter table public.event_action_log enable row level security;
 alter table public.match_sides enable row level security;
 alter table public.match_entrants enable row level security;
+alter table public.gauntlet_candidate_entrants enable row level security;
+alter table public.gauntlet_actual_entrants enable row level security;
 alter table public.picks enable row level security;
 alter table public.scores enable row level security;
 
@@ -488,6 +518,28 @@ create policy "Match entrants are viewable by everyone"
 
 create policy "Match entrants are modifiable by admins"
   on public.match_entrants
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+create policy "Gauntlet candidates are viewable by everyone"
+  on public.gauntlet_candidate_entrants
+  for select
+  using (true);
+
+create policy "Gauntlet candidates are modifiable by admins"
+  on public.gauntlet_candidate_entrants
+  for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+create policy "Gauntlet actual entrants are viewable by everyone"
+  on public.gauntlet_actual_entrants
+  for select
+  using (true);
+
+create policy "Gauntlet actual entrants are modifiable by admins"
+  on public.gauntlet_actual_entrants
   for all
   using (public.is_admin(auth.uid()))
   with check (public.is_admin(auth.uid()));

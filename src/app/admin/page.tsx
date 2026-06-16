@@ -97,6 +97,9 @@ type MatchRow = {
   championship_name?: string | null;
   championship_image_url?: string | null;
   champion_side_id?: string | null;
+  known_wrestler_id?: string | null;
+  gauntlet_survival_result?: boolean | null;
+  gauntlet_final_entrant_id?: string | null;
   winner_entrant_id: string | null;
   winner_side_id: string | null;
   finish_method: string | null;
@@ -122,6 +125,12 @@ type MatchEntrantRow = {
   match_id: string;
   entrant_id: string;
   side_id: string | null;
+};
+
+type GauntletEntrantRow = {
+  id: string;
+  match_id: string;
+  entrant_id: string;
 };
 
 type EliminatorEntryRow = {
@@ -204,6 +213,12 @@ export default function AdminPage() {
   const [showMatches, setShowMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
+  const [gauntletCandidateEntrants, setGauntletCandidateEntrants] = useState<
+    GauntletEntrantRow[]
+  >([]);
+  const [gauntletActualEntrants, setGauntletActualEntrants] = useState<
+    GauntletEntrantRow[]
+  >([]);
   const [eliminatorEntries, setEliminatorEntries] = useState<
     EliminatorEntryRow[]
   >([]);
@@ -296,6 +311,8 @@ export default function AdminPage() {
   const [matchIsChampionship, setMatchIsChampionship] = useState(false);
   const [matchChampionshipName, setMatchChampionshipName] = useState("");
   const [matchChampionshipImageUrl, setMatchChampionshipImageUrl] = useState("");
+  const [matchKnownWrestlerId, setMatchKnownWrestlerId] = useState("");
+  const [matchCandidateIds, setMatchCandidateIds] = useState<string[]>([]);
   const [matchCreateOpen, setMatchCreateOpen] = useState(false);
   const [matchEntrantSelection, setMatchEntrantSelection] = useState<Record<string, string>>({});
   const [matchSideSelection, setMatchSideSelection] = useState<Record<string, string>>({});
@@ -313,6 +330,19 @@ export default function AdminPage() {
     Record<string, string>
   >({});
   const [matchChampionSideEdits, setMatchChampionSideEdits] = useState<
+    Record<string, string>
+  >({});
+  const [matchKnownWrestlerEdits, setMatchKnownWrestlerEdits] = useState<
+    Record<string, string>
+  >({});
+  const [matchGauntletCandidateSelection, setMatchGauntletCandidateSelection] =
+    useState<Record<string, string>>({});
+  const [matchGauntletActualSelection, setMatchGauntletActualSelection] =
+    useState<Record<string, string>>({});
+  const [matchGauntletSurvivalEdits, setMatchGauntletSurvivalEdits] = useState<
+    Record<string, string>
+  >({});
+  const [matchGauntletFinalEdits, setMatchGauntletFinalEdits] = useState<
     Record<string, string>
   >({});
   const [matchSideLabelEdits, setMatchSideLabelEdits] = useState<Record<string, string>>({});
@@ -382,6 +412,8 @@ export default function AdminPage() {
         return "Triple Threat";
       case "fatal_4_way":
         return "Fatal 4-Way";
+      case "blind_gauntlet":
+        return "Blind Gauntlet Match";
       default:
         return value.replace("_", " ");
     }
@@ -780,6 +812,24 @@ export default function AdminPage() {
       return map;
     }, {} as Record<string, MatchEntrantRow[]>);
   }, [matchEntrants]);
+  const gauntletCandidateEntrantsByMatch = useMemo(() => {
+    return gauntletCandidateEntrants.reduce((map, row) => {
+      if (!map[row.match_id]) {
+        map[row.match_id] = [];
+      }
+      map[row.match_id].push(row);
+      return map;
+    }, {} as Record<string, GauntletEntrantRow[]>);
+  }, [gauntletCandidateEntrants]);
+  const gauntletActualEntrantsByMatch = useMemo(() => {
+    return gauntletActualEntrants.reduce((map, row) => {
+      if (!map[row.match_id]) {
+        map[row.match_id] = [];
+      }
+      map[row.match_id].push(row);
+      return map;
+    }, {} as Record<string, GauntletEntrantRow[]>);
+  }, [gauntletActualEntrants]);
   const entrantOptions = useMemo(() => {
     return [...entrants].sort((a, b) => a.name.localeCompare(b.name));
   }, [entrants]);
@@ -864,6 +914,8 @@ export default function AdminPage() {
         { data: matchRows },
         { data: matchSideRows },
         { data: matchEntrantRows },
+        { data: gauntletCandidateRows },
+        { data: gauntletActualRows },
         { data: eliminatorEntryRows },
         { data: eliminatorEliminationRows },
       ] = await Promise.all([
@@ -892,7 +944,7 @@ export default function AdminPage() {
           const query = supabase
             .from("matches")
             .select(
-              "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, champion_side_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
+              "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, champion_side_id, known_wrestler_id, gauntlet_survival_result, gauntlet_final_entrant_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
             )
             .order("order_index", { ascending: true, nullsFirst: false })
             .order("created_at", { ascending: true });
@@ -907,6 +959,12 @@ export default function AdminPage() {
         supabase
           .from("match_entrants")
           .select("id, match_id, entrant_id, side_id"),
+        supabase
+          .from("gauntlet_candidate_entrants")
+          .select("id, match_id, entrant_id"),
+        supabase
+          .from("gauntlet_actual_entrants")
+          .select("id, match_id, entrant_id"),
         supabase
           .from("eliminator_entries")
           .select("id, eliminator_id, entrant_id, entry_order"),
@@ -933,6 +991,16 @@ export default function AdminPage() {
       setMatches(matchListAll);
       setMatchSides(matchSideList);
       setMatchEntrants(matchEntrantList);
+      setGauntletCandidateEntrants(
+        ((gauntletCandidateRows ?? []) as GauntletEntrantRow[]).filter((row) =>
+          matchIdSet.has(row.match_id)
+        )
+      );
+      setGauntletActualEntrants(
+        ((gauntletActualRows ?? []) as GauntletEntrantRow[]).filter((row) =>
+          matchIdSet.has(row.match_id)
+        )
+      );
       setEliminatorEntries((eliminatorEntryRows ?? []) as EliminatorEntryRow[]);
       setEliminatorEliminations(
         (eliminatorEliminationRows ?? []) as EliminatorEliminationRow[]
@@ -1027,11 +1095,71 @@ export default function AdminPage() {
         });
         return next;
       });
+      setMatchKnownWrestlerEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = match.known_wrestler_id ?? "";
+          }
+        });
+        return next;
+      });
+      setMatchGauntletSurvivalEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] =
+              typeof match.gauntlet_survival_result === "boolean"
+                ? String(match.gauntlet_survival_result)
+                : "";
+          }
+        });
+        return next;
+      });
+      setMatchGauntletFinalEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = match.gauntlet_final_entrant_id ?? "";
+          }
+        });
+        return next;
+      });
       setMatchSideLabelEdits((prev) => {
         const next = { ...prev };
         matchSideList.forEach((side) => {
           if (!next[side.id]) {
             next[side.id] = side.label ?? "";
+          }
+        });
+        return next;
+      });
+      setMatchKnownWrestlerEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = match.known_wrestler_id ?? "";
+          }
+        });
+        return next;
+      });
+      setMatchGauntletSurvivalEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] =
+              typeof match.gauntlet_survival_result === "boolean"
+                ? String(match.gauntlet_survival_result)
+                : "";
+          }
+        });
+        return next;
+      });
+      setMatchGauntletFinalEdits((prev) => {
+        const next = { ...prev };
+        matchListAll.forEach((match) => {
+          if (next[match.id] === undefined) {
+            next[match.id] = match.gauntlet_final_entrant_id ?? "";
           }
         });
         return next;
@@ -1066,6 +1194,8 @@ export default function AdminPage() {
         { data: matchRows },
         { data: matchSideRows },
         { data: matchEntrantRows },
+        { data: gauntletCandidateRows },
+        { data: gauntletActualRows },
         { data: eliminatorEntryRows },
         { data: eliminatorEliminationRows },
       ] = await Promise.all([
@@ -1101,7 +1231,7 @@ export default function AdminPage() {
             const query = supabase
               .from("matches")
               .select(
-                "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, champion_side_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
+                "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, champion_side_id, known_wrestler_id, gauntlet_survival_result, gauntlet_final_entrant_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, roster_year, roster_gender, event_id, show_id"
               )
               .order("order_index", { ascending: true, nullsFirst: false })
               .order("created_at", { ascending: true });
@@ -1116,6 +1246,12 @@ export default function AdminPage() {
           supabase
             .from("match_entrants")
             .select("id, match_id, entrant_id, side_id"),
+          supabase
+            .from("gauntlet_candidate_entrants")
+            .select("id, match_id, entrant_id"),
+          supabase
+            .from("gauntlet_actual_entrants")
+            .select("id, match_id, entrant_id"),
           supabase
             .from("eliminator_entries")
             .select("id, eliminator_id, entrant_id, entry_order"),
@@ -1147,6 +1283,16 @@ export default function AdminPage() {
       setMatches(matchListAll);
       setMatchSides(matchSideList);
       setMatchEntrants(matchEntrantList);
+      setGauntletCandidateEntrants(
+        ((gauntletCandidateRows ?? []) as GauntletEntrantRow[]).filter((row) =>
+          matchIdSet.has(row.match_id)
+        )
+      );
+      setGauntletActualEntrants(
+        ((gauntletActualRows ?? []) as GauntletEntrantRow[]).filter((row) =>
+          matchIdSet.has(row.match_id)
+        )
+      );
       setEliminatorEntries((eliminatorEntryRows ?? []) as EliminatorEntryRow[]);
       setEliminatorEliminations(
         (eliminatorEliminationRows ?? []) as EliminatorEliminationRow[]
@@ -1943,6 +2089,21 @@ export default function AdminPage() {
       setMessage("Enter a match name.");
       return;
     }
+    if (matchType === "blind_gauntlet") {
+      const uniqueCandidateIds = [...new Set(matchCandidateIds)];
+      if (!matchKnownWrestlerId) {
+        setMessage("Select the known wrestler for this Blind Gauntlet Match.");
+        return;
+      }
+      if (uniqueCandidateIds.includes(matchKnownWrestlerId)) {
+        setMessage("Candidate entrants cannot include the known wrestler.");
+        return;
+      }
+      if (uniqueCandidateIds.length < 3 || uniqueCandidateIds.length > 20) {
+        setMessage("Select 3 to 20 candidate entrants for this Blind Gauntlet Match.");
+        return;
+      }
+    }
     const { data: newMatch, error } = await supabase
       .from("matches")
       .insert({
@@ -1962,11 +2123,42 @@ export default function AdminPage() {
           ? matchChampionshipImageUrl.trim() || null
           : null,
         champion_side_id: null,
+        known_wrestler_id:
+          matchType === "blind_gauntlet" ? matchKnownWrestlerId : null,
       })
       .select("id")
       .single();
     if (error || !newMatch) {
       setMessage(error?.message ?? "Failed to create match.");
+      return;
+    }
+
+    if (matchType === "blind_gauntlet") {
+      const { error: candidateError } = await supabase
+        .from("gauntlet_candidate_entrants")
+        .insert(
+          [...new Set(matchCandidateIds)].map((entrantId) => ({
+            match_id: newMatch.id,
+            entrant_id: entrantId,
+          }))
+        );
+      if (candidateError) {
+        setMessage(candidateError.message);
+        return;
+      }
+      setMatchName("");
+      setMatchKind("match");
+      setMatchType("singles");
+      setMatchRosterYear("");
+      setMatchRosterGender("men");
+      setMatchIsMainEvent(false);
+      setMatchIsChampionship(false);
+      setMatchChampionshipName("");
+      setMatchChampionshipImageUrl("");
+      setMatchKnownWrestlerId("");
+      setMatchCandidateIds([]);
+      setMatchCreateOpen(false);
+      refreshData();
       return;
     }
 
@@ -2003,6 +2195,8 @@ export default function AdminPage() {
     setMatchIsChampionship(false);
     setMatchChampionshipName("");
     setMatchChampionshipImageUrl("");
+    setMatchKnownWrestlerId("");
+    setMatchCandidateIds([]);
     setMatchCreateOpen(false);
     refreshData();
   };
@@ -2271,6 +2465,167 @@ export default function AdminPage() {
     refreshData();
   };
 
+  const handleUpdateBlindGauntletKnownWrestler = async (matchId: string) => {
+    const knownWrestlerId = matchKnownWrestlerEdits[matchId] ?? "";
+    const candidateIds =
+      gauntletCandidateEntrantsByMatch[matchId]?.map((row) => row.entrant_id) ??
+      [];
+    if (!knownWrestlerId) {
+      setMessage("Select a known wrestler.");
+      return;
+    }
+    if (candidateIds.includes(knownWrestlerId)) {
+      setMessage("The known wrestler cannot also be a candidate entrant.");
+      return;
+    }
+    const { error } = await supabase
+      .from("matches")
+      .update({ known_wrestler_id: knownWrestlerId })
+      .eq("id", matchId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setToastMessage("Known wrestler updated.");
+    refreshData();
+  };
+
+  const handleAddGauntletCandidate = async (matchId: string) => {
+    const entrantId = matchGauntletCandidateSelection[matchId] ?? "";
+    const match = matches.find((row) => row.id === matchId);
+    const currentCandidates = gauntletCandidateEntrantsByMatch[matchId] ?? [];
+    if (!entrantId) return;
+    if (entrantId === match?.known_wrestler_id) {
+      setMessage("Candidate entrants cannot include the known wrestler.");
+      return;
+    }
+    if (currentCandidates.length >= 20) {
+      setMessage("Blind Gauntlet candidate pool cannot exceed 20 entrants.");
+      return;
+    }
+    const { error } = await supabase.from("gauntlet_candidate_entrants").insert({
+      match_id: matchId,
+      entrant_id: entrantId,
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMatchGauntletCandidateSelection((prev) => ({ ...prev, [matchId]: "" }));
+    refreshData();
+  };
+
+  const handleRemoveGauntletCandidate = async (
+    matchId: string,
+    entrantId: string
+  ) => {
+    const { error } = await supabase
+      .from("gauntlet_candidate_entrants")
+      .delete()
+      .eq("match_id", matchId)
+      .eq("entrant_id", entrantId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await supabase
+      .from("gauntlet_actual_entrants")
+      .delete()
+      .eq("match_id", matchId)
+      .eq("entrant_id", entrantId);
+    refreshData();
+  };
+
+  const handleSetGauntletSurvivalResult = async (matchId: string) => {
+    const value = matchGauntletSurvivalEdits[matchId] ?? "";
+    const { error } = await supabase
+      .from("matches")
+      .update({
+        gauntlet_survival_result: value === "" ? null : value === "true",
+      })
+      .eq("id", matchId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await handleRecalculateScores({ silent: true });
+    refreshData();
+  };
+
+  const handleAddGauntletActual = async (matchId: string) => {
+    const entrantId = matchGauntletActualSelection[matchId] ?? "";
+    const candidateIds = new Set(
+      (gauntletCandidateEntrantsByMatch[matchId] ?? []).map(
+        (row) => row.entrant_id
+      )
+    );
+    if (!entrantId) return;
+    if (!candidateIds.has(entrantId)) {
+      setMessage("Actual entrants must be from the candidate pool.");
+      return;
+    }
+    const { error } = await supabase.from("gauntlet_actual_entrants").insert({
+      match_id: matchId,
+      entrant_id: entrantId,
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMatchGauntletActualSelection((prev) => ({ ...prev, [matchId]: "" }));
+    await handleRecalculateScores({ silent: true });
+    refreshData();
+  };
+
+  const handleRemoveGauntletActual = async (
+    matchId: string,
+    entrantId: string
+  ) => {
+    const match = matches.find((row) => row.id === matchId);
+    const updates =
+      match?.gauntlet_final_entrant_id === entrantId
+        ? supabase
+            .from("matches")
+            .update({ gauntlet_final_entrant_id: null })
+            .eq("id", matchId)
+        : Promise.resolve({ error: null });
+    const [{ error: updateError }, { error: deleteError }] = await Promise.all([
+      updates,
+      supabase
+        .from("gauntlet_actual_entrants")
+        .delete()
+        .eq("match_id", matchId)
+        .eq("entrant_id", entrantId),
+    ]);
+    if (updateError || deleteError) {
+      setMessage(updateError?.message ?? deleteError?.message ?? "Failed to update result.");
+      return;
+    }
+    await handleRecalculateScores({ silent: true });
+    refreshData();
+  };
+
+  const handleSetGauntletFinalEntrant = async (matchId: string) => {
+    const entrantId = matchGauntletFinalEdits[matchId] ?? "";
+    const actualIds = new Set(
+      (gauntletActualEntrantsByMatch[matchId] ?? []).map((row) => row.entrant_id)
+    );
+    if (entrantId && !actualIds.has(entrantId)) {
+      setMessage("Final entrant must be one of the actual entrants.");
+      return;
+    }
+    const { error } = await supabase
+      .from("matches")
+      .update({ gauntlet_final_entrant_id: entrantId || null })
+      .eq("id", matchId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await handleRecalculateScores({ silent: true });
+    refreshData();
+  };
+
   const handleSetMatchFinish = async (
     matchId: string,
     method: string,
@@ -2353,12 +2708,15 @@ export default function AdminPage() {
         finish_loser_entrant_id: null,
         match_length: null,
         match_interference: null,
+        gauntlet_survival_result: null,
+        gauntlet_final_entrant_id: null,
       })
       .eq("id", matchId);
     if (error) {
       setMessage(error.message);
       return;
     }
+    await supabase.from("gauntlet_actual_entrants").delete().eq("match_id", matchId);
     setToastMessage("Match results cleared.");
     setMatchLengthEdits((prev) => ({ ...prev, [matchId]: "" }));
     refreshData();
@@ -2581,6 +2939,7 @@ export default function AdminPage() {
       { data: matchRows, error: matchError },
       { data: matchSideRows, error: matchSideError },
       { data: matchEntrantRows, error: matchEntrantError },
+      { data: gauntletActualRows, error: gauntletActualError },
     ] = await Promise.all([
       supabase
         .from("picks")
@@ -2595,7 +2954,7 @@ export default function AdminPage() {
       supabase
         .from("matches")
         .select(
-          "id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
+          "id, match_type, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, gauntlet_survival_result, gauntlet_final_entrant_id"
         )
         .eq("event_id", activeEvent.id),
       supabase
@@ -2604,6 +2963,9 @@ export default function AdminPage() {
       supabase
         .from("match_entrants")
         .select("match_id, entrant_id, side_id"),
+      supabase
+        .from("gauntlet_actual_entrants")
+        .select("match_id, entrant_id"),
     ]);
 
     if (pickError) {
@@ -2631,6 +2993,11 @@ export default function AdminPage() {
       setRecalcBusy(false);
       return;
     }
+    if (gauntletActualError) {
+      setMessage(gauntletActualError.message);
+      setRecalcBusy(false);
+      return;
+    }
 
     const picks = (pickRows ?? []) as PickRow[];
     const entries = (entryRows ?? []) as RumbleEntryRow[];
@@ -2650,6 +3017,8 @@ export default function AdminPage() {
       finish_loser_entrant_id: string | null;
       match_length?: string | null;
       match_interference?: string | null;
+      gauntlet_survival_result?: boolean | null;
+      gauntlet_final_entrant_id?: string | null;
     }[];
     const matchIdSet = new Set(matchList.map((match) => match.id));
     const matchEntrantList = (matchEntrantRows ?? [])
@@ -2664,6 +3033,9 @@ export default function AdminPage() {
       match_id: string;
       label: string | null;
     }[];
+    const gauntletActualList = (gauntletActualRows ?? []).filter((row) =>
+      matchIdSet.has(row.match_id)
+    ) as { match_id: string; entrant_id: string }[];
 
     const eliminatorEntries: EliminatorEntryRow[] = [];
     const eliminatorEliminations: EliminatorEliminationRow[] = [];
@@ -2723,7 +3095,8 @@ export default function AdminPage() {
         eliminatorEntries,
         eliminatorEliminations,
         eliminatorList,
-        questionList
+        questionList,
+        gauntletActualList
       );
       return {
         user_id: pick.user_id,
@@ -3995,6 +4368,7 @@ export default function AdminPage() {
                 <option value="triple_threat">Triple Threat</option>
                 <option value="fatal_4_way">Fatal 4-Way</option>
                 <option value="ladder_6">6-Man Ladder</option>
+                <option value="blind_gauntlet">Blind Gauntlet Match</option>
                 <option value="multi">Multi-person</option>
               </select>
               <input
@@ -4023,6 +4397,56 @@ export default function AdminPage() {
                 Add match
               </button>
             </div>
+            {matchType === "blind_gauntlet" && (
+              <div className="mt-3 rounded-2xl border border-amber-400/20 bg-black/30 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+                  Blind Gauntlet setup
+                </p>
+                <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1.4fr]">
+                  <select
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    value={matchKnownWrestlerId}
+                    onChange={(event) => {
+                      const nextKnownId = event.target.value;
+                      setMatchKnownWrestlerId(nextKnownId);
+                      setMatchCandidateIds((prev) =>
+                        prev.filter((id) => id !== nextKnownId)
+                      );
+                    }}
+                  >
+                    <option value="">Known wrestler</option>
+                    {entrantOptions.map((entrant) => (
+                      <option key={entrant.id} value={entrant.id}>
+                        {entrant.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="min-h-32 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                    multiple
+                    value={matchCandidateIds}
+                    onChange={(event) =>
+                      setMatchCandidateIds(
+                        Array.from(event.target.selectedOptions).map(
+                          (option) => option.value
+                        )
+                      )
+                    }
+                  >
+                    {entrantOptions
+                      .filter((entrant) => entrant.id !== matchKnownWrestlerId)
+                      .map((entrant) => (
+                        <option key={entrant.id} value={entrant.id}>
+                          {entrant.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <p className="mt-2 text-xs text-zinc-500">
+                  Select 3 to 20 candidate entrants. Hold Command or Shift to select multiple.
+                </p>
+              </div>
+            )}
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <label className="flex items-center gap-2 text-sm text-zinc-300">
                 <input
@@ -4118,6 +4542,7 @@ export default function AdminPage() {
                   finishState.method === "pinfall" ||
                   finishState.method === "submission";
                 const matchType = match.match_type;
+                const isBlindGauntlet = matchType === "blind_gauntlet";
                 const isSingles = matchType === "singles";
                 const isMultiSideSingles =
                   matchType === "triple_threat" ||
@@ -4144,6 +4569,29 @@ export default function AdminPage() {
                 const championSideEdit =
                   matchChampionSideEdits[match.id] ??
                   match.champion_side_id ??
+                  "";
+                const knownWrestlerEdit =
+                  matchKnownWrestlerEdits[match.id] ??
+                  match.known_wrestler_id ??
+                  "";
+                const gauntletCandidates =
+                  gauntletCandidateEntrantsByMatch[match.id] ?? [];
+                const gauntletActuals =
+                  gauntletActualEntrantsByMatch[match.id] ?? [];
+                const gauntletCandidateIds = new Set(
+                  gauntletCandidates.map((row) => row.entrant_id)
+                );
+                const gauntletActualIds = new Set(
+                  gauntletActuals.map((row) => row.entrant_id)
+                );
+                const gauntletSurvivalState =
+                  matchGauntletSurvivalEdits[match.id] ??
+                  (typeof match.gauntlet_survival_result === "boolean"
+                    ? String(match.gauntlet_survival_result)
+                    : "");
+                const gauntletFinalState =
+                  matchGauntletFinalEdits[match.id] ??
+                  match.gauntlet_final_entrant_id ??
                   "";
                 const winningSideEntrants =
                   sideEntries.find((side) => side.side.id === winnerSideId)?.entrants ??
@@ -4206,23 +4654,25 @@ export default function AdminPage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <select
-                          className="h-10 min-w-[220px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                          value={match.winner_side_id ?? ""}
-                          onChange={(event) =>
-                            handleSetMatchWinner(match.id, event.target.value)
-                          }
-                        >
-                          <option value="">Select winner</option>
-                          {sideEntries.map(({ side, label, entrants }) => (
-                            <option key={side.id} value={side.id}>
-                              {label}
-                              {entrants.length > 0
-                                ? ` — ${entrants.map((entrant) => entrant.name).join(", ")}`
-                                : ""}
-                            </option>
-                          ))}
-                        </select>
+                        {!isBlindGauntlet && (
+                          <select
+                            className="h-10 min-w-[220px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={match.winner_side_id ?? ""}
+                            onChange={(event) =>
+                              handleSetMatchWinner(match.id, event.target.value)
+                            }
+                          >
+                            <option value="">Select winner</option>
+                            {sideEntries.map(({ side, label, entrants }) => (
+                              <option key={side.id} value={side.id}>
+                                {label}
+                                {entrants.length > 0
+                                  ? ` — ${entrants.map((entrant) => entrant.name).join(", ")}`
+                                  : ""}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                         <button
                           className="inline-flex h-10 items-center justify-center rounded-full border border-red-500/60 px-4 text-[10px] font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
                           type="button"
@@ -4322,9 +4772,113 @@ export default function AdminPage() {
                       )}
                     </div>
 
+                    {isBlindGauntlet && (
+                      <div className="mt-4 rounded-2xl border border-amber-400/20 bg-black/30 p-3">
+                        <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
+                          Blind Gauntlet setup
+                        </p>
+                        <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto]">
+                          <select
+                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={knownWrestlerEdit}
+                            onChange={(event) =>
+                              setMatchKnownWrestlerEdits((prev) => ({
+                                ...prev,
+                                [match.id]: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">Known wrestler</option>
+                            {eligibleEntrants
+                              .filter((entrant) => !gauntletCandidateIds.has(entrant.id))
+                              .map((entrant) => (
+                                <option key={entrant.id} value={entrant.id}>
+                                  {entrant.name}
+                                </option>
+                              ))}
+                          </select>
+                          <button
+                            className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                            type="button"
+                            onClick={() =>
+                              handleUpdateBlindGauntletKnownWrestler(match.id)
+                            }
+                          >
+                            Save known wrestler
+                          </button>
+                        </div>
+                        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+                          <select
+                            className="h-10 min-w-[240px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={matchGauntletCandidateSelection[match.id] ?? ""}
+                            onChange={(event) =>
+                              setMatchGauntletCandidateSelection((prev) => ({
+                                ...prev,
+                                [match.id]: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">Add candidate entrant</option>
+                            {eligibleEntrants
+                              .filter(
+                                (entrant) =>
+                                  entrant.id !== knownWrestlerEdit &&
+                                  !gauntletCandidateIds.has(entrant.id)
+                              )
+                              .map((entrant) => (
+                                <option key={entrant.id} value={entrant.id}>
+                                  {entrant.name}
+                                </option>
+                              ))}
+                          </select>
+                          <button
+                            className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+                            type="button"
+                            onClick={() => handleAddGauntletCandidate(match.id)}
+                          >
+                            Add candidate
+                          </button>
+                          <span className="text-xs text-zinc-500">
+                            {gauntletCandidates.length} selected · required 3-20
+                          </span>
+                        </div>
+                        {gauntletCandidates.length > 0 && (
+                          <div className="mt-3 grid gap-2 md:grid-cols-2">
+                            {gauntletCandidates.map((row) => {
+                              const entrant = entrantMap.get(row.entrant_id);
+                              return (
+                                <div
+                                  key={row.id}
+                                  className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"
+                                >
+                                  <EntrantCard
+                                    name={entrant?.name ?? "Entrant"}
+                                    promotion={entrant?.promotion ?? null}
+                                    imageUrl={entrant?.image_url ?? null}
+                                  />
+                                  <button
+                                    className="inline-flex h-8 items-center justify-center rounded-full border border-red-500/70 px-3 text-[10px] font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
+                                    type="button"
+                                    onClick={() =>
+                                      handleRemoveGauntletCandidate(
+                                        match.id,
+                                        row.entrant_id
+                                      )
+                                    }
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-3">
                       <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                        Match finish
+                        {isBlindGauntlet ? "Blind Gauntlet results" : "Match finish"}
                       </p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         {matchLengthOptions.map((option) => {
@@ -4359,6 +4913,133 @@ export default function AdminPage() {
                           Save length
                         </button>
                       </div>
+                      {isBlindGauntlet && (
+                        <div className="mt-4 space-y-3">
+                          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                            <select
+                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                              value={gauntletSurvivalState}
+                              onChange={(event) =>
+                                setMatchGauntletSurvivalEdits((prev) => ({
+                                  ...prev,
+                                  [match.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Survival result</option>
+                              <option value="true">Survived</option>
+                              <option value="false">Did not survive</option>
+                            </select>
+                            <button
+                              className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                              type="button"
+                              onClick={() =>
+                                handleSetGauntletSurvivalResult(match.id)
+                              }
+                            >
+                              Save survival
+                            </button>
+                          </div>
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                            <select
+                              className="h-10 min-w-[240px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                              value={matchGauntletActualSelection[match.id] ?? ""}
+                              onChange={(event) =>
+                                setMatchGauntletActualSelection((prev) => ({
+                                  ...prev,
+                                  [match.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Add actual entrant</option>
+                              {gauntletCandidates
+                                .filter((row) => !gauntletActualIds.has(row.entrant_id))
+                                .map((row) => {
+                                  const entrant = entrantMap.get(row.entrant_id);
+                                  return (
+                                    <option key={row.entrant_id} value={row.entrant_id}>
+                                      {entrant?.name ?? "Entrant"}
+                                    </option>
+                                  );
+                                })}
+                            </select>
+                            <button
+                              className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+                              type="button"
+                              onClick={() => handleAddGauntletActual(match.id)}
+                            >
+                              Add actual
+                            </button>
+                            <span className="text-xs text-zinc-500">
+                              {gauntletActuals.length} actual entrant
+                              {gauntletActuals.length === 1 ? "" : "s"}
+                            </span>
+                          </div>
+                          {gauntletActuals.length > 0 && (
+                            <div className="grid gap-2 md:grid-cols-2">
+                              {gauntletActuals.map((row) => {
+                                const entrant = entrantMap.get(row.entrant_id);
+                                return (
+                                  <div
+                                    key={row.id}
+                                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"
+                                  >
+                                    <EntrantCard
+                                      name={entrant?.name ?? "Entrant"}
+                                      promotion={entrant?.promotion ?? null}
+                                      imageUrl={entrant?.image_url ?? null}
+                                    />
+                                    <button
+                                      className="inline-flex h-8 items-center justify-center rounded-full border border-red-500/70 px-3 text-[10px] font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
+                                      type="button"
+                                      onClick={() =>
+                                        handleRemoveGauntletActual(
+                                          match.id,
+                                          row.entrant_id
+                                        )
+                                      }
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                            <select
+                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                              value={gauntletFinalState}
+                              onChange={(event) =>
+                                setMatchGauntletFinalEdits((prev) => ({
+                                  ...prev,
+                                  [match.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Final entrant</option>
+                              {gauntletActuals.map((row) => {
+                                const entrant = entrantMap.get(row.entrant_id);
+                                return (
+                                  <option key={row.entrant_id} value={row.entrant_id}>
+                                    {entrant?.name ?? "Entrant"}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <button
+                              className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                              type="button"
+                              onClick={() =>
+                                handleSetGauntletFinalEntrant(match.id)
+                              }
+                            >
+                              Save final entrant
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {!isBlindGauntlet && (
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         {matchInterferenceOptions.map((option) => {
                           const isSelected = matchInterferenceState === option.value;
@@ -4395,6 +5076,8 @@ export default function AdminPage() {
                           Save interference
                         </button>
                       </div>
+                      )}
+                      {!isBlindGauntlet && (
                       <div className="mt-3 grid gap-3 md:grid-cols-3">
                         <select
                           className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
@@ -4467,6 +5150,8 @@ export default function AdminPage() {
                           </select>
                         )}
                       </div>
+                      )}
+                      {!isBlindGauntlet && (
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
                         <span>Set the finish to score these picks.</span>
                         <button
@@ -4484,9 +5169,10 @@ export default function AdminPage() {
                           Save finish
                         </button>
                       </div>
+                      )}
                     </div>
 
-                    {!participantsOpen ? (
+                    {!isBlindGauntlet && (!participantsOpen ? (
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-950/50 px-3 py-2 text-xs text-zinc-400">
                         <span>Participants saved.</span>
                         <button
@@ -4574,9 +5260,9 @@ export default function AdminPage() {
                           Add side
                         </button>
                       </div>
-                    )}
+                    ))}
 
-                    {sideEntries.length === 0 ? (
+                    {!isBlindGauntlet && (sideEntries.length === 0 ? (
                       <p className="mt-3 text-xs text-zinc-500">
                         No sides added yet.
                       </p>
@@ -4643,7 +5329,7 @@ export default function AdminPage() {
                           </div>
                         ))}
                       </div>
-                    )}
+                    ))}
                   </div>
                 );
               })}

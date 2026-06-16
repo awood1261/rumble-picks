@@ -57,6 +57,14 @@ type PickRow = {
   >;
   match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
   match_interference_picks?: Record<string, "yes" | "no" | null>;
+  blind_gauntlet_picks?: Record<
+    string,
+    {
+      survival: boolean | null;
+      entrant_ids: string[];
+      final_entrant_id: string | null;
+    }
+  >;
   updated_at: string;
 };
 
@@ -104,6 +112,7 @@ type EventEntrantRow = {
 
 type MatchRow = {
   id: string;
+  match_type?: string | null;
   winner_entrant_id: string | null;
   winner_side_id: string | null;
   finish_method: string | null;
@@ -111,6 +120,13 @@ type MatchRow = {
   finish_loser_entrant_id: string | null;
   match_length?: string | null;
   match_interference?: string | null;
+  gauntlet_survival_result?: boolean | null;
+  gauntlet_final_entrant_id?: string | null;
+};
+
+type GauntletEntrantRow = {
+  match_id: string;
+  entrant_id: string;
 };
 
 type MatchSideRow = {
@@ -150,6 +166,7 @@ type LoadedMatches = {
   matches: MatchRow[];
   matchSides: MatchSideRow[];
   matchEntrants: MatchEntrantRow[];
+  gauntletActualEntrants: GauntletEntrantRow[];
 };
 type LoadedRumbleData = {
   rumbleEntries: RumbleEntryRow[];
@@ -166,6 +183,7 @@ type ScoreDataOverrides = {
   matches?: MatchRow[];
   matchSides?: MatchSideRow[];
   matchEntrants?: MatchEntrantRow[];
+  gauntletActualEntrants?: GauntletEntrantRow[];
   eliminatorEntries?: EliminatorEntryRow[];
   eliminatorEliminations?: EliminatorEliminationRow[];
   eliminators?: { id: string; winner_entrant_id: string | null }[];
@@ -222,6 +240,9 @@ function ScoreboardPageInner() {
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
+  const [gauntletActualEntrants, setGauntletActualEntrants] = useState<
+    GauntletEntrantRow[]
+  >([]);
   const [eliminatorEntries, setEliminatorEntries] = useState<
     EliminatorEntryRow[]
   >([]);
@@ -569,7 +590,7 @@ function ScoreboardPageInner() {
     const { data: pickRows, error: pickError } = await supabase
       .from("picks")
       .select(
-        "id, user_id, updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_confidence_picks:payload->match_confidence_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+        "id, user_id, updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, match_picks:payload->match_picks, match_confidence_picks:payload->match_confidence_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks, blind_gauntlet_picks:payload->blind_gauntlet_picks"
       )
       .eq("show_id", selectedShowId);
 
@@ -601,6 +622,8 @@ function ScoreboardPageInner() {
     const effectiveMatches = overrides?.matches ?? matches;
     const effectiveMatchEntrants = overrides?.matchEntrants ?? matchEntrants;
     const effectiveMatchSides = overrides?.matchSides ?? matchSides;
+    const effectiveGauntletActualEntrants =
+      overrides?.gauntletActualEntrants ?? gauntletActualEntrants;
     const effectiveEliminatorEntries = overrides?.eliminatorEntries ?? eliminatorEntries;
     const effectiveEliminatorEliminations =
       overrides?.eliminatorEliminations ?? eliminatorEliminations;
@@ -637,6 +660,7 @@ function ScoreboardPageInner() {
         match_finish_picks: pick.match_finish_picks ?? {},
         match_length_picks: pick.match_length_picks ?? {},
         match_interference_picks: pick.match_interference_picks ?? {},
+        blind_gauntlet_picks: pick.blind_gauntlet_picks ?? {},
       };
       const matchScore = calculateScore(
         matchPayload,
@@ -648,13 +672,16 @@ function ScoreboardPageInner() {
         { useConfidencePoints: selectedShow?.use_confidence_points ?? false },
         effectiveEliminatorEntries,
         effectiveEliminatorEliminations,
-        effectiveEliminators
+        effectiveEliminators,
+        [],
+        effectiveGauntletActualEntrants
       );
       points += matchScore.points;
       breakdown.matches = matchScore.breakdown.matches ?? 0;
       breakdown.match_finish_method = matchScore.breakdown.match_finish_method ?? 0;
       breakdown.match_length = matchScore.breakdown.match_length ?? 0;
       breakdown.match_interference = matchScore.breakdown.match_interference ?? 0;
+      breakdown.blind_gauntlet = matchScore.breakdown.blind_gauntlet ?? 0;
 
       return {
         id: pick.id,
@@ -704,6 +731,7 @@ function ScoreboardPageInner() {
     eliminatorEliminations,
     eliminatorEntries,
     eliminators,
+    gauntletActualEntrants,
   ]);
 
   const loadRumbleEntries = useCallback(async (): Promise<LoadedRumbleData> => {
@@ -1011,51 +1039,77 @@ function ScoreboardPageInner() {
       setMatches([]);
       setMatchSides([]);
       setMatchEntrants([]);
-      return { matches: [], matchSides: [], matchEntrants: [] };
+      setGauntletActualEntrants([]);
+      return {
+        matches: [],
+        matchSides: [],
+        matchEntrants: [],
+        gauntletActualEntrants: [],
+      };
     }
     const { data: matchRows, error } = await supabase
       .from("matches")
       .select(
-        "id, order_index, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
+        "id, match_type, order_index, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, gauntlet_survival_result, gauntlet_final_entrant_id"
       )
       .eq("show_id", selectedShowId)
       .order("order_index", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true });
     if (error) {
       setMessage(error.message);
-      return { matches: [], matchSides: [], matchEntrants: [] };
+      return {
+        matches: [],
+        matchSides: [],
+        matchEntrants: [],
+        gauntletActualEntrants: [],
+      };
     }
     const matchList = (matchRows ?? []) as MatchRow[];
     setMatches(matchList);
     if (matchList.length === 0) {
       setMatchSides([]);
       setMatchEntrants([]);
-      return { matches: matchList, matchSides: [], matchEntrants: [] };
+      setGauntletActualEntrants([]);
+      return {
+        matches: matchList,
+        matchSides: [],
+        matchEntrants: [],
+        gauntletActualEntrants: [],
+      };
     }
     const matchIds = matchList.map((match) => match.id);
     const [
       { data: sideRows, error: sideError },
       { data: entrantRows, error: entrantError },
+      { data: gauntletActualRows, error: gauntletActualError },
     ] = await Promise.all([
       supabase.from("match_sides").select("id, match_id, label").in("match_id", matchIds),
       supabase.from("match_entrants").select("match_id, entrant_id, side_id").in("match_id", matchIds),
+      supabase.from("gauntlet_actual_entrants").select("match_id, entrant_id").in("match_id", matchIds),
     ]);
     if (sideError) {
       setMessage(sideError.message);
-      return { matches: matchList, matchSides: [], matchEntrants: [] };
+      return { matches: matchList, matchSides: [], matchEntrants: [], gauntletActualEntrants: [] };
     }
     if (entrantError) {
       setMessage(entrantError.message);
-      return { matches: matchList, matchSides: [], matchEntrants: [] };
+      return { matches: matchList, matchSides: [], matchEntrants: [], gauntletActualEntrants: [] };
+    }
+    if (gauntletActualError) {
+      setMessage(gauntletActualError.message);
+      return { matches: matchList, matchSides: [], matchEntrants: [], gauntletActualEntrants: [] };
     }
     const nextMatchSides = (sideRows ?? []) as MatchSideRow[];
     const nextMatchEntrants = (entrantRows ?? []) as MatchEntrantRow[];
+    const nextGauntletActualEntrants = (gauntletActualRows ?? []) as GauntletEntrantRow[];
     setMatchSides(nextMatchSides);
     setMatchEntrants(nextMatchEntrants);
+    setGauntletActualEntrants(nextGauntletActualEntrants);
     return {
       matches: matchList,
       matchSides: nextMatchSides,
       matchEntrants: nextMatchEntrants,
+      gauntletActualEntrants: nextGauntletActualEntrants,
     };
   }, [selectedShowId]);
 
@@ -1108,6 +1162,7 @@ function ScoreboardPageInner() {
         matches: matchData.matches,
         matchSides: matchData.matchSides,
         matchEntrants: matchData.matchEntrants,
+        gauntletActualEntrants: matchData.gauntletActualEntrants,
         rumbleEntries: rumbleData.rumbleEntries,
         eliminatorEntries: eliminatorData.eliminatorEntries,
         eliminatorEliminations: eliminations,
@@ -1140,6 +1195,7 @@ function ScoreboardPageInner() {
         matches: matchData.matches,
         matchSides: matchData.matchSides,
         matchEntrants: matchData.matchEntrants,
+        gauntletActualEntrants: matchData.gauntletActualEntrants,
         rumbleEntries: rumbleData.rumbleEntries,
         eliminatorEntries: eliminatorData.eliminatorEntries,
         eliminatorEliminations: eliminations,

@@ -26,6 +26,7 @@ import type {
   MatchEntrantRow,
   MatchRow,
   MatchSideRow,
+  GauntletEntrantRow,
   PicksPayload,
   RankInfo,
   RumblePick,
@@ -1001,6 +1002,7 @@ type MatchSummarySectionProps = {
   matchWinnerMap: Map<string, string | null>;
   matchSidesByMatch: Record<string, MatchSideRow[]>;
   matchEntrantsByMatch: Record<string, MatchEntrantRow[]>;
+  gauntletCandidateEntrantsByMatch: Record<string, GauntletEntrantRow[]>;
   entrantByIdAll: Map<string, EntrantRow>;
   payload: PicksPayload;
   isLocked: boolean;
@@ -1270,6 +1272,7 @@ type MatchPicksSectionProps = {
   confidenceMatchIds: string[];
   matchSidesByMatch: Record<string, MatchSideRow[]>;
   matchEntrantsByMatch: Record<string, MatchEntrantRow[]>;
+  gauntletCandidateEntrantsByMatch: Record<string, GauntletEntrantRow[]>;
   entrantByIdAll: Map<string, EntrantRow>;
   matchPickStats: Record<string, { total: number; bySide: Record<string, number> }>;
   payload: PicksPayload;
@@ -2054,6 +2057,7 @@ export const MatchPicksSection = ({
   confidenceMatchIds,
   matchSidesByMatch,
   matchEntrantsByMatch,
+  gauntletCandidateEntrantsByMatch,
   entrantByIdAll,
   matchPickStats,
   payload,
@@ -2070,6 +2074,7 @@ export const MatchPicksSection = ({
 
   useEffect(() => {
     matches.forEach((match) => {
+      if (match.match_type === "blind_gauntlet") return;
       const finishPick = payload.match_finish_picks[match.id] ?? {
         method: null,
         winner: null,
@@ -2200,6 +2205,7 @@ export const MatchPicksSection = ({
             { value: "no", label: "No" },
           ];
           const matchType = match.match_type;
+          const isBlindGauntlet = matchType === "blind_gauntlet";
           const isSingles = matchType === "singles";
           const isTripleOrFatal =
             matchType === "triple_threat" || matchType === "fatal_4_way";
@@ -2364,6 +2370,291 @@ export const MatchPicksSection = ({
               });
             }
           };
+
+          if (isBlindGauntlet) {
+            const knownWrestler = match.known_wrestler_id
+              ? entrantByIdAll.get(match.known_wrestler_id)
+              : null;
+            const candidateRows = gauntletCandidateEntrantsByMatch[match.id] ?? [];
+            const candidates = candidateRows
+              .map((row) => entrantByIdAll.get(row.entrant_id))
+              .filter(Boolean) as EntrantRow[];
+            const gauntletPick = payload.blind_gauntlet_picks?.[match.id] ?? {
+              survival: null,
+              entrant_ids: [],
+              final_entrant_id: null,
+            };
+            const selectedEntrantIds = new Set(gauntletPick.entrant_ids ?? []);
+            const selectedCount = selectedEntrantIds.size;
+            const finalEntrantCandidates = candidates.filter((entrant) =>
+              selectedEntrantIds.has(entrant.id)
+            );
+            const updateGauntletPick = (
+              nextPick: typeof gauntletPick
+            ) => {
+              setPayload((prev) => ({
+                ...prev,
+                blind_gauntlet_picks: {
+                  ...(prev.blind_gauntlet_picks ?? {}),
+                  [match.id]: nextPick,
+                },
+              }));
+            };
+            const toggleCandidate = (entrantId: string) => {
+              const nextIds = selectedEntrantIds.has(entrantId)
+                ? (gauntletPick.entrant_ids ?? []).filter((id) => id !== entrantId)
+                : [...(gauntletPick.entrant_ids ?? []), entrantId];
+              updateGauntletPick({
+                ...gauntletPick,
+                entrant_ids: nextIds,
+                final_entrant_id:
+                  gauntletPick.final_entrant_id &&
+                  nextIds.includes(gauntletPick.final_entrant_id)
+                    ? gauntletPick.final_entrant_id
+                    : null,
+              });
+            };
+            const minEntrantImpact =
+              selectedCount * scoringRules.blind_gauntlet_entrant_incorrect;
+            const maxEntrantImpact =
+              selectedCount * scoringRules.blind_gauntlet_entrant_correct;
+
+            return (
+              <div
+                key={match.id}
+                className="rounded-2xl border border-amber-400/30 bg-zinc-950/80 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.45)]"
+              >
+                <div className="overflow-hidden rounded-2xl border border-amber-400/30 bg-black/50">
+                  <div className="grid gap-4 p-4 sm:grid-cols-[1.1fr_0.9fr] sm:items-end">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-200">
+                        Blind Gauntlet Match
+                      </p>
+                      <h3 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-100">
+                        {match.name}
+                      </h3>
+                      <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
+                        Known participant
+                      </p>
+                      <p className="mt-1 text-xl font-semibold uppercase tracking-[0.08em] text-zinc-100">
+                        {knownWrestler?.name ?? "Not configured"}
+                      </p>
+                    </div>
+                    <div className="relative h-48 overflow-hidden rounded-xl bg-zinc-900 sm:h-56">
+                      {knownWrestler?.image_url ? (
+                        <Image
+                          src={knownWrestler.image_url}
+                          alt={knownWrestler.name}
+                          fill
+                          sizes="(min-width: 640px) 320px, 100vw"
+                          style={{ filter: WRESTLER_OUTLINE_FILTER }}
+                          className="object-cover object-top"
+                        />
+                      ) : (
+                        <MatchupSilhouette />
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black to-transparent" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/35 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-100">
+                      Will {knownWrestler?.name ?? "the known wrestler"} survive the gauntlet?
+                    </p>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
+                      +{scoringRules.blind_gauntlet_survival} pts
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {[
+                      { value: true, label: "Yes, survives" },
+                      { value: false, label: "No, does not survive" },
+                    ].map((option) => {
+                      const selected = gauntletPick.survival === option.value;
+                      return (
+                        <button
+                          key={`${match.id}-survival-${String(option.value)}`}
+                          type="button"
+                          disabled={isLocked}
+                          onClick={() =>
+                            updateGauntletPick({
+                              ...gauntletPick,
+                              survival: option.value,
+                            })
+                          }
+                          className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                            selected
+                              ? "border-amber-300 bg-amber-400/15 text-amber-100"
+                              : "border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-amber-400/60"
+                          }`}
+                        >
+                          {selected ? "✓ " : ""}
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/35 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-100">
+                        Which wrestlers will appear?
+                      </p>
+                      <p className="mt-1 text-sm text-zinc-400">
+                        Correct: +{scoringRules.blind_gauntlet_entrant_correct} each · Incorrect: {scoringRules.blind_gauntlet_entrant_incorrect} each
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
+                      Risk / reward
+                    </span>
+                  </div>
+                  {candidates.length === 0 ? (
+                    <p className="mt-3 text-sm text-zinc-500">
+                      Candidate entrants have not been configured yet.
+                    </p>
+                  ) : (
+                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                      {candidates.map((entrant) => {
+                        const selected = selectedEntrantIds.has(entrant.id);
+                        return (
+                          <button
+                            key={`${match.id}-candidate-${entrant.id}`}
+                            type="button"
+                            disabled={isLocked}
+                            onClick={() => toggleCandidate(entrant.id)}
+                            className={`relative overflow-hidden rounded-xl border bg-zinc-950 text-left transition ${
+                              selected
+                                ? "border-amber-300 shadow-[0_0_20px_rgba(251,196,0,0.22)]"
+                                : "border-zinc-800 hover:border-amber-400/60"
+                            }`}
+                          >
+                            <div className="relative h-40 bg-zinc-900">
+                              {entrant.image_url ? (
+                                <Image
+                                  src={entrant.image_url}
+                                  alt={entrant.name}
+                                  fill
+                                  sizes="(min-width: 1024px) 180px, 45vw"
+                                  className="object-cover object-top"
+                                />
+                              ) : (
+                                <MatchupSilhouette />
+                              )}
+                              <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black via-black/60 to-transparent" />
+                            </div>
+                            <div className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md border border-zinc-600 bg-black/75 text-sm text-zinc-300">
+                              {selected ? "✓" : ""}
+                            </div>
+                            <p className="absolute inset-x-2 bottom-2 text-center text-[12px] font-semibold uppercase leading-tight tracking-[0.12em] text-zinc-100">
+                              {entrant.name}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <span className="text-zinc-300">{selectedCount} selected</span>
+                    <span className="text-zinc-400">
+                      Entrant score impact:{" "}
+                      <span className="text-red-300">{minEntrantImpact}</span>
+                      {" to "}
+                      <span className="text-emerald-300">+{maxEntrantImpact}</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/35 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-100">
+                      Who will be the final entrant?
+                    </p>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
+                      +{scoringRules.blind_gauntlet_final_entrant} pts
+                    </span>
+                  </div>
+                  {finalEntrantCandidates.length === 0 ? (
+                    <p className="mt-3 rounded-xl border border-dashed border-zinc-700 bg-zinc-950/70 px-4 py-3 text-sm text-zinc-400">
+                      Add wrestlers you think will appear, then choose the final entrant from your selections.
+                    </p>
+                  ) : (
+                    <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
+                      {finalEntrantCandidates.map((entrant) => {
+                        const selected = gauntletPick.final_entrant_id === entrant.id;
+                        return (
+                          <button
+                            key={`${match.id}-final-${entrant.id}`}
+                            type="button"
+                            disabled={isLocked}
+                            onClick={() =>
+                              updateGauntletPick({
+                                ...gauntletPick,
+                                final_entrant_id: entrant.id,
+                              })
+                            }
+                            className={`min-w-24 text-center transition ${
+                              selected ? "text-amber-200" : "text-zinc-300"
+                            }`}
+                          >
+                            <span
+                              className={`relative mx-auto block h-16 w-16 overflow-hidden rounded-full border ${
+                                selected ? "border-amber-300" : "border-zinc-700"
+                              }`}
+                            >
+                              {entrant.image_url ? (
+                                <Image
+                                  src={entrant.image_url}
+                                  alt={entrant.name}
+                                  fill
+                                  sizes="64px"
+                                  className="object-cover object-top"
+                                />
+                              ) : (
+                                <MatchupSilhouette />
+                              )}
+                            </span>
+                            <span className="mt-2 block text-[11px] font-semibold uppercase leading-tight tracking-[0.12em]">
+                              {entrant.name}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/35 p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-100">
+                      Match length
+                    </p>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">
+                      +{scoringRules.match_length} pts
+                    </span>
+                  </div>
+                  <SegmentedPills
+                    options={lengthOptions}
+                    selectedValue={lengthPick}
+                    disabled={isLocked}
+                    onSelect={(value) =>
+                      setPayload((prev): PicksPayload => ({
+                        ...prev,
+                        match_length_picks: {
+                          ...prev.match_length_picks,
+                          [match.id]: value as "sprint" | "standard" | "epic",
+                        },
+                      }))
+                    }
+                    className="mt-3"
+                  />
+                </div>
+              </div>
+            );
+          }
 
           return (
             <div

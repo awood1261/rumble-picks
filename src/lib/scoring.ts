@@ -29,6 +29,14 @@ export type PicksPayload = {
   >;
   match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
   match_interference_picks?: Record<string, "yes" | "no" | null>;
+  blind_gauntlet_picks?: Record<
+    string,
+    {
+      survival: boolean | null;
+      entrant_ids: string[];
+      final_entrant_id: string | null;
+    }
+  >;
 };
 
 export type RumbleEntryRow = {
@@ -41,6 +49,7 @@ export type RumbleEntryRow = {
 
 export type MatchRow = {
   id: string;
+  match_type?: string | null;
   winner_entrant_id: string | null;
   winner_side_id: string | null;
   finish_method: string | null;
@@ -48,6 +57,8 @@ export type MatchRow = {
   finish_loser_entrant_id: string | null;
   match_length?: string | null;
   match_interference?: string | null;
+  gauntlet_survival_result?: boolean | null;
+  gauntlet_final_entrant_id?: string | null;
 };
 
 export type MatchEntrantRow = {
@@ -60,6 +71,11 @@ export type MatchSideRow = {
   id: string;
   match_id: string;
   label: string | null;
+};
+
+export type GauntletActualEntrantRow = {
+  match_id: string;
+  entrant_id: string;
 };
 
 export type EliminatorEntryRow = {
@@ -100,7 +116,8 @@ export const calculateScore = (
   eliminatorEntries: EliminatorEntryRow[] = [],
   eliminatorEliminations: EliminatorEliminationRow[] = [],
   eliminators: EliminatorRow[] = [],
-  questions: ShowQuestionRow[] = []
+  questions: ShowQuestionRow[] = [],
+  gauntletActualEntrants: GauntletActualEntrantRow[] = []
 ) => {
   const breakdown: Record<string, number> = {};
   let points = 0;
@@ -202,12 +219,14 @@ export const calculateScore = (
   const matchFinishPicks = payload.match_finish_picks ?? {};
   const matchLengthPicks = payload.match_length_picks ?? {};
   const matchInterferencePicks = payload.match_interference_picks ?? {};
+  const blindGauntletPicks = payload.blind_gauntlet_picks ?? {};
   const entrantCountByMatch = matchEntrants.reduce((map, item) => {
     map[item.match_id] = (map[item.match_id] ?? 0) + 1;
     return map;
   }, {} as Record<string, number>);
   const matchPoints = matches.reduce((total, match) => {
     const pick = matchPicks[match.id];
+    if (match.match_type === "blind_gauntlet") return total;
     if (!match.winner_side_id || !pick) return total;
     const allowed = matchSideSet[match.id];
     if (allowed && !allowed.has(pick)) return total;
@@ -222,6 +241,7 @@ export const calculateScore = (
   }, 0);
 
   const matchFinishPoints = matches.reduce((total, match) => {
+    if (match.match_type === "blind_gauntlet") return total;
     const entrantCount = entrantCountByMatch[match.id] ?? 0;
     if (!match.finish_method) return total;
     const pick = matchFinishPicks[match.id];
@@ -272,6 +292,44 @@ export const calculateScore = (
   points += matchFinishPoints;
   points += matchLengthPoints;
   points += matchInterferencePoints;
+
+  const gauntletActualByMatch = gauntletActualEntrants.reduce((map, row) => {
+    if (!map[row.match_id]) {
+      map[row.match_id] = new Set();
+    }
+    map[row.match_id].add(row.entrant_id);
+    return map;
+  }, {} as Record<string, Set<string>>);
+
+  const blindGauntletPoints = matches.reduce((total, match) => {
+    if (match.match_type !== "blind_gauntlet") return total;
+    const pick = blindGauntletPicks[match.id];
+    if (!pick) return total;
+    let subtotal = 0;
+    if (
+      typeof match.gauntlet_survival_result === "boolean" &&
+      pick.survival === match.gauntlet_survival_result
+    ) {
+      subtotal += rules.blind_gauntlet_survival;
+    }
+    const actualEntrants = gauntletActualByMatch[match.id] ?? new Set();
+    (pick.entrant_ids ?? []).forEach((entrantId) => {
+      subtotal += actualEntrants.has(entrantId)
+        ? rules.blind_gauntlet_entrant_correct
+        : rules.blind_gauntlet_entrant_incorrect;
+    });
+    if (
+      match.gauntlet_final_entrant_id &&
+      pick.final_entrant_id === match.gauntlet_final_entrant_id &&
+      (pick.entrant_ids ?? []).includes(pick.final_entrant_id)
+    ) {
+      subtotal += rules.blind_gauntlet_final_entrant;
+    }
+    return total + subtotal;
+  }, 0);
+
+  breakdown.blind_gauntlet = blindGauntletPoints;
+  points += blindGauntletPoints;
 
   const eliminatorEntriesById = eliminatorEntries.reduce((map, entry) => {
     if (!map[entry.eliminator_id]) {
