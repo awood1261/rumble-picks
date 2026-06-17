@@ -267,7 +267,7 @@ export const getChampionWinnerForShow = async (
     matchIds.length > 0
       ? supabaseAdmin
           .from("match_sides")
-          .select("id, match_id, label")
+          .select("id, match_id, label, image_url")
           .in("match_id", matchIds)
       : Promise.resolve({ data: [], error: null }),
     matchIds.length > 0

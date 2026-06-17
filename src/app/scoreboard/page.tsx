@@ -133,6 +133,7 @@ type MatchSideRow = {
   id: string;
   match_id: string;
   label: string | null;
+  image_url?: string | null;
 };
 
 type MatchEntrantRow = {
@@ -1083,7 +1084,7 @@ function ScoreboardPageInner() {
       { data: entrantRows, error: entrantError },
       { data: gauntletActualRows, error: gauntletActualError },
     ] = await Promise.all([
-      supabase.from("match_sides").select("id, match_id, label").in("match_id", matchIds),
+      supabase.from("match_sides").select("id, match_id, label, image_url").in("match_id", matchIds),
       supabase.from("match_entrants").select("match_id, entrant_id, side_id").in("match_id", matchIds),
       supabase.from("gauntlet_actual_entrants").select("match_id, entrant_id").in("match_id", matchIds),
     ]);
