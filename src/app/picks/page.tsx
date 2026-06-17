@@ -31,6 +31,7 @@ import type {
   MatchEntrantRow,
   MatchRow,
   MatchSideRow,
+  GauntletEntrantRow,
   EliminatorEliminationRow,
   EliminatorEntryRow,
   EliminatorRow,
@@ -64,6 +65,7 @@ const emptyPayload: PicksPayload = {
   match_finish_picks: {},
   match_length_picks: {},
   match_interference_picks: {},
+  blind_gauntlet_picks: {},
 };
 
 const emptyEliminatorPick: EliminatorPick = {
@@ -145,7 +147,14 @@ const hasPickProgress = (payload?: Partial<PicksPayload> | null) => {
         (pick) => pick?.method || pick?.winner || pick?.loser,
       ) ||
       Object.values(payload.match_length_picks ?? {}).some(Boolean) ||
-      Object.values(payload.match_interference_picks ?? {}).some(Boolean),
+      Object.values(payload.match_interference_picks ?? {}).some(Boolean) ||
+      Object.values(payload.blind_gauntlet_picks ?? {}).some((pick) =>
+        Boolean(
+          typeof pick?.survival === "boolean" ||
+            pick?.entrant_ids?.length ||
+            pick?.final_entrant_id
+        )
+      ),
   );
 };
 
@@ -196,6 +205,9 @@ function PicksPageInner() {
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
+  const [gauntletCandidateEntrants, setGauntletCandidateEntrants] = useState<
+    GauntletEntrantRow[]
+  >([]);
   const [matchPickStats, setMatchPickStats] = useState<
     Record<string, { total: number; bySide: Record<string, number> }>
   >({});
@@ -526,6 +538,19 @@ function PicksPageInner() {
     );
   }, [matchEntrants]);
 
+  const gauntletCandidateEntrantsByMatch = useMemo(() => {
+    return gauntletCandidateEntrants.reduce(
+      (map, row) => {
+        if (!map[row.match_id]) {
+          map[row.match_id] = [];
+        }
+        map[row.match_id].push(row);
+        return map;
+      },
+      {} as Record<string, GauntletEntrantRow[]>,
+    );
+  }, [gauntletCandidateEntrants]);
+
   const matchWinnerMap = useMemo(() => {
     return new Map(matches.map((match) => [match.id, match.winner_side_id]));
   }, [matches]);
@@ -534,7 +559,11 @@ function PicksPageInner() {
     if (isLocked) return matches;
     if (!hasShowStarted) return matches;
     return matches.filter(
-      (match) => !match.winner_side_id && !match.winner_entrant_id,
+      (match) =>
+        match.match_type === "blind_gauntlet"
+          ? !match.gauntlet_final_entrant_id &&
+            typeof match.gauntlet_survival_result !== "boolean"
+          : !match.winner_side_id && !match.winner_entrant_id,
     );
   }, [hasShowStarted, isLocked, matches]);
 
@@ -878,7 +907,7 @@ function PicksPageInner() {
     const { data: matchRows, error: matchError } = await supabase
       .from("matches")
       .select(
-        "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, champion_side_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference",
+        "id, name, kind, match_type, status, order_index, is_main_event, is_championship, championship_name, championship_image_url, champion_side_id, known_wrestler_id, gauntlet_survival_result, gauntlet_final_entrant_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference",
       )
       .eq("show_id", selectedShowId)
       .order("order_index", { ascending: true, nullsFirst: false })
@@ -895,6 +924,7 @@ function PicksPageInner() {
       const [
         { data: matchSideRows, error: matchSideError },
         { data: matchEntrantRows, error: matchEntrantError },
+        { data: gauntletCandidateRows, error: gauntletCandidateError },
       ] = await Promise.all([
         supabase
           .from("match_sides")
@@ -903,6 +933,10 @@ function PicksPageInner() {
         supabase
           .from("match_entrants")
           .select("match_id, entrant_id, side_id")
+          .in("match_id", matchIds),
+        supabase
+          .from("gauntlet_candidate_entrants")
+          .select("id, match_id, entrant_id")
           .in("match_id", matchIds),
       ]);
       if (matchSideError) {
@@ -913,11 +947,19 @@ function PicksPageInner() {
         setMessage(matchEntrantError.message);
         return;
       }
+      if (gauntletCandidateError) {
+        setMessage(gauntletCandidateError.message);
+        return;
+      }
       setMatchSides((matchSideRows ?? []) as MatchSideRow[]);
       setMatchEntrants((matchEntrantRows ?? []) as MatchEntrantRow[]);
+      setGauntletCandidateEntrants(
+        (gauntletCandidateRows ?? []) as GauntletEntrantRow[]
+      );
     } else {
       setMatchSides([]);
       setMatchEntrants([]);
+      setGauntletCandidateEntrants([]);
     }
   }, [selectedShowId]);
 
@@ -1037,7 +1079,7 @@ function PicksPageInner() {
           supabase
             .from("picks")
             .select(
-              "updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_confidence_picks:payload->match_confidence_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+              "updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_confidence_picks:payload->match_confidence_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks, blind_gauntlet_picks:payload->blind_gauntlet_picks"
             )
             .eq("show_id", selectedShowId)
             .eq("user_id", userId)
@@ -1071,6 +1113,7 @@ function PicksPageInner() {
               match_finish_picks: pickRows.match_finish_picks ?? {},
               match_length_picks: pickRows.match_length_picks ?? {},
               match_interference_picks: pickRows.match_interference_picks ?? {},
+              blind_gauntlet_picks: pickRows.blind_gauntlet_picks ?? {},
             } as Partial<PicksPayload>)
           : null;
         const savedUpdatedAt =
@@ -1157,6 +1200,9 @@ function PicksPageInner() {
                 string,
                 "yes" | "no" | null
               >) ?? {},
+            blind_gauntlet_picks:
+              (savedPayload.blind_gauntlet_picks as PicksPayload["blind_gauntlet_picks"]) ??
+              {},
           });
           isHydratingPayloadRef.current = false;
           setHasSaved(true);
@@ -1172,6 +1218,7 @@ function PicksPageInner() {
             match_finish_picks: {},
             match_length_picks: {},
             match_interference_picks: {},
+            blind_gauntlet_picks: {},
           });
           isHydratingPayloadRef.current = false;
         }
@@ -1265,6 +1312,33 @@ function PicksPageInner() {
           ([matchId]) => matchIdSet.has(matchId),
         ),
       );
+      const blindGauntletPicks = Object.fromEntries(
+        Object.entries(prev.blind_gauntlet_picks ?? {})
+          .filter(([matchId]) => matchIdSet.has(matchId))
+          .map(([matchId, pick]) => {
+            const candidateIds = new Set(
+              (gauntletCandidateEntrantsByMatch[matchId] ?? []).map(
+                (row) => row.entrant_id
+              )
+            );
+            const selectedIds = (pick?.entrant_ids ?? []).filter((id) =>
+              candidateIds.has(id)
+            );
+            return [
+              matchId,
+              {
+                survival:
+                  typeof pick?.survival === "boolean" ? pick.survival : null,
+                entrant_ids: selectedIds,
+                final_entrant_id:
+                  pick?.final_entrant_id &&
+                  selectedIds.includes(pick.final_entrant_id)
+                    ? pick.final_entrant_id
+                    : null,
+              },
+            ];
+          })
+      );
       const eliminatorPicks = Object.fromEntries(
         Object.entries(prev.eliminators ?? {}).filter(([eliminatorId]) =>
           eliminatorIdSet.has(eliminatorId),
@@ -1326,9 +1400,17 @@ function PicksPageInner() {
         match_finish_picks: matchFinishPicks,
         match_length_picks: matchLengthPicks,
         match_interference_picks: matchInterferencePicks,
+        blind_gauntlet_picks: blindGauntletPicks,
       };
     });
-  }, [matches, showEvents, confirmedEntrantsByEvent, eliminators, questionsForShow]);
+  }, [
+    matches,
+    showEvents,
+    confirmedEntrantsByEvent,
+    eliminators,
+    questionsForShow,
+    gauntletCandidateEntrantsByMatch,
+  ]);
 
   useEffect(() => {
     if (editSection !== "key_picks") return;
@@ -1480,8 +1562,29 @@ function PicksPageInner() {
       setMessage("Picks are locked for this show.");
       return false;
     }
+    const incompleteBlindGauntlet = availableMatches.find((match) => {
+      if (currentStep?.type !== "match" || currentStep.id !== match.id) return false;
+      if (match.match_type !== "blind_gauntlet") return false;
+      const pick = payload.blind_gauntlet_picks?.[match.id];
+      return !(
+        pick &&
+        typeof pick.survival === "boolean" &&
+        (pick.entrant_ids?.length ?? 0) > 0 &&
+        pick.final_entrant_id &&
+        (pick.entrant_ids ?? []).includes(pick.final_entrant_id) &&
+        payload.match_length_picks?.[match.id]
+      );
+    });
+    if (incompleteBlindGauntlet) {
+      setMessage(
+        "Complete survival, entrant, final entrant, and match length picks before saving."
+      );
+      return false;
+    }
     if (showUsesConfidencePoints) {
-      const matchIds = availableMatches.map((match) => match.id);
+      const matchIds = availableMatches
+        .filter((match) => match.match_type !== "blind_gauntlet")
+        .map((match) => match.id);
       const pickedMatchIds = matchIds.filter((id) => Boolean(payload.match_picks[id]));
       const confidenceRanks = pickedMatchIds.map(
         (id) => payload.match_confidence_picks?.[id] ?? null
@@ -1675,16 +1778,44 @@ function PicksPageInner() {
 
   const currentStepMatchReady =
     currentStep?.type !== "match" ||
-    (Boolean(payload.match_picks[currentStep.id]) &&
-      (!showUsesConfidencePoints ||
-        (typeof payload.match_confidence_picks?.[currentStep.id] === "number" &&
-          (payload.match_confidence_picks?.[currentStep.id] ?? 0) > 0)));
+    (() => {
+      const match = matches.find((item) => item.id === currentStep.id);
+      if (match?.match_type === "blind_gauntlet") {
+        const pick = payload.blind_gauntlet_picks?.[currentStep.id];
+        return Boolean(
+          pick &&
+            typeof pick.survival === "boolean" &&
+            (pick.entrant_ids?.length ?? 0) > 0 &&
+            pick.final_entrant_id &&
+            (pick.entrant_ids ?? []).includes(pick.final_entrant_id) &&
+            payload.match_length_picks?.[currentStep.id]
+        );
+      }
+      return (
+        Boolean(payload.match_picks[currentStep.id]) &&
+        (!showUsesConfidencePoints ||
+          (typeof payload.match_confidence_picks?.[currentStep.id] === "number" &&
+            (payload.match_confidence_picks?.[currentStep.id] ?? 0) > 0))
+      );
+    })();
 
   const allMatchWinnersPicked = useMemo(() => {
     if (!selectedShowId || stepItems.length === 0) return false;
     const matchSteps = stepItems.filter((item) => item.type === "match");
     if (matchSteps.length === 0) return false;
     return matchSteps.every((item) => {
+      const match = matches.find((row) => row.id === item.id);
+      if (match?.match_type === "blind_gauntlet") {
+        const pick = payload.blind_gauntlet_picks?.[item.id];
+        return Boolean(
+          pick &&
+            typeof pick.survival === "boolean" &&
+            (pick.entrant_ids?.length ?? 0) > 0 &&
+            pick.final_entrant_id &&
+            (pick.entrant_ids ?? []).includes(pick.final_entrant_id) &&
+            payload.match_length_picks?.[item.id]
+        );
+      }
       if (!payload.match_picks[item.id]) {
         return false;
       }
@@ -1696,7 +1827,10 @@ function PicksPageInner() {
     });
   }, [
     payload.match_confidence_picks,
+    payload.blind_gauntlet_picks,
+    payload.match_length_picks,
     payload.match_picks,
+    matches,
     selectedShowId,
     showUsesConfidencePoints,
     stepItems,
@@ -2238,6 +2372,54 @@ function PicksPageInner() {
                   }
                   const match = matches.find((row) => row.id === item.id);
                   if (!match) return null;
+                  if (match.match_type === "blind_gauntlet") {
+                    const pick = payload.blind_gauntlet_picks?.[match.id];
+                    const entrantNames = (pick?.entrant_ids ?? [])
+                      .map((id) => entrantByIdAll.get(id)?.name)
+                      .filter(Boolean)
+                      .join(", ");
+                    const finalEntrant = pick?.final_entrant_id
+                      ? entrantByIdAll.get(pick.final_entrant_id)?.name
+                      : null;
+                    return (
+                      <div
+                        key={`match:${match.id}`}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                            {match.name}
+                          </p>
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
+                            onClick={() =>
+                              setStepIndex(
+                                stepIndexById.get(`match:${match.id}`) ?? 0,
+                              )
+                            }
+                            aria-label={`Edit ${match.name}`}
+                          >
+                            ✎
+                          </button>
+                        </div>
+                        <p className="mt-2 text-sm text-zinc-300">
+                          Survival:{" "}
+                          {typeof pick?.survival === "boolean"
+                            ? pick.survival
+                              ? "Survives"
+                              : "Does not survive"
+                            : "Not set"}
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-300">
+                          Entrants: {entrantNames || "Not set"}
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-300">
+                          Final entrant: {finalEntrant || "Not set"}
+                        </p>
+                      </div>
+                    );
+                  }
                   const winnerSideId = payload.match_picks[match.id] ?? null;
                   const sideEntrants = matchEntrantsByMatch[match.id] ?? [];
                   const sides = matchSidesByMatch[match.id] ?? [];
@@ -2507,9 +2689,14 @@ function PicksPageInner() {
                         selectedShowName={selectedShow?.name}
                         selectedPromotionId={selectedShow?.promotion_id}
                         useConfidencePoints={showUsesConfidencePoints}
-                        confidenceMatchIds={availableMatches.map((item) => item.id)}
+                        confidenceMatchIds={availableMatches
+                          .filter((item) => item.match_type !== "blind_gauntlet")
+                          .map((item) => item.id)}
                         matchSidesByMatch={matchSidesByMatch}
                         matchEntrantsByMatch={matchEntrantsByMatch}
+                        gauntletCandidateEntrantsByMatch={
+                          gauntletCandidateEntrantsByMatch
+                        }
                         entrantByIdAll={entrantByIdAll}
                         matchPickStats={matchPickStats}
                         payload={payload}

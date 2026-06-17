@@ -99,6 +99,14 @@ export type PicksPayload = {
   >;
   match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
   match_interference_picks?: Record<string, "yes" | "no" | null>;
+  blind_gauntlet_picks?: Record<
+    string,
+    {
+      survival: boolean | null;
+      entrant_ids: string[];
+      final_entrant_id: string | null;
+    }
+  >;
 };
 
 export type RumbleEntryRow = {
@@ -136,6 +144,9 @@ export type MatchRow = {
   championship_name?: string | null;
   championship_image_url?: string | null;
   champion_side_id?: string | null;
+  known_wrestler_id?: string | null;
+  gauntlet_survival_result?: boolean | null;
+  gauntlet_final_entrant_id?: string | null;
   winner_entrant_id: string | null;
   winner_side_id: string | null;
   finish_method: string | null;
@@ -155,6 +166,12 @@ export type MatchSideRow = {
   id: string;
   match_id: string;
   label: string | null;
+};
+
+export type GauntletEntrantRow = {
+  id?: string;
+  match_id: string;
+  entrant_id: string;
 };
 
 export type EventActuals = {

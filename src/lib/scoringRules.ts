@@ -19,6 +19,10 @@ export type ScoringRules = {
   match_finish_loser: number;
   match_length: number;
   match_interference: number;
+  blind_gauntlet_survival: number;
+  blind_gauntlet_entrant_correct: number;
+  blind_gauntlet_entrant_incorrect: number;
+  blind_gauntlet_final_entrant: number;
   question_correct: number;
 };
 
@@ -43,5 +47,9 @@ export const scoringRules: ScoringRules = {
   match_finish_loser: 2,
   match_length: 2,
   match_interference: 2,
+  blind_gauntlet_survival: 5,
+  blind_gauntlet_entrant_correct: 2,
+  blind_gauntlet_entrant_incorrect: -2,
+  blind_gauntlet_final_entrant: 2,
   question_correct: 5,
 };

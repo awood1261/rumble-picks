@@ -225,7 +225,7 @@ export const getChampionWinnerForShow = async (
     supabaseAdmin
       .from("matches")
       .select(
-        "id, show_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
+        "id, show_id, match_type, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, gauntlet_survival_result, gauntlet_final_entrant_id"
       )
       .eq("show_id", show.id),
     supabaseAdmin
@@ -260,6 +260,7 @@ export const getChampionWinnerForShow = async (
   const [
     { data: matchSideData, error: matchSideError },
     { data: matchEntrantData, error: matchEntrantError },
+    { data: gauntletActualData, error: gauntletActualError },
     { data: eliminatorEntryData, error: eliminatorEntryError },
     { data: eliminatorEliminationData, error: eliminatorEliminationError },
   ] = await Promise.all([
@@ -273,6 +274,12 @@ export const getChampionWinnerForShow = async (
       ? supabaseAdmin
           .from("match_entrants")
           .select("match_id, entrant_id, side_id")
+          .in("match_id", matchIds)
+      : Promise.resolve({ data: [], error: null }),
+    matchIds.length > 0
+      ? supabaseAdmin
+          .from("gauntlet_actual_entrants")
+          .select("match_id, entrant_id")
           .in("match_id", matchIds)
       : Promise.resolve({ data: [], error: null }),
     eliminatorIds.length > 0
@@ -293,6 +300,7 @@ export const getChampionWinnerForShow = async (
 
   if (matchSideError) throw new Error(matchSideError.message);
   if (matchEntrantError) throw new Error(matchEntrantError.message);
+  if (gauntletActualError) throw new Error(gauntletActualError.message);
   if (eliminatorEntryError) throw new Error(eliminatorEntryError.message);
   if (eliminatorEliminationError) {
     throw new Error(eliminatorEliminationError.message);
@@ -300,6 +308,10 @@ export const getChampionWinnerForShow = async (
 
   const matchSides = (matchSideData ?? []) as MatchSideRow[];
   const matchEntrants = (matchEntrantData ?? []) as MatchEntrantRow[];
+  const gauntletActualEntrants = (gauntletActualData ?? []) as {
+    match_id: string;
+    entrant_id: string;
+  }[];
   const eliminatorEntries = (eliminatorEntryData ?? []) as EliminatorEntryRow[];
   const eliminatorEliminations = (eliminatorEliminationData ?? []) as EliminatorEliminationRow[];
 
@@ -333,7 +345,8 @@ export const getChampionWinnerForShow = async (
         showEliminatorIds.has(entry.eliminator_id)
       ),
       showEliminators,
-      showQuestions
+      showQuestions,
+      gauntletActualEntrants.filter((entry) => showMatchIds.has(entry.match_id))
     );
 
     if (
