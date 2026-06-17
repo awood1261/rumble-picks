@@ -232,7 +232,23 @@ const TeamStackMatchupPicker = ({
                   ✓
                 </div>
               )}
-              {isFourWide ? (
+              {sideEntry.side.image_url ? (
+                <>
+                  <Image
+                    src={sideEntry.side.image_url}
+                    alt={sideEntry.label}
+                    fill
+                    sizes="(min-width: 768px) 640px, 100vw"
+                    className="z-10 object-cover object-center"
+                  />
+                  <div className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 p-4 text-center">
+                    <span className="inline-flex max-w-full rounded-md bg-black/75 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.16em] text-zinc-100 shadow-[0_4px_14px_rgba(0,0,0,0.45)]">
+                      {sideEntry.label}
+                    </span>
+                  </div>
+                </>
+              ) : isFourWide ? (
                 <div className="absolute inset-0 z-10 grid grid-cols-2 grid-rows-2 gap-px bg-white/10">
                   {visibleEntrants.map((entrant) => (
                     <div
@@ -2732,6 +2748,7 @@ export const MatchPicksSection = ({
                         >
                           {matchupSides.map((sideEntry, index) => {
                             const entrant = sideEntry.entrants?.[0] ?? null;
+                            const sideImageUrl = sideEntry.side.image_url;
                             const percent = getPercent(sideEntry.side.id ?? null);
                             const isSelected =
                               payload.match_picks[match.id] === sideEntry.side.id;
@@ -2765,7 +2782,15 @@ export const MatchPicksSection = ({
                                   </div>
                                 ) : null}
                                 <div className="relative h-52 overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(245,210,120,0.14),_transparent_42%),linear-gradient(180deg,_rgba(255,255,255,0.03),_rgba(255,255,255,0)_28%),repeating-linear-gradient(135deg,_rgba(255,255,255,0.028)_0px,_rgba(255,255,255,0.028)_2px,_transparent_2px,_transparent_12px)] sm:h-64">
-                                  {entrant?.image_url ? (
+                                  {sideImageUrl ? (
+                                    <Image
+                                      src={sideImageUrl}
+                                      alt={sideEntry.label}
+                                      fill
+                                      sizes="(min-width: 640px) 40vw, 90vw"
+                                      className="object-cover object-center"
+                                    />
+                                  ) : entrant?.image_url ? (
                                     <Image
                                       src={entrant.image_url}
                                       alt={entrant.name}
@@ -2835,6 +2860,7 @@ export const MatchPicksSection = ({
                           >
                             {matchupSides.map((sideEntry, index) => {
                               const entrants = sideEntry.entrants ?? [];
+                              const sideImageUrl = sideEntry.side.image_url;
                               const percent = getPercent(sideEntry.side.id ?? null);
                               const isSelected =
                                 payload.match_picks[match.id] ===
@@ -2861,8 +2887,20 @@ export const MatchPicksSection = ({
                                       ✓
                                     </div>
                                   )}
-                                  <div className={`grid h-full w-full ${sideGridClass}`}>
-                                    {entrants.length > 0 ? (
+                                  {sideImageUrl ? (
+                                    <div className="relative h-full w-full overflow-hidden">
+                                      <Image
+                                        src={sideImageUrl}
+                                        alt={sideEntry.label}
+                                        fill
+                                        sizes="(min-width: 1024px) 50vw, 100vw"
+                                        className="object-cover object-center"
+                                      />
+                                      <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
+                                    </div>
+                                  ) : (
+                                    <div className={`grid h-full w-full ${sideGridClass}`}>
+                                      {entrants.length > 0 ? (
                                       entrants.map((entrant) => (
                                         (() => {
                                           return (
@@ -2887,10 +2925,11 @@ export const MatchPicksSection = ({
                                           );
                                         })()
                                       ))
-                                    ) : (
-                                      <MatchupSilhouette />
-                                    )}
-                                  </div>
+                                      ) : (
+                                        <MatchupSilhouette />
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -2992,13 +3031,17 @@ export const MatchPicksSection = ({
                           >
                             {matchupSides.map((sideEntry, index) => {
                               const entrant = sideEntry.entrants?.[0] ?? null;
-                              if (!entrant) {
+                              const sideImageUrl = sideEntry.side.image_url;
+                              if (!entrant && !sideImageUrl) {
                                 return <div key={`${match.id}-overlay-label-${index}`} />;
                               }
-                              const hasLogo = Boolean(entrant.logo_url);
+                              const hasLogo = Boolean(entrant?.logo_url);
+                              const label = sideImageUrl
+                                ? sideEntry.label
+                                : entrant?.name ?? sideEntry.label;
                               return (
                                 <div
-                                  key={`${match.id}-overlay-label-${entrant.id}`}
+                                  key={`${match.id}-overlay-label-${sideEntry.side.id}`}
                                   className="flex h-full items-end justify-center p-2 text-center"
                                 >
                                   <div
@@ -3006,17 +3049,17 @@ export const MatchPicksSection = ({
                                       hasLogo ? "translate-y-8" : ""
                                     }`}
                                   >
-                                    {entrant.logo_url ? (
+                                    {entrant?.logo_url ? (
                                       <Image
                                         src={entrant.logo_url}
-                                        alt={`${entrant.name} logo`}
+                                        alt={`${entrant?.name ?? label} logo`}
                                         width={128}
                                         height={128}
                                         className="mx-auto h-32 w-32 object-contain"
                                       />
                                     ) : (
                                       <span className="block text-[13px] font-semibold uppercase leading-[0.95] tracking-[0.18em] text-zinc-100 drop-shadow">
-                                        {entrant.name}
+                                        {label}
                                       </span>
                                     )}
                                   </div>

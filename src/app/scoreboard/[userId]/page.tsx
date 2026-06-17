@@ -131,6 +131,7 @@ type MatchSideRow = {
   id: string;
   match_id: string;
   label: string | null;
+  image_url?: string | null;
 };
 
 type MatchEntrantRow = {
@@ -936,7 +937,7 @@ export default function ScoreboardPicksPage() {
       ] = await Promise.all([
         supabase
           .from("match_sides")
-          .select("id, match_id, label")
+          .select("id, match_id, label, image_url")
           .in("match_id", matchIds),
         supabase
           .from("match_entrants")

@@ -118,6 +118,7 @@ type MatchSideRow = {
   id: string;
   match_id: string;
   label: string | null;
+  image_url: string | null;
 };
 
 type MatchEntrantRow = {
@@ -346,6 +347,7 @@ export default function AdminPage() {
     Record<string, string>
   >({});
   const [matchSideLabelEdits, setMatchSideLabelEdits] = useState<Record<string, string>>({});
+  const [matchSideImageEdits, setMatchSideImageEdits] = useState<Record<string, string>>({});
   const [matchFinishEdits, setMatchFinishEdits] = useState<
     Record<string, { method: string; winner: string; loser: string }>
   >({});
@@ -955,7 +957,7 @@ export default function AdminPage() {
         })(),
         supabase
           .from("match_sides")
-          .select("id, match_id, label"),
+          .select("id, match_id, label, image_url"),
         supabase
           .from("match_entrants")
           .select("id, match_id, entrant_id, side_id"),
@@ -1134,6 +1136,15 @@ export default function AdminPage() {
         });
         return next;
       });
+      setMatchSideImageEdits((prev) => {
+        const next = { ...prev };
+        matchSideList.forEach((side) => {
+          if (next[side.id] === undefined) {
+            next[side.id] = side.image_url ?? "";
+          }
+        });
+        return next;
+      });
       setMatchKnownWrestlerEdits((prev) => {
         const next = { ...prev };
         matchListAll.forEach((match) => {
@@ -1242,7 +1253,7 @@ export default function AdminPage() {
           })(),
           supabase
             .from("match_sides")
-            .select("id, match_id, label"),
+            .select("id, match_id, label, image_url"),
           supabase
             .from("match_entrants")
             .select("id, match_id, entrant_id, side_id"),
@@ -1311,6 +1322,15 @@ export default function AdminPage() {
         matchSideList.forEach((side) => {
           if (!next[side.id]) {
             next[side.id] = side.label ?? "";
+          }
+        });
+        return next;
+      });
+      setMatchSideImageEdits((prev) => {
+        const next = { ...prev };
+        matchSideList.forEach((side) => {
+          if (next[side.id] === undefined) {
+            next[side.id] = side.image_url ?? "";
           }
         });
         return next;
@@ -2420,6 +2440,19 @@ export default function AdminPage() {
     refreshData();
   };
 
+  const handleUpdateMatchSideImage = async (sideId: string, imageUrl: string) => {
+    setMessage(null);
+    const { error } = await supabase
+      .from("match_sides")
+      .update({ image_url: imageUrl.trim() || null })
+      .eq("id", sideId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    refreshData();
+  };
+
   const handleUpdateMatchName = async (matchId: string, name: string) => {
     setMessage(null);
     if (!name.trim()) {
@@ -2959,7 +2992,7 @@ export default function AdminPage() {
         .eq("event_id", activeEvent.id),
       supabase
         .from("match_sides")
-        .select("id, match_id, label"),
+        .select("id, match_id, label, image_url"),
       supabase
         .from("match_entrants")
         .select("match_id, entrant_id, side_id"),
@@ -5268,34 +5301,82 @@ export default function AdminPage() {
                       </p>
                     ) : (
                       <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        {sideEntries.map(({ side, label, entrants }) => (
-                          <div
-                            key={side.id}
-                            className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <input
-                                className="h-9 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100"
-                                value={matchSideLabelEdits[side.id] ?? label}
-                                onChange={(event) =>
-                                  setMatchSideLabelEdits((prev) => ({
-                                    ...prev,
-                                    [side.id]: event.target.value,
-                                  }))
-                                }
-                              />
-                              <button
-                                className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-3 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                                type="button"
-                                onClick={() =>
-                                  handleUpdateMatchSideLabel(
-                                    side.id,
-                                    matchSideLabelEdits[side.id] ?? label
-                                  )
-                                }
-                              >
-                                Save
-                              </button>
+                        {sideEntries.map(({ side, label, entrants }) => {
+                          const sideImageEdit =
+                            matchSideImageEdits[side.id] ?? side.image_url ?? "";
+                          const canPreviewSideImage =
+                            sideImageEdit.startsWith("http://") ||
+                            sideImageEdit.startsWith("https://") ||
+                            sideImageEdit.startsWith("/");
+                          return (
+                            <div
+                              key={side.id}
+                              className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3"
+                            >
+                            <div className="grid gap-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <input
+                                  className="h-9 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100"
+                                  value={matchSideLabelEdits[side.id] ?? label}
+                                  onChange={(event) =>
+                                    setMatchSideLabelEdits((prev) => ({
+                                      ...prev,
+                                      [side.id]: event.target.value,
+                                    }))
+                                  }
+                                  placeholder="Side label"
+                                />
+                                <button
+                                  className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-3 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                                  type="button"
+                                  onClick={() =>
+                                    handleUpdateMatchSideLabel(
+                                      side.id,
+                                      matchSideLabelEdits[side.id] ?? label
+                                    )
+                                  }
+                                >
+                                  Save
+                                </button>
+                              </div>
+                              <div className="grid gap-2">
+                                {canPreviewSideImage ? (
+                                  <div className="relative aspect-video overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
+                                    <Image
+                                      src={sideImageEdit}
+                                      alt={`${label} side image`}
+                                      fill
+                                      sizes="(min-width: 768px) 360px, 90vw"
+                                      className="object-cover object-center"
+                                    />
+                                  </div>
+                                ) : null}
+                                <div className="flex items-center justify-between gap-2">
+                                  <input
+                                    className="h-9 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100"
+                                    value={sideImageEdit}
+                                    onChange={(event) =>
+                                      setMatchSideImageEdits((prev) => ({
+                                        ...prev,
+                                        [side.id]: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="Optional side image URL, ideally 1200 x 675"
+                                  />
+                                  <button
+                                    className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateMatchSideImage(
+                                        side.id,
+                                        sideImageEdit
+                                      )
+                                    }
+                                  >
+                                    Save image
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                             {entrants.length === 0 ? (
                               <p className="mt-3 text-xs text-zinc-500">
@@ -5327,7 +5408,8 @@ export default function AdminPage() {
                               </div>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ))}
                   </div>

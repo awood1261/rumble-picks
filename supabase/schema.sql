@@ -188,6 +188,7 @@ create table if not exists public.match_sides (
   id uuid primary key default gen_random_uuid(),
   match_id uuid not null references public.matches(id) on delete cascade,
   label text,
+  image_url text,
   created_at timestamptz not null default now()
 );
 

@@ -166,6 +166,7 @@ export type MatchSideRow = {
   id: string;
   match_id: string;
   label: string | null;
+  image_url?: string | null;
 };
 
 export type GauntletEntrantRow = {
