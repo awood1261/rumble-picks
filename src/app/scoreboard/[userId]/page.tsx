@@ -40,6 +40,14 @@ type PicksPayload = {
   >;
   match_length_picks?: Record<string, "sprint" | "standard" | "epic" | null>;
   match_interference_picks?: Record<string, "yes" | "no" | null>;
+  blind_gauntlet_picks?: Record<
+    string,
+    {
+      survival: boolean | null;
+      entrant_ids: string[];
+      final_entrant_id: string | null;
+    }
+  >;
 };
 
 type EntrantRow = {
@@ -116,6 +124,7 @@ type MatchRow = {
   id: string;
   name: string;
   kind: string;
+  match_type?: string | null;
   champion_side_id?: string | null;
   winner_entrant_id: string | null;
   winner_side_id: string | null;
@@ -124,6 +133,8 @@ type MatchRow = {
   finish_loser_entrant_id: string | null;
   match_length?: string | null;
   match_interference?: string | null;
+  gauntlet_survival_result?: boolean | null;
+  gauntlet_final_entrant_id?: string | null;
   order_index?: number | null;
 };
 
@@ -138,6 +149,11 @@ type MatchEntrantRow = {
   match_id: string;
   entrant_id: string;
   side_id: string | null;
+};
+
+type GauntletEntrantRow = {
+  match_id: string;
+  entrant_id: string;
 };
 
 const PICKS_POLL_INTERVAL_MS = 120000;
@@ -235,6 +251,12 @@ export default function ScoreboardPicksPage() {
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [matchSides, setMatchSides] = useState<MatchSideRow[]>([]);
   const [matchEntrants, setMatchEntrants] = useState<MatchEntrantRow[]>([]);
+  const [gauntletCandidateEntrants, setGauntletCandidateEntrants] = useState<
+    GauntletEntrantRow[]
+  >([]);
+  const [gauntletActualEntrants, setGauntletActualEntrants] = useState<
+    GauntletEntrantRow[]
+  >([]);
   const [matchPickStats, setMatchPickStats] = useState<
     Record<string, { total: number; bySide: Record<string, number> }>
   >({});
@@ -269,6 +291,26 @@ export default function ScoreboardPicksPage() {
       return map;
     }, {} as Record<string, MatchEntrantRow[]>);
   }, [matchEntrants]);
+
+  const gauntletCandidateEntrantsByMatch = useMemo(() => {
+    return gauntletCandidateEntrants.reduce((map, row) => {
+      if (!map[row.match_id]) {
+        map[row.match_id] = [];
+      }
+      map[row.match_id].push(row);
+      return map;
+    }, {} as Record<string, GauntletEntrantRow[]>);
+  }, [gauntletCandidateEntrants]);
+
+  const gauntletActualEntrantsByMatch = useMemo(() => {
+    return gauntletActualEntrants.reduce((map, row) => {
+      if (!map[row.match_id]) {
+        map[row.match_id] = [];
+      }
+      map[row.match_id].push(row);
+      return map;
+    }, {} as Record<string, GauntletEntrantRow[]>);
+  }, [gauntletActualEntrants]);
 
   const matchWinnerMap = useMemo(() => {
     return new Map(matches.map((match) => [match.id, match.winner_side_id]));
@@ -309,10 +351,14 @@ export default function ScoreboardPicksPage() {
     if (!payload) return [];
     return matches.filter((match) => {
       const finishPick = payload.match_finish_picks?.[match.id];
+      const gauntletPick = payload.blind_gauntlet_picks?.[match.id];
       return Boolean(
         payload.match_picks?.[match.id] ||
           payload.match_length_picks?.[match.id] ||
           payload.match_interference_picks?.[match.id] ||
+          typeof gauntletPick?.survival === "boolean" ||
+          gauntletPick?.entrant_ids?.length ||
+          gauntletPick?.final_entrant_id ||
           finishPick?.method ||
           finishPick?.winner ||
           finishPick?.loser,
@@ -665,6 +711,7 @@ export default function ScoreboardPicksPage() {
       finishLoser: 0,
       matchLength: 0,
       matchInterference: 0,
+      blindGauntlet: 0,
       total: 0,
     };
     const entrantCountByMatch = matchEntrants.reduce((map, row) => {
@@ -672,8 +719,40 @@ export default function ScoreboardPicksPage() {
       return map;
     }, {} as Record<string, number>);
     matches.forEach((match) => {
+      if (match.match_type === "blind_gauntlet") {
+        const gauntletPick = payload?.blind_gauntlet_picks?.[match.id] ?? null;
+        const actualEntrantIds = new Set(
+          (gauntletActualEntrantsByMatch[match.id] ?? []).map(
+            (row) => row.entrant_id,
+          ),
+        );
+        if (
+          gauntletPick &&
+          typeof match.gauntlet_survival_result === "boolean" &&
+          gauntletPick.survival === match.gauntlet_survival_result
+        ) {
+          summary.blindGauntlet += scoringRules.blind_gauntlet_survival;
+        }
+        (gauntletPick?.entrant_ids ?? []).forEach((entrantId) => {
+          summary.blindGauntlet += actualEntrantIds.has(entrantId)
+            ? scoringRules.blind_gauntlet_entrant_correct
+            : scoringRules.blind_gauntlet_entrant_incorrect;
+        });
+        if (
+          match.gauntlet_final_entrant_id &&
+          gauntletPick?.final_entrant_id === match.gauntlet_final_entrant_id &&
+          (gauntletPick.entrant_ids ?? []).includes(gauntletPick.final_entrant_id)
+        ) {
+          summary.blindGauntlet += scoringRules.blind_gauntlet_final_entrant;
+        }
+      }
       const pick = payload?.match_picks?.[match.id] ?? null;
-      if (match.winner_side_id && pick && pick === match.winner_side_id) {
+      if (
+        match.match_type !== "blind_gauntlet" &&
+        match.winner_side_id &&
+        pick &&
+        pick === match.winner_side_id
+      ) {
         if (show?.use_confidence_points) {
           const confidence = payload?.match_confidence_picks?.[match.id] ?? null;
           if (typeof confidence === "number" && confidence > 0) {
@@ -692,7 +771,7 @@ export default function ScoreboardPicksPage() {
         summary.matchInterference += scoringRules.match_interference;
       }
       const entrantCount = entrantCountByMatch[match.id] ?? 0;
-      if (!match.finish_method) {
+      if (match.match_type === "blind_gauntlet" || !match.finish_method) {
         return;
       }
       const finishPick = payload?.match_finish_picks?.[match.id];
@@ -726,9 +805,16 @@ export default function ScoreboardPicksPage() {
       summary.finishWinner +
       summary.finishLoser +
       summary.matchLength +
-      summary.matchInterference;
+      summary.matchInterference +
+      summary.blindGauntlet;
     return summary;
-  }, [matchEntrants, matches, payload, show?.use_confidence_points]);
+  }, [
+    gauntletActualEntrantsByMatch,
+    matchEntrants,
+    matches,
+    payload,
+    show?.use_confidence_points,
+  ]);
 
   const totalShowPoints = useMemo(() => {
     return (
@@ -764,7 +850,7 @@ export default function ScoreboardPicksPage() {
       supabase
         .from("picks")
         .select(
-          "rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_confidence_picks:payload->match_confidence_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks"
+          "rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_confidence_picks:payload->match_confidence_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks, blind_gauntlet_picks:payload->blind_gauntlet_picks"
         )
         .eq("show_id", validShowId)
         .eq("user_id", userId)
@@ -794,7 +880,7 @@ export default function ScoreboardPicksPage() {
       supabase
         .from("matches")
         .select(
-          "id, name, kind, order_index, champion_side_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference"
+          "id, name, kind, match_type, order_index, champion_side_id, winner_entrant_id, winner_side_id, finish_method, finish_winner_entrant_id, finish_loser_entrant_id, match_length, match_interference, gauntlet_survival_result, gauntlet_final_entrant_id"
         )
         .eq("show_id", validShowId)
         .order("order_index", { ascending: true, nullsFirst: false })
@@ -856,6 +942,7 @@ export default function ScoreboardPicksPage() {
           match_finish_picks: pickRow.match_finish_picks ?? {},
           match_length_picks: pickRow.match_length_picks ?? {},
           match_interference_picks: pickRow.match_interference_picks ?? {},
+          blind_gauntlet_picks: pickRow.blind_gauntlet_picks ?? {},
         } as PicksPayload)
       : null;
     setPayload(nextPayload);
@@ -929,11 +1016,15 @@ export default function ScoreboardPicksPage() {
     }
 
     let matchEntrantRowsList: MatchEntrantRow[] = [];
+    let gauntletCandidateRowsList: GauntletEntrantRow[] = [];
+    let gauntletActualRowsList: GauntletEntrantRow[] = [];
     if (matchList.length > 0) {
       const matchIds = matchList.map((match) => match.id);
       const [
         { data: matchSideRows, error: matchSideError },
         { data: matchEntrantRows, error: matchEntrantError },
+        { data: gauntletCandidateRows, error: gauntletCandidateError },
+        { data: gauntletActualRows, error: gauntletActualError },
       ] = await Promise.all([
         supabase
           .from("match_sides")
@@ -942,6 +1033,14 @@ export default function ScoreboardPicksPage() {
         supabase
           .from("match_entrants")
           .select("match_id, entrant_id, side_id")
+          .in("match_id", matchIds),
+        supabase
+          .from("gauntlet_candidate_entrants")
+          .select("match_id, entrant_id")
+          .in("match_id", matchIds),
+        supabase
+          .from("gauntlet_actual_entrants")
+          .select("match_id, entrant_id")
           .in("match_id", matchIds),
       ]);
       if (matchSideError) {
@@ -954,13 +1053,30 @@ export default function ScoreboardPicksPage() {
         setLoading(false);
         return;
       }
+      if (gauntletCandidateError) {
+        setMessage(gauntletCandidateError.message);
+        setLoading(false);
+        return;
+      }
+      if (gauntletActualError) {
+        setMessage(gauntletActualError.message);
+        setLoading(false);
+        return;
+      }
       const sideRowsList = (matchSideRows ?? []) as MatchSideRow[];
       matchEntrantRowsList = (matchEntrantRows ?? []) as MatchEntrantRow[];
+      gauntletCandidateRowsList =
+        (gauntletCandidateRows ?? []) as GauntletEntrantRow[];
+      gauntletActualRowsList = (gauntletActualRows ?? []) as GauntletEntrantRow[];
       setMatchSides(sideRowsList);
       setMatchEntrants(matchEntrantRowsList);
+      setGauntletCandidateEntrants(gauntletCandidateRowsList);
+      setGauntletActualEntrants(gauntletActualRowsList);
     } else {
       setMatchSides([]);
       setMatchEntrants([]);
+      setGauntletCandidateEntrants([]);
+      setGauntletActualEntrants([]);
     }
 
     let eliminatorEntryRowsList: EliminatorEntryRow[] = [];
@@ -1009,6 +1125,15 @@ export default function ScoreboardPicksPage() {
     const matchEntrantIds = matchEntrantRowsList
       .map((row) => row.entrant_id)
       .filter(Boolean);
+    const gauntletEntrantIds = [
+      ...gauntletCandidateRowsList.map((row) => row.entrant_id),
+      ...gauntletActualRowsList.map((row) => row.entrant_id),
+      ...Object.values(nextPayload?.blind_gauntlet_picks ?? {}).flatMap((pick) => [
+        ...(pick?.entrant_ids ?? []),
+        pick?.final_entrant_id,
+      ]),
+      ...matchList.map((match) => match.gauntlet_final_entrant_id),
+    ].filter(Boolean);
     const eliminatorPickIds = Object.values(
       nextPayload?.eliminators ?? {}
     ).flatMap((pick) => [
@@ -1036,6 +1161,7 @@ export default function ScoreboardPicksPage() {
       ...rumblePickIds,
       ...matchFinishIds,
       ...matchEntrantIds,
+      ...gauntletEntrantIds,
       ...eliminatorPickIds,
       ...eliminatorEntrantIds,
     ]
@@ -1769,6 +1895,207 @@ export default function ScoreboardPicksPage() {
                   !!finishPick ||
                   !!lengthPick ||
                   !!interferencePick;
+
+                if (match.match_type === "blind_gauntlet") {
+                  const gauntletPick = payload.blind_gauntlet_picks?.[match.id] ?? null;
+                  const actualEntrantIds = new Set(
+                    (gauntletActualEntrantsByMatch[match.id] ?? []).map(
+                      (row) => row.entrant_id,
+                    ),
+                  );
+                  const selectedEntrantIds = gauntletPick?.entrant_ids ?? [];
+                  const selectedEntrants = selectedEntrantIds
+                    .map((id) => entrantMap.get(id))
+                    .filter(Boolean);
+                  const finalEntrant = gauntletPick?.final_entrant_id
+                    ? entrantMap.get(gauntletPick.final_entrant_id)
+                    : null;
+                  const survivalReady =
+                    typeof match.gauntlet_survival_result === "boolean";
+                  const survivalCorrect =
+                    survivalReady &&
+                    gauntletPick?.survival === match.gauntlet_survival_result;
+                  const survivalPoints = survivalCorrect
+                    ? scoringRules.blind_gauntlet_survival
+                    : 0;
+                  const entrantPoints = selectedEntrantIds.reduce(
+                    (total, entrantId) =>
+                      total +
+                      (actualEntrantIds.has(entrantId)
+                        ? scoringRules.blind_gauntlet_entrant_correct
+                        : scoringRules.blind_gauntlet_entrant_incorrect),
+                    0,
+                  );
+                  const finalEntrantId = gauntletPick?.final_entrant_id ?? null;
+                  const finalEntrantCorrect =
+                    Boolean(match.gauntlet_final_entrant_id) &&
+                    (finalEntrantId
+                      ? finalEntrantId === match.gauntlet_final_entrant_id &&
+                        selectedEntrantIds.includes(finalEntrantId)
+                      : false);
+                  const finalEntrantPoints = finalEntrantCorrect
+                    ? scoringRules.blind_gauntlet_final_entrant
+                    : 0;
+                  const gauntletMatchTotalPoints =
+                    survivalPoints +
+                    entrantPoints +
+                    finalEntrantPoints +
+                    (matchLengthCorrect ? scoringRules.match_length : 0);
+                  const resultReady =
+                    survivalReady ||
+                    actualEntrantIds.size > 0 ||
+                    Boolean(match.gauntlet_final_entrant_id) ||
+                    Boolean(match.match_length);
+
+                  return (
+                    <div
+                      key={match.id}
+                      className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 px-3 py-2"
+                    >
+                      <details className="group peer">
+                        <summary className="relative flex cursor-pointer list-none items-start justify-between gap-3">
+                          <div className="flex flex-col gap-2">
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                                Blind Gauntlet Match
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-semibold text-zinc-100">
+                                  {match.name}
+                                </p>
+                                <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                                  {gauntletMatchTotalPoints} pts
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-xs font-semibold text-zinc-200">
+                              Survival:{" "}
+                              <span className="font-semibold text-zinc-400">
+                                {typeof gauntletPick?.survival === "boolean"
+                                  ? gauntletPick.survival
+                                    ? "Survives"
+                                    : "Does not survive"
+                                  : "Not set"}
+                              </span>
+                            </div>
+                            <div className="text-xs font-semibold text-zinc-200">
+                              Final entrant:{" "}
+                              <span className="font-semibold text-zinc-400">
+                                {finalEntrant?.name ?? "Not set"}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="pointer-events-none absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full border border-zinc-800 bg-black p-2 text-amber-200 shadow-sm transition group-open:rotate-180">
+                            <ChevronIcon />
+                          </span>
+                        </summary>
+                        <div className="mt-3 space-y-2 text-xs text-zinc-400">
+                          <div className="flex items-center justify-between gap-3">
+                            <span>Survival</span>
+                            <span
+                              className={
+                                !survivalReady
+                                  ? "text-zinc-500"
+                                  : survivalCorrect
+                                    ? "text-emerald-200"
+                                    : "text-red-200"
+                              }
+                            >
+                              {survivalReady
+                                ? survivalCorrect
+                                  ? `+${scoringRules.blind_gauntlet_survival}`
+                                  : "0"
+                                : "Pending"}{" "}
+                              pts
+                            </span>
+                          </div>
+                          <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <span>Appearing wrestlers</span>
+                              <span
+                                className={
+                                  resultReady
+                                    ? entrantPoints >= 0
+                                      ? "text-emerald-200"
+                                      : "text-red-200"
+                                    : "text-zinc-500"
+                                }
+                              >
+                                {resultReady ? entrantPoints : "Pending"} pts
+                              </span>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {selectedEntrants.length > 0 ? (
+                                selectedEntrants.map((entrant) => {
+                                  const isActual = actualEntrantIds.has(entrant!.id);
+                                  return (
+                                    <span
+                                      key={entrant!.id}
+                                      className={`rounded-full border px-2 py-1 ${
+                                        !resultReady
+                                          ? "border-zinc-700 text-zinc-400"
+                                          : isActual
+                                            ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-200"
+                                            : "border-red-500/50 bg-red-500/10 text-red-200"
+                                      }`}
+                                    >
+                                      {entrant!.name}
+                                    </span>
+                                  );
+                                })
+                              ) : (
+                                <span className="text-zinc-500">None selected</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span>Final entrant</span>
+                            <span
+                              className={
+                                !match.gauntlet_final_entrant_id
+                                  ? "text-zinc-500"
+                                  : finalEntrantCorrect
+                                    ? "text-emerald-200"
+                                    : "text-red-200"
+                              }
+                            >
+                              {match.gauntlet_final_entrant_id
+                                ? finalEntrantCorrect
+                                  ? `+${scoringRules.blind_gauntlet_final_entrant}`
+                                  : "0"
+                                : "Pending"}{" "}
+                              pts
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span>Match length</span>
+                            <span
+                              className={
+                                !match.match_length
+                                  ? "text-zinc-500"
+                                  : matchLengthCorrect
+                                    ? "text-emerald-200"
+                                    : "text-red-200"
+                              }
+                            >
+                              {lengthPick ? lengthPick.replace("_", " ") : "Not set"}
+                              {match.match_length
+                                ? ` • ${
+                                    matchLengthCorrect
+                                      ? `+${scoringRules.match_length}`
+                                      : "0"
+                                  } pts`
+                                : ""}
+                            </span>
+                          </div>
+                        </div>
+                      </details>
+                      <div className="peer-open:hidden">
+                        {renderGhostStrip(selectedEntrantIds, 3)}
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <div

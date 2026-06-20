@@ -1,10 +1,18 @@
+import { createClient } from "@supabase/supabase-js";
+
 const SUPABASE_URL =
   process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+const SUPABASE_PUBLISHABLE_KEY =
+  process.env.SUPABASE_PUBLISHABLE_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const SHOW_ID =
   process.env.SHOW_ID ?? "6226e8db-3262-41c6-997c-00e98a184af8";
 const USER_COUNT = Number(process.env.USER_COUNT ?? "12");
 const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN ?? "boutpick.test";
+const AUTH_MODE = process.env.AUTH_MODE ?? "anonymous";
+const USER_CREATE_DELAY_MS = Number(process.env.USER_CREATE_DELAY_MS ?? "1250");
+const USER_CREATE_MAX_RETRIES = Number(process.env.USER_CREATE_MAX_RETRIES ?? "5");
 const RUN_TAG =
   process.env.RUN_TAG ??
   new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -17,8 +25,25 @@ if (!SUPABASE_URL || !SUPABASE_SECRET_KEY || !SHOW_ID) {
   process.exit(1);
 }
 
+if (AUTH_MODE === "anonymous" && !SUPABASE_PUBLISHABLE_KEY) {
+  console.error(
+    "Missing required env var for anonymous users: SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)"
+  );
+  process.exit(1);
+}
+
 if (!USER_COUNT || Number.isNaN(USER_COUNT) || USER_COUNT <= 0) {
   console.error("USER_COUNT must be a positive integer.");
+  process.exit(1);
+}
+
+if (
+  Number.isNaN(USER_CREATE_DELAY_MS) ||
+  USER_CREATE_DELAY_MS < 0 ||
+  Number.isNaN(USER_CREATE_MAX_RETRIES) ||
+  USER_CREATE_MAX_RETRIES < 0
+) {
+  console.error("USER_CREATE_DELAY_MS and USER_CREATE_MAX_RETRIES must be positive numbers.");
   process.exit(1);
 }
 
@@ -32,6 +57,15 @@ const restHeaders = {
   ...authHeaders,
   Prefer: "return=representation,resolution=merge-duplicates",
 };
+
+const createAnonymousClient = () =>
+  createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  });
 
 const AVATAR_KEYS = [
   "default",
@@ -71,6 +105,7 @@ const FINISH_METHOD_OPTIONS = ["pinfall", "submission", "disqualification"];
 const INTERFERENCE_OPTIONS = ["yes", "no"];
 const TAG_MATCH_TYPES = new Set(["tag", "tag_3", "tag_4"]);
 const MULTI_SIDE_MATCH_TYPES = new Set(["triple_threat", "fatal_4_way", "ladder_6"]);
+const BLIND_GAUNTLET_MATCH_TYPE = "blind_gauntlet";
 
 const request = async (url, options) => {
   const res = await fetch(url, options);
@@ -82,6 +117,8 @@ const request = async (url, options) => {
   if (!text) return null;
   return JSON.parse(text);
 };
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const shuffle = (arr, random = Math.random) => {
   const copy = [...arr];
@@ -117,18 +154,79 @@ const createSeededRandom = (seedValue) => {
   };
 };
 
-const createTestUsers = async (count) => {
-  const createdUsers = [];
+const findUserByEmail = async (email) => {
+  let page = 1;
 
-  for (let index = 0; index < count; index += 1) {
-    const displayName = SPOOF_NAMES[index % SPOOF_NAMES.length];
-    const avatarKey = AVATAR_KEYS[index % AVATAR_KEYS.length];
-    const email = `${slugify(displayName)}-${RUN_TAG}-${String(index + 1).padStart(
-      2,
-      "0"
-    )}@${EMAIL_DOMAIN}`;
+  while (true) {
+    const payload = await request(
+      `${SUPABASE_URL}/auth/v1/admin/users?per_page=1000&page=${page}`,
+      { headers: authHeaders }
+    );
+    const users = payload?.users ?? [];
+    const user = users.find((item) => item.email === email);
+    if (user) return user;
+    if (users.length < 1000) return null;
+    page += 1;
+  }
+};
 
-    const user = await request(`${SUPABASE_URL}/auth/v1/admin/users`, {
+const createAnonymousTestUser = async ({ displayName, avatarKey, index }) => {
+  const username = `${displayName} ${RUN_TAG} ${String(index + 1).padStart(2, "0")}`;
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= USER_CREATE_MAX_RETRIES; attempt += 1) {
+    const supabase = createAnonymousClient();
+    const { data, error } = await supabase.auth.signInAnonymously({
+      options: {
+        data: {
+          display_name: username,
+          avatar_key: avatarKey,
+          marketing_opt_in: false,
+          test_seed: true,
+          test_seed_show_id: SHOW_ID,
+          test_seed_run_tag: RUN_TAG,
+        },
+      },
+    });
+
+    if (!error && data.user) {
+      await supabase.auth.signOut();
+
+      return {
+        id: data.user.id,
+        email: null,
+        displayName: username,
+        avatarKey,
+      };
+    }
+
+    await supabase.auth.signOut();
+    lastError = error;
+    const message = error?.message ?? "";
+    const isRateLimited = message.toLowerCase().includes("rate limit");
+    if (!isRateLimited || attempt === USER_CREATE_MAX_RETRIES) {
+      break;
+    }
+
+    const waitMs = USER_CREATE_DELAY_MS * (attempt + 2);
+    console.log(
+      `Rate limited creating ${username}. Retrying in ${Math.round(waitMs / 1000)}s...`
+    );
+    await sleep(waitMs);
+  }
+
+  throw new Error(lastError?.message ?? "Failed to create anonymous test user.");
+};
+
+const createEmailTestUser = async ({ displayName, avatarKey, index }) => {
+  const email = `${slugify(displayName)}-${RUN_TAG}-${String(index + 1).padStart(
+    2,
+    "0"
+  )}@${EMAIL_DOMAIN}`;
+  let user;
+
+  try {
+    user = await request(`${SUPABASE_URL}/auth/v1/admin/users`, {
       method: "POST",
       headers: authHeaders,
       body: JSON.stringify({
@@ -144,13 +242,40 @@ const createTestUsers = async (count) => {
         },
       }),
     });
+  } catch (error) {
+    if (!String(error?.message ?? "").includes("email_exists")) {
+      throw error;
+    }
+    user = await findUserByEmail(email);
+    if (!user) {
+      throw error;
+    }
+    console.log(`Reusing existing test user: ${email}`);
+  }
 
-    createdUsers.push({
-      id: user.id,
-      email,
-      displayName,
-      avatarKey,
-    });
+  return {
+    id: user.id,
+    email,
+    displayName,
+    avatarKey,
+  };
+};
+
+const createTestUsers = async (count) => {
+  const createdUsers = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const displayName = SPOOF_NAMES[index % SPOOF_NAMES.length];
+    const avatarKey = AVATAR_KEYS[index % AVATAR_KEYS.length];
+    const user =
+      AUTH_MODE === "email"
+        ? await createEmailTestUser({ displayName, avatarKey, index })
+        : await createAnonymousTestUser({ displayName, avatarKey, index });
+
+    createdUsers.push(user);
+    if (AUTH_MODE === "anonymous" && USER_CREATE_DELAY_MS > 0 && index < count - 1) {
+      await sleep(USER_CREATE_DELAY_MS);
+    }
   }
 
   return createdUsers;
@@ -160,6 +285,7 @@ const buildMatchPayload = ({
   matches,
   matchSides,
   matchEntrants,
+  gauntletCandidates,
   useConfidencePoints,
   userIndex,
 }) => {
@@ -168,7 +294,10 @@ const buildMatchPayload = ({
   const matchFinishPicks = {};
   const matchLengthPicks = {};
   const matchInterferencePicks = {};
-  const rankedMatchIds = matches.map((match) => match.id);
+  const blindGauntletPicks = {};
+  const rankedMatchIds = matches
+    .filter((match) => match.match_type !== BLIND_GAUNTLET_MATCH_TYPE)
+    .map((match) => match.id);
   const seededRandom = createSeededRandom(`${SHOW_ID}:${userIndex}`);
   const confidenceRanks = useConfidencePoints
     ? shuffle(
@@ -176,8 +305,31 @@ const buildMatchPayload = ({
         seededRandom
       )
     : [];
+  const confidenceRankByMatchId = new Map(
+    rankedMatchIds.map((matchId, index) => [matchId, confidenceRanks[index] ?? null])
+  );
 
   matches.forEach((match, matchIndex) => {
+    matchLengthPicks[match.id] = pickOne(MATCH_LENGTH_OPTIONS, seededRandom);
+
+    if (match.match_type === BLIND_GAUNTLET_MATCH_TYPE) {
+      const candidateIds = gauntletCandidates
+        .filter((row) => row.match_id === match.id)
+        .map((row) => row.entrant_id);
+      const shuffledCandidateIds = shuffle(candidateIds, seededRandom);
+      const maxSelected = Math.min(shuffledCandidateIds.length, 5);
+      const selectedCount =
+        maxSelected > 0 ? 1 + Math.floor(seededRandom() * maxSelected) : 0;
+      const entrantIds = shuffledCandidateIds.slice(0, selectedCount);
+
+      blindGauntletPicks[match.id] = {
+        survival: seededRandom() >= 0.5,
+        entrant_ids: entrantIds,
+        final_entrant_id: pickOne(entrantIds, seededRandom),
+      };
+      return;
+    }
+
     const sidesForMatch = matchSides.filter((side) => side.match_id === match.id);
     const entrantsForMatch = matchEntrants.filter(
       (entry) => entry.match_id === match.id
@@ -194,11 +346,10 @@ const buildMatchPayload = ({
     matchPicks[match.id] = selectedSide?.id ?? null;
 
     if (useConfidencePoints) {
-      matchConfidencePicks[match.id] = confidenceRanks[matchIndex] ?? null;
+      matchConfidencePicks[match.id] = confidenceRankByMatchId.get(match.id) ?? null;
     }
 
     const method = pickOne(FINISH_METHOD_OPTIONS, seededRandom);
-    matchLengthPicks[match.id] = pickOne(MATCH_LENGTH_OPTIONS, seededRandom);
     matchInterferencePicks[match.id] = pickOne(INTERFERENCE_OPTIONS, seededRandom);
 
     let finishWinner = null;
@@ -245,6 +396,7 @@ const buildMatchPayload = ({
     match_finish_picks: matchFinishPicks,
     match_length_picks: matchLengthPicks,
     match_interference_picks: matchInterferencePicks,
+    blind_gauntlet_picks: blindGauntletPicks,
   };
 };
 
@@ -270,7 +422,7 @@ const run = async () => {
   }
 
   const matchIds = matches.map((match) => match.id);
-  const [matchSides, matchEntrants] = await Promise.all([
+  const [matchSides, matchEntrants, gauntletCandidates] = await Promise.all([
     request(
       `${SUPABASE_URL}/rest/v1/match_sides?select=id,match_id,label&match_id=in.(${matchIds.join(
         ","
@@ -279,6 +431,12 @@ const run = async () => {
     ),
     request(
       `${SUPABASE_URL}/rest/v1/match_entrants?select=match_id,entrant_id,side_id&match_id=in.(${matchIds.join(
+        ","
+      )})`,
+      { headers: restHeaders }
+    ),
+    request(
+      `${SUPABASE_URL}/rest/v1/gauntlet_candidate_entrants?select=match_id,entrant_id&match_id=in.(${matchIds.join(
         ","
       )})`,
       { headers: restHeaders }
@@ -297,6 +455,7 @@ const run = async () => {
         matches,
         matchSides: matchSides ?? [],
         matchEntrants: matchEntrants ?? [],
+        gauntletCandidates: gauntletCandidates ?? [],
         useConfidencePoints: show.use_confidence_points ?? false,
         userIndex: index,
       }),
@@ -313,12 +472,12 @@ const run = async () => {
     });
 
     console.log(
-      `Seeded ${user.displayName} (${user.email}) for show ${show.name}`
+      `Seeded ${user.displayName}${user.email ? ` (${user.email})` : ""} for show ${show.name}`
     );
   }
 
   console.log(
-    `Created ${createdUsers.length} test profiles and picks for show ${show.name} (${SHOW_ID}).`
+    `Created ${createdUsers.length} ${AUTH_MODE} test profiles and picks for show ${show.name} (${SHOW_ID}).`
   );
 };
 
