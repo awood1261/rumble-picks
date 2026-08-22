@@ -1,32 +1,90 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  BoutPick is a mobile-first fan prediction game for professional wrestling
+  shows. It is not gambling: product changes must preserve a game/leaderboard
+  experience without wagering, payouts, odds, or betting language.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Primary user experiences include browsing promotions and shows, signing in or
+  playing anonymously where supported, submitting predictions before lock,
+  viewing live/public scoreboards, managing a profile/avatar, and using admin
+  tools to create shows, matches, entrants, results, and score recalculations.
+  A separate championship/title lineage experience lets eligible users claim or
+  view promotion-scoped champions.
 
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+  Core domains are promotions, shows, events/rumbles, matches, match sides,
+  wrestlers/entrants, eliminators, show questions, predictions, scoring,
+  scoreboards, users/profiles, admin operations, championships/title lineage,
+  images/storage, and analytics.
+
+  Current architecture is Next.js App Router, React, TypeScript, Tailwind CSS,
+  and Supabase Postgres/Auth/RLS/Storage. Most interactive flows are client
+  route components that call the publishable Supabase client directly under
+  RLS. Server-side Supabase admin access exists mainly for champion/title
+  helpers and bypasses RLS, so proposals must justify any new use.
+
+  Supabase RLS is the primary authorization boundary. Public show/event/match
+  and scoreboard data is broadly readable; profile and pick writes are
+  user-owned; most content, result, and scoring writes are admin-only through
+  profiles.is_admin and public.is_admin(auth.uid()). Promotion boundaries and
+  RLS guarantees must be preserved.
+
+  Shows are promotion-scoped through shows.promotion_id and routes such as
+  /shows/[promotionId], /shows/[promotionId]/[showId], and /title/[promotionId].
+  Specs that touch shows, titles, scoreboards, or admin flows must account for
+  promotion scope.
+
+  Current predictions are stored in picks.payload JSONB. The active app behavior
+  is show-level picks using picks.show_id, with payload sections for rumbles,
+  eliminators, show questions, match winners, confidence ranks, match finishes,
+  match length/interference, and blind gauntlet picks. Legacy event-level picks
+  using picks.event_id still exist in schema/scripts and must not be normalized
+  or removed without an explicit migration plan.
+
+  Current app scoring source of truth is src/lib/scoring.ts with point values in
+  src/lib/scoringRules.ts. Legacy database scoring also exists in
+  supabase/schema.sql for event-level rumble scoring. Scoring changes must
+  explicitly define point rules, readiness rules, ties, negative points, partial
+  results, recalculation behavior, and scoreboard impact.
+
+  The championship subsystem is distinct from normal predictions. It uses
+  champion card codes, champion claims, completed show winners, and title
+  lineage helpers. Specs touching championship behavior should treat that
+  subsystem separately from ordinary picks and scores.
+
+  Database state is brownfield. supabase/schema.sql is a useful reference but
+  does not contain every column used by the app, and sidecar SQL files describe
+  later changes. There are no generated Supabase database types. Database
+  changes must explicitly account for schema, RLS, migration/backfill impact,
+  and compatibility with existing data.
+
+  Existing behavior in code is the brownfield source of truth until an OpenSpec
+  change explicitly modifies it. Large route components contain substantial
+  domain logic; proposals should reuse established architecture unless they
+  explicitly justify changing it. Prediction changes must consider already
+  submitted picks and JSON payload compatibility.
+
+  There is currently no automated application test suite and no Supabase Edge
+  Functions. Verification plans should use available commands such as lint/build
+  plus targeted manual checks unless a change explicitly introduces tests.
+
+rules:
+  proposal:
+    - State whether the change affects promotion scope, RLS/authorization, predictions, scoring, database schema, or existing submitted picks.
+    - Treat unrelated refactors and architecture migrations as non-goals unless they are the explicit purpose of the change.
+  specs:
+    - Requirements must describe user-visible behavior and data compatibility, not just implementation tasks.
+    - Prediction and scoring requirements must include edge cases for incomplete data, existing picks, and recalculation/display behavior.
+  tasks:
+    - Include verification tasks using the currently available test surface; note when only lint/build/manual verification is possible.
+    - Include migration/backfill/RLS tasks for database-impacting changes.
+
+operations:
+  apply:
+    guidance:
+      - Inspect current implementation before editing; preserve brownfield behavior outside the accepted change scope.
+      - Do not introduce new data-access, auth, scoring, or state-management patterns without proposal justification.
+      - Keep test summaries honest about the current lack of an automated application test suite.
+  archive:
+    guidance:
+      - Summarize behavior changed, schema/RLS impact, and verification performed.
