@@ -11,23 +11,23 @@
 
 ## 3. Geofence Utilities
 
-- [ ] 3.1 Add shared client-safe helpers for Haversine distance, geofence pass/fail/inconclusive evaluation, and verification storage keys, and verify helper behavior with focused manual or lightweight local checks.
-- [ ] 3.2 Implement short-lived show-scoped browser verification storage without persisting exact latitude/longitude and verify stored data contains only verification metadata.
+- [x] 3.1 Add shared client-safe helpers for Haversine distance, geofence pass/fail/inconclusive evaluation, and verification storage keys, and verify helper behavior with focused manual or lightweight local checks.
+- [x] 3.2 Implement short-lived show-scoped browser verification storage without persisting exact latitude/longitude and verify stored data contains only verification metadata.
 
 ## 4. Show Verification Experience
 
-- [ ] 4.1 Load location gate fields on the show detail page and render an explanatory verification state for gated shows before the browser permission prompt.
-- [ ] 4.2 Implement one-time browser geolocation verification with checking, verified, outside-geofence, permission-denied, unavailable/timeout, imprecise, and unsupported-browser states, and verify retry behavior.
-- [ ] 4.3 Preserve existing show splash behavior for ungated shows, signed-in users, signed-out users, email-required shows, and anonymous-profile shows.
+- [x] 4.1 Load location gate fields on the show detail page and render an explanatory verification state for gated shows before the browser permission prompt.
+- [x] 4.2 Implement one-time browser geolocation verification with checking, verified, outside-geofence, permission-denied, unavailable/timeout, imprecise, and unsupported-browser states, and verify retry behavior.
+- [x] 4.3 Preserve existing show splash behavior for ungated shows, signed-in users, signed-out users, email-required shows, and anonymous-profile shows.
 
 ## 5. Picks Entry And Save Enforcement
 
-- [ ] 5.1 Load location gate fields in `/picks` for the selected show and block the picks UI when a gated show lacks valid unexpired verification, with a route back to verification.
-- [ ] 5.2 Block `handleSave` for gated shows without valid unexpired verification before upserting `picks`, and verify existing lock/confidence/blind-gauntlet validations still apply after verification.
-- [ ] 5.3 Preserve existing show-level pick loading, updating, ownership, and `picks.payload` compatibility for ungated shows and verified gated shows.
+- [x] 5.1 Load location gate fields in `/picks` for the selected show and block the picks UI when a gated show lacks valid unexpired verification, with a route back to verification.
+- [x] 5.2 Block `handleSave` for gated shows without valid unexpired verification before upserting `picks`, and verify existing lock/confidence/blind-gauntlet validations still apply after verification.
+- [x] 5.3 Preserve existing show-level pick loading, updating, ownership, and `picks.payload` compatibility for ungated shows and verified gated shows.
 
 ## 6. Verification
 
-- [ ] 6.1 Run `npm run lint` and address failures introduced by this change.
-- [ ] 6.2 Run `npm run build` and address failures introduced by this change.
-- [ ] 6.3 Manually verify admin geofence configuration, gated show verification states, direct `/picks?show=...` enforcement, ungated show regression behavior, and submitted pick compatibility.
+- [x] 6.1 Run `npm run lint` and address failures introduced by this change.
+- [x] 6.2 Run `npm run build` and address failures introduced by this change.
+- [x] 6.3 Manually verify admin geofence configuration, gated show verification states, direct `/picks?show=...` enforcement, ungated show regression behavior, and submitted pick compatibility.
