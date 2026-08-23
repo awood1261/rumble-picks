@@ -5,9 +5,9 @@
 
 ## 2. Admin Show Configuration
 
-- [ ] 2.1 Extend admin show create state, edit state, Supabase insert/update payloads, and reset/hydration paths for location verification fields and verify saved values are selected back into admin state.
-- [ ] 2.2 Extend the existing show editor/admin modal UI with controls for enabling location verification, venue name, venue address, venue latitude, venue longitude, and radius, and verify ungated show editing still works.
-- [ ] 2.3 Add admin-side validation for gated shows so required coordinates and radius are present and valid before save, and verify incomplete gated configuration shows a clear admin error.
+- [x] 2.1 Extend admin show create state, edit state, Supabase insert/update payloads, and reset/hydration paths for location verification fields and verify saved values are selected back into admin state.
+- [x] 2.2 Extend the existing show editor/admin modal UI with controls for enabling location verification, venue name, venue address, venue latitude, venue longitude, and radius, and verify ungated show editing still works.
+- [x] 2.3 Add admin-side validation for gated shows so required coordinates and radius are present and valid before save, and verify incomplete gated configuration shows a clear admin error.
 
 ## 3. Geofence Utilities
 
