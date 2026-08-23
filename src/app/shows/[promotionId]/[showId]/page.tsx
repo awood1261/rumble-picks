@@ -80,7 +80,7 @@ export default function ShowDetailPage() {
       const { data, error } = await supabase
         .from("shows")
         .select(
-          "id, name, tagline, image_url, starts_at, status, promotion_id, requires_email_registration, lock_picks_at_start"
+          "id, name, tagline, image_url, starts_at, status, promotion_id, requires_email_registration, lock_picks_at_start, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
         )
         .eq("id", showId)
         .maybeSingle();

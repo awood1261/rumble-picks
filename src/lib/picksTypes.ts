@@ -45,6 +45,12 @@ export type ShowRow = {
   is_featured_play_show?: boolean | null;
   is_over?: boolean | null;
   use_confidence_points?: boolean | null;
+  requires_location_verification?: boolean | null;
+  venue_name?: string | null;
+  venue_address?: string | null;
+  venue_latitude?: number | null;
+  venue_longitude?: number | null;
+  location_radius_meters?: number | null;
 };
 
 export type PromotionRow = {

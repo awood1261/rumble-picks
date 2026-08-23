@@ -799,7 +799,7 @@ function PicksPageInner() {
     Promise.all([
           supabase
             .from("shows")
-            .select("id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start, use_confidence_points")
+            .select("id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters")
             .order("name", { ascending: true }),
       supabase
         .from("promotions")

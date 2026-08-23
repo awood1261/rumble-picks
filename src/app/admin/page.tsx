@@ -44,6 +44,12 @@ type ShowRow = {
   is_featured_play_show?: boolean | null;
   is_over?: boolean | null;
   use_confidence_points?: boolean | null;
+  requires_location_verification?: boolean | null;
+  venue_name?: string | null;
+  venue_address?: string | null;
+  venue_latitude?: number | null;
+  venue_longitude?: number | null;
+  location_radius_meters?: number | null;
 };
 
 type PromotionRow = {
@@ -924,7 +930,7 @@ export default function AdminPage() {
         supabase
           .from("shows")
           .select(
-            "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points"
+            "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
           )
           .order("created_at", { ascending: false }),
         supabase
@@ -1213,7 +1219,7 @@ export default function AdminPage() {
           supabase
             .from("shows")
             .select(
-              "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points"
+              "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
             )
             .order("created_at", { ascending: false }),
           supabase

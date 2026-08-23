@@ -52,6 +52,12 @@ create table if not exists public.shows (
   lock_picks_at_start boolean not null default true,
   is_featured_play_show boolean not null default false,
   is_over boolean not null default false,
+  requires_location_verification boolean not null default false,
+  venue_name text,
+  venue_address text,
+  venue_latitude double precision,
+  venue_longitude double precision,
+  location_radius_meters integer,
   created_at timestamptz not null default now()
 );
 
@@ -72,6 +78,24 @@ alter table public.shows
 
 alter table public.shows
   add column if not exists is_over boolean not null default false;
+
+alter table public.shows
+  add column if not exists requires_location_verification boolean not null default false;
+
+alter table public.shows
+  add column if not exists venue_name text;
+
+alter table public.shows
+  add column if not exists venue_address text;
+
+alter table public.shows
+  add column if not exists venue_latitude double precision;
+
+alter table public.shows
+  add column if not exists venue_longitude double precision;
+
+alter table public.shows
+  add column if not exists location_radius_meters integer;
 
 create table if not exists public.promotions (
   id uuid primary key default gen_random_uuid(),
