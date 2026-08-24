@@ -21,6 +21,18 @@ type ShowEditorProps = {
   setIsOver: (value: boolean) => void;
   useConfidencePoints: boolean;
   setUseConfidencePoints: (value: boolean) => void;
+  requiresLocationVerification: boolean;
+  setRequiresLocationVerification: (value: boolean) => void;
+  venueName: string;
+  setVenueName: (value: string) => void;
+  venueAddress: string;
+  setVenueAddress: (value: string) => void;
+  venueLatitude: string;
+  setVenueLatitude: (value: string) => void;
+  venueLongitude: string;
+  setVenueLongitude: (value: string) => void;
+  locationRadiusMeters: string;
+  setLocationRadiusMeters: (value: string) => void;
   startsAt: string;
   setStartsAt: (value: string) => void;
   saving: boolean;
@@ -50,6 +62,18 @@ export const ShowEditor = ({
   setIsOver,
   useConfidencePoints,
   setUseConfidencePoints,
+  requiresLocationVerification,
+  setRequiresLocationVerification,
+  venueName,
+  setVenueName,
+  venueAddress,
+  setVenueAddress,
+  venueLatitude,
+  setVenueLatitude,
+  venueLongitude,
+  setVenueLongitude,
+  locationRadiusMeters,
+  setLocationRadiusMeters,
   startsAt,
   setStartsAt,
   saving,
@@ -177,5 +201,57 @@ export const ShowEditor = ({
       />
       Use confidence points for match winners
     </label>
+    <label className="mt-2 flex items-center gap-3 text-sm text-zinc-300">
+      <input
+        type="checkbox"
+        className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+        checked={requiresLocationVerification}
+        onChange={(event) =>
+          setRequiresLocationVerification(event.target.checked)
+        }
+        disabled={disabled}
+      />
+      Require location verification
+    </label>
+    <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-[1fr_1fr_0.8fr_0.8fr_0.8fr]">
+      <input
+        className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+        placeholder="Venue name"
+        value={venueName}
+        onChange={(event) => setVenueName(event.target.value)}
+        disabled={disabled}
+      />
+      <input
+        className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+        placeholder="Venue address"
+        value={venueAddress}
+        onChange={(event) => setVenueAddress(event.target.value)}
+        disabled={disabled}
+      />
+      <input
+        className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+        inputMode="decimal"
+        placeholder="Latitude"
+        value={venueLatitude}
+        onChange={(event) => setVenueLatitude(event.target.value)}
+        disabled={disabled}
+      />
+      <input
+        className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+        inputMode="decimal"
+        placeholder="Longitude"
+        value={venueLongitude}
+        onChange={(event) => setVenueLongitude(event.target.value)}
+        disabled={disabled}
+      />
+      <input
+        className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+        inputMode="numeric"
+        placeholder="Radius meters"
+        value={locationRadiusMeters}
+        onChange={(event) => setLocationRadiusMeters(event.target.value)}
+        disabled={disabled}
+      />
+    </div>
   </div>
 );

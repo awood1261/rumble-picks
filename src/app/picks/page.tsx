@@ -6,6 +6,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import { scoringRules } from "../../lib/scoringRules";
+import {
+  getStoredLocationVerification,
+  isValidLocationGateConfig,
+} from "../../lib/locationGate";
 import posthog from "posthog-js";
 import {
   CustomEntrantModal,
@@ -247,11 +251,34 @@ function PicksPageInner() {
   const [editSection, setEditSection] = useState<EditSection>(null);
   const [focusedEventId, setFocusedEventId] = useState<string>("");
   const [isPicksLoading, setIsPicksLoading] = useState(false);
+  const [hasLocationVerification, setHasLocationVerification] = useState(false);
 
   const selectedShow = useMemo(
     () => shows.find((show) => show.id === selectedShowId) ?? null,
     [shows, selectedShowId],
   );
+  const selectedShowRequiresLocationVerification =
+    !!selectedShow?.requires_location_verification;
+  const selectedShowLocationGateConfig = useMemo(
+    () => ({
+      venueLatitude: selectedShow?.venue_latitude,
+      venueLongitude: selectedShow?.venue_longitude,
+      radiusMeters: selectedShow?.location_radius_meters,
+    }),
+    [
+      selectedShow?.location_radius_meters,
+      selectedShow?.venue_latitude,
+      selectedShow?.venue_longitude,
+    ],
+  );
+  const hasValidSelectedShowLocationGateConfig = isValidLocationGateConfig(
+    selectedShowLocationGateConfig,
+  );
+  const isLocationGateSatisfied =
+    !selectedShowRequiresLocationVerification || hasLocationVerification;
+  const selectedShowVerificationHref = selectedShow?.promotion_id
+    ? `/shows/${selectedShow.promotion_id}/${selectedShow.id}`
+    : "/shows";
   const showUsesConfidencePoints = selectedShow?.use_confidence_points ?? false;
   const showLocksAtStart = selectedShow?.lock_picks_at_start ?? true;
   const showEvents = useMemo(() => {
@@ -799,7 +826,7 @@ function PicksPageInner() {
     Promise.all([
           supabase
             .from("shows")
-            .select("id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start, use_confidence_points")
+            .select("id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters")
             .order("name", { ascending: true }),
       supabase
         .from("promotions")
@@ -863,10 +890,38 @@ function PicksPageInner() {
   }, [selectedShowId]);
 
   useEffect(() => {
-    if (!selectedShow?.starts_at) return;
+    if (!selectedShow?.starts_at && !selectedShowRequiresLocationVerification) {
+      return;
+    }
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [selectedShow?.starts_at]);
+  }, [selectedShow?.starts_at, selectedShowRequiresLocationVerification]);
+
+  useEffect(() => {
+    if (!selectedShow?.id || !selectedShowRequiresLocationVerification) {
+      setHasLocationVerification(false);
+      return;
+    }
+    if (!hasValidSelectedShowLocationGateConfig) {
+      setHasLocationVerification(false);
+      return;
+    }
+
+    setHasLocationVerification(
+      Boolean(
+        getStoredLocationVerification({
+          showId: selectedShow.id,
+          userId,
+        }),
+      ),
+    );
+  }, [
+    hasValidSelectedShowLocationGateConfig,
+    now,
+    selectedShow?.id,
+    selectedShowRequiresLocationVerification,
+    userId,
+  ]);
 
   const loadRumbleEntries = useCallback(async () => {
     if (!selectedShowId) return;
@@ -1558,6 +1613,23 @@ function PicksPageInner() {
 
   const handleSave = async () => {
     if (!userId || !selectedShowId) return false;
+    if (selectedShowRequiresLocationVerification) {
+      const storedVerification =
+        hasValidSelectedShowLocationGateConfig && selectedShow
+          ? getStoredLocationVerification({
+              showId: selectedShow.id,
+              userId,
+            })
+          : null;
+      if (!storedVerification) {
+        setHasLocationVerification(false);
+        setMessage(
+          "Location verification is required before saving picks for this show.",
+        );
+        return false;
+      }
+      setHasLocationVerification(true);
+    }
     if (isLocked) {
       setMessage("Picks are locked for this show.");
       return false;
@@ -2041,6 +2113,34 @@ function PicksPageInner() {
           <p className="mt-4 text-sm text-zinc-400">
             Visit the login screen to make your picks.
           </p>
+        </main>
+      </div>
+    );
+  }
+
+  if (selectedShowRequiresLocationVerification && !isLocationGateSatisfied) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-200">
+        <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+            Location check required
+          </p>
+          <h1 className="mt-4 text-2xl font-semibold text-zinc-100">
+            Verify attendance to make picks
+          </h1>
+          <p className="mt-4 text-sm text-zinc-400">
+            {hasValidSelectedShowLocationGateConfig
+              ? `Complete location verification for ${
+                  selectedShow?.name ?? "this show"
+                } before entering picks.`
+              : "This show is missing venue coordinates or a radius, so picks cannot be opened until the show configuration is complete."}
+          </p>
+          <Link
+            className="mt-6 inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
+            href={selectedShowVerificationHref}
+          >
+            Return to show
+          </Link>
         </main>
       </div>
     );

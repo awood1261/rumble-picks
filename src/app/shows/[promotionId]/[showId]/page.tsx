@@ -1,12 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabaseClient";
 import { avatarSrcForKey } from "../../../../lib/avatarOptions";
 import type { PromotionRow, ShowRow } from "../../../../lib/picksTypes";
+import {
+  LOCATION_GATE_GEOLOCATION_OPTIONS,
+  evaluateLocationGate,
+  getStoredLocationVerification,
+  isValidLocationGateConfig,
+  saveLocationVerification,
+} from "../../../../lib/locationGate";
 import type {
   ChampionParticipant,
   PromotionChampionshipStatus,
@@ -15,6 +22,18 @@ import posthog from "posthog-js";
 
 const BOUTPICK_FPC_BELT_URL =
   "https://fqfufzrebrxubrechdal.supabase.co/storage/v1/object/public/belts/boutpick/bout-pick-prediction-title.png";
+
+type LocationVerificationStatus =
+  | "idle"
+  | "checking"
+  | "verified"
+  | "outside"
+  | "permission_denied"
+  | "unavailable"
+  | "timeout"
+  | "imprecise"
+  | "unsupported"
+  | "invalid_config";
 
 export default function ShowDetailPage() {
   const params = useParams();
@@ -32,8 +51,27 @@ export default function ShowDetailPage() {
   const [championshipStatusLoading, setChampionshipStatusLoading] =
     useState(false);
   const [isSignedIn, setIsSignedIn] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [locationVerificationStatus, setLocationVerificationStatus] =
+    useState<LocationVerificationStatus>("idle");
+  const [locationVerificationDetail, setLocationVerificationDetail] =
+    useState<string | null>(null);
+
+  const locationGateConfig = useMemo(
+    () => ({
+      venueLatitude: show?.venue_latitude,
+      venueLongitude: show?.venue_longitude,
+      radiusMeters: show?.location_radius_meters,
+    }),
+    [show?.location_radius_meters, show?.venue_latitude, show?.venue_longitude]
+  );
+  const requiresLocationVerification = !!show?.requires_location_verification;
+  const hasValidLocationGateConfig =
+    isValidLocationGateConfig(locationGateConfig);
+  const canEnterPicks =
+    !requiresLocationVerification || locationVerificationStatus === "verified";
 
   const formattedStart = (() => {
     if (!show?.starts_at) return null;
@@ -80,7 +118,7 @@ export default function ShowDetailPage() {
       const { data, error } = await supabase
         .from("shows")
         .select(
-          "id, name, tagline, image_url, starts_at, status, promotion_id, requires_email_registration, lock_picks_at_start"
+          "id, name, tagline, image_url, starts_at, status, promotion_id, requires_email_registration, lock_picks_at_start, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
         )
         .eq("id", showId)
         .maybeSingle();
@@ -207,8 +245,10 @@ export default function ShowDetailPage() {
       if (ignore) return;
       if (!error && data?.user) {
         setIsSignedIn(true);
+        setUserId(data.user.id);
       } else {
         setIsSignedIn(false);
+        setUserId(null);
       }
       setAuthChecked(true);
     };
@@ -217,6 +257,129 @@ export default function ShowDetailPage() {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!show?.id || !requiresLocationVerification) {
+      setLocationVerificationStatus("idle");
+      setLocationVerificationDetail(null);
+      return;
+    }
+    if (!hasValidLocationGateConfig) {
+      setLocationVerificationStatus("invalid_config");
+      setLocationVerificationDetail(
+        "This show is missing venue coordinates or a radius."
+      );
+      return;
+    }
+
+    const storedVerification = getStoredLocationVerification({
+      showId: show.id,
+      userId,
+    });
+    if (storedVerification) {
+      setLocationVerificationStatus("verified");
+      setLocationVerificationDetail(
+        "Location already verified for this show."
+      );
+    } else {
+      setLocationVerificationStatus("idle");
+      setLocationVerificationDetail(null);
+    }
+  }, [
+    hasValidLocationGateConfig,
+    requiresLocationVerification,
+    show?.id,
+    userId,
+  ]);
+
+  const handleVerifyLocation = () => {
+    if (!show?.id) return;
+    if (!hasValidLocationGateConfig) {
+      setLocationVerificationStatus("invalid_config");
+      setLocationVerificationDetail(
+        "This show is missing venue coordinates or a radius."
+      );
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocationVerificationStatus("unsupported");
+      setLocationVerificationDetail(
+        "This browser does not support location verification."
+      );
+      return;
+    }
+
+    setLocationVerificationStatus("checking");
+    setLocationVerificationDetail("Checking your location for this show...");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const result = evaluateLocationGate(locationGateConfig, {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracyMeters: position.coords.accuracy,
+        });
+
+        if (result.status === "inside") {
+          saveLocationVerification({
+            showId: show.id,
+            userId,
+            showStartsAt: show.starts_at,
+          });
+          setLocationVerificationStatus("verified");
+          setLocationVerificationDetail(
+            "Location verified for this show. You can continue to picks."
+          );
+          posthog.capture("show_location_verified", {
+            show_id: show.id,
+            promotion_id: show.promotion_id,
+          });
+          return;
+        }
+
+        if (result.status === "inconclusive") {
+          setLocationVerificationStatus("imprecise");
+          setLocationVerificationDetail(
+            "Your browser returned an imprecise location. Try again from the venue."
+          );
+          return;
+        }
+
+        if (result.status === "outside") {
+          setLocationVerificationStatus("outside");
+          setLocationVerificationDetail(
+            "Your device does not appear to be inside the venue area for this show."
+          );
+          return;
+        }
+
+        setLocationVerificationStatus("invalid_config");
+        setLocationVerificationDetail(
+          "This show is missing venue coordinates or a radius."
+        );
+      },
+      (error) => {
+        if (error.code === 1) {
+          setLocationVerificationStatus("permission_denied");
+          setLocationVerificationDetail(
+            "Location permission is needed for this show. Enable location access and try again."
+          );
+          return;
+        }
+        if (error.code === 3) {
+          setLocationVerificationStatus("timeout");
+          setLocationVerificationDetail(
+            "Location verification timed out. Try again near the venue."
+          );
+          return;
+        }
+        setLocationVerificationStatus("unavailable");
+        setLocationVerificationDetail(
+          "Your browser could not determine your location. Try again near the venue."
+        );
+      },
+      LOCATION_GATE_GEOLOCATION_OPTIONS
+    );
+  };
 
   if (!showId) {
     return (
@@ -295,8 +458,56 @@ export default function ShowDetailPage() {
                 {show.tagline}
               </p>
             ) : null}
+            {requiresLocationVerification && lockStatusText !== "Show is locked" ? (
+              <section className="mt-6 rounded-3xl border border-amber-400/25 bg-black/55 p-5 backdrop-blur-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200">
+                  Location check required
+                </p>
+                <h2 className="mt-3 text-xl font-semibold text-zinc-100">
+                  Verify attendance to make picks
+                </h2>
+                <p className="mt-2 text-sm text-zinc-200">
+                  This show is limited to fans at{" "}
+                  {show.venue_name ?? "the venue"}. BoutPick will ask your
+                  browser for a one-time location check before picks open.
+                </p>
+                {show.venue_address ? (
+                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-zinc-400">
+                    {show.venue_address}
+                  </p>
+                ) : null}
+                {locationVerificationDetail ? (
+                  <p
+                    className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
+                      locationVerificationStatus === "verified"
+                        ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-100"
+                        : locationVerificationStatus === "checking"
+                          ? "border-sky-300/35 bg-sky-300/10 text-sky-100"
+                          : "border-amber-400/30 bg-amber-400/10 text-amber-100"
+                    }`}
+                  >
+                    {locationVerificationDetail}
+                  </p>
+                ) : null}
+                {locationVerificationStatus !== "verified" &&
+                locationVerificationStatus !== "invalid_config" ? (
+                  <button
+                    className="mt-4 inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                    type="button"
+                    onClick={handleVerifyLocation}
+                    disabled={locationVerificationStatus === "checking"}
+                  >
+                    {locationVerificationStatus === "checking"
+                      ? "Checking..."
+                      : "Verify location"}
+                  </button>
+                ) : null}
+              </section>
+            ) : null}
             <div className="mt-6 flex flex-wrap gap-3">
-              {lockStatusText !== "Show is locked" && isSignedIn ? (
+              {lockStatusText !== "Show is locked" &&
+              isSignedIn &&
+              canEnterPicks ? (
                 <Link
                   href={`/picks?show=${show.id}`}
                   className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
@@ -425,7 +636,10 @@ export default function ShowDetailPage() {
                 </div>
               </section>
             ) : null}
-            {authChecked && !isSignedIn && lockStatusText !== "Show is locked" ? (
+            {authChecked &&
+            !isSignedIn &&
+            lockStatusText !== "Show is locked" &&
+            canEnterPicks ? (
               <div className="mt-6 space-y-3">
                 <p className="text-sm text-zinc-200">
                   {show?.requires_email_registration

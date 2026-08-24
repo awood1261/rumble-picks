@@ -44,6 +44,12 @@ type ShowRow = {
   is_featured_play_show?: boolean | null;
   is_over?: boolean | null;
   use_confidence_points?: boolean | null;
+  requires_location_verification?: boolean | null;
+  venue_name?: string | null;
+  venue_address?: string | null;
+  venue_latitude?: number | null;
+  venue_longitude?: number | null;
+  location_radius_meters?: number | null;
 };
 
 type PromotionRow = {
@@ -197,6 +203,90 @@ type PickRow = {
   payload: Record<string, unknown> | null;
 };
 
+type ShowLocationGateForm = {
+  requiresLocationVerification: boolean;
+  venueName: string;
+  venueAddress: string;
+  venueLatitude: string;
+  venueLongitude: string;
+  locationRadiusMeters: string;
+};
+
+type ShowLocationGatePayload = {
+  requires_location_verification: boolean;
+  venue_name: string | null;
+  venue_address: string | null;
+  venue_latitude: number | null;
+  venue_longitude: number | null;
+  location_radius_meters: number | null;
+};
+
+type ShowLocationGateResult =
+  | { payload: ShowLocationGatePayload }
+  | { error: string };
+
+const parseOptionalNumber = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return { value: null, error: false };
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed)
+    ? { value: parsed, error: false }
+    : { value: null, error: true };
+};
+
+const buildShowLocationGatePayload = (
+  form: ShowLocationGateForm
+): ShowLocationGateResult => {
+  const latitude = parseOptionalNumber(form.venueLatitude);
+  const longitude = parseOptionalNumber(form.venueLongitude);
+  const radius = parseOptionalNumber(form.locationRadiusMeters);
+
+  if (
+    latitude.error ||
+    (latitude.value !== null && (latitude.value < -90 || latitude.value > 90))
+  ) {
+    return { error: "Venue latitude must be a number between -90 and 90." };
+  }
+  if (
+    longitude.error ||
+    (longitude.value !== null &&
+      (longitude.value < -180 || longitude.value > 180))
+  ) {
+    return { error: "Venue longitude must be a number between -180 and 180." };
+  }
+  if (
+    radius.error ||
+    (radius.value !== null &&
+      (!Number.isInteger(radius.value) || radius.value <= 0))
+  ) {
+    return {
+      error: "Location radius must be a positive whole number of meters.",
+    };
+  }
+  if (
+    form.requiresLocationVerification &&
+    (latitude.value === null ||
+      longitude.value === null ||
+      radius.value === null)
+  ) {
+    return {
+      error:
+        "Location-gated shows require venue latitude, longitude, and radius.",
+    };
+  }
+
+  return {
+    payload: {
+      requires_location_verification: form.requiresLocationVerification,
+      venue_name: form.venueName.trim() || null,
+      venue_address: form.venueAddress.trim() || null,
+      venue_latitude: latitude.value,
+      venue_longitude: longitude.value,
+      location_radius_meters: radius.value,
+    },
+  };
+};
+
 export default function AdminPage() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -258,6 +348,13 @@ export default function AdminPage() {
   const [showIsFeaturedPlayShow, setShowIsFeaturedPlayShow] = useState(false);
   const [showIsOver, setShowIsOver] = useState(false);
   const [showUseConfidencePoints, setShowUseConfidencePoints] = useState(false);
+  const [showRequiresLocationVerification, setShowRequiresLocationVerification] =
+    useState(false);
+  const [showVenueName, setShowVenueName] = useState("");
+  const [showVenueAddress, setShowVenueAddress] = useState("");
+  const [showVenueLatitude, setShowVenueLatitude] = useState("");
+  const [showVenueLongitude, setShowVenueLongitude] = useState("");
+  const [showLocationRadiusMeters, setShowLocationRadiusMeters] = useState("");
   const [showModalOpen, setShowModalOpen] = useState(false);
   const [promotionModalOpen, setPromotionModalOpen] = useState(false);
   const [promotionName, setPromotionName] = useState("");
@@ -273,6 +370,16 @@ export default function AdminPage() {
   const [showEditIsOver, setShowEditIsOver] = useState(false);
   const [showEditUseConfidencePoints, setShowEditUseConfidencePoints] =
     useState(false);
+  const [
+    showEditRequiresLocationVerification,
+    setShowEditRequiresLocationVerification,
+  ] = useState(false);
+  const [showEditVenueName, setShowEditVenueName] = useState("");
+  const [showEditVenueAddress, setShowEditVenueAddress] = useState("");
+  const [showEditVenueLatitude, setShowEditVenueLatitude] = useState("");
+  const [showEditVenueLongitude, setShowEditVenueLongitude] = useState("");
+  const [showEditLocationRadiusMeters, setShowEditLocationRadiusMeters] =
+    useState("");
   const [showEditBusy, setShowEditBusy] = useState(false);
   const [showDeleteBusy, setShowDeleteBusy] = useState(false);
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
@@ -540,6 +647,12 @@ export default function AdminPage() {
       setShowEditIsFeaturedPlayShow(false);
       setShowEditIsOver(false);
       setShowEditUseConfidencePoints(false);
+      setShowEditRequiresLocationVerification(false);
+      setShowEditVenueName("");
+      setShowEditVenueAddress("");
+      setShowEditVenueLatitude("");
+      setShowEditVenueLongitude("");
+      setShowEditLocationRadiusMeters("");
       return;
     }
     setShowEditName(activeShow.name ?? "");
@@ -552,6 +665,29 @@ export default function AdminPage() {
     setShowEditIsFeaturedPlayShow(activeShow.is_featured_play_show ?? false);
     setShowEditIsOver(activeShow.is_over ?? false);
     setShowEditUseConfidencePoints(activeShow.use_confidence_points ?? false);
+    setShowEditRequiresLocationVerification(
+      activeShow.requires_location_verification ?? false
+    );
+    setShowEditVenueName(activeShow.venue_name ?? "");
+    setShowEditVenueAddress(activeShow.venue_address ?? "");
+    setShowEditVenueLatitude(
+      activeShow.venue_latitude === null ||
+        activeShow.venue_latitude === undefined
+        ? ""
+        : String(activeShow.venue_latitude)
+    );
+    setShowEditVenueLongitude(
+      activeShow.venue_longitude === null ||
+        activeShow.venue_longitude === undefined
+        ? ""
+        : String(activeShow.venue_longitude)
+    );
+    setShowEditLocationRadiusMeters(
+      activeShow.location_radius_meters === null ||
+        activeShow.location_radius_meters === undefined
+        ? ""
+        : String(activeShow.location_radius_meters)
+    );
   }, [
     activeShow?.id,
     activeShow?.name,
@@ -564,6 +700,12 @@ export default function AdminPage() {
     activeShow?.is_featured_play_show,
     activeShow?.is_over,
     activeShow?.use_confidence_points,
+    activeShow?.requires_location_verification,
+    activeShow?.venue_name,
+    activeShow?.venue_address,
+    activeShow?.venue_latitude,
+    activeShow?.venue_longitude,
+    activeShow?.location_radius_meters,
   ]);
   useEffect(() => {
     if (!selectedShowId && activeShow?.id) {
@@ -924,7 +1066,7 @@ export default function AdminPage() {
         supabase
           .from("shows")
           .select(
-            "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points"
+            "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
           )
           .order("created_at", { ascending: false }),
         supabase
@@ -1213,7 +1355,7 @@ export default function AdminPage() {
           supabase
             .from("shows")
             .select(
-              "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points"
+              "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
             )
             .order("created_at", { ascending: false }),
           supabase
@@ -1668,6 +1810,18 @@ export default function AdminPage() {
       setMessage("Select a promotion for the show.");
       return;
     }
+    const locationGateResult = buildShowLocationGatePayload({
+      requiresLocationVerification: showRequiresLocationVerification,
+      venueName: showVenueName,
+      venueAddress: showVenueAddress,
+      venueLatitude: showVenueLatitude,
+      venueLongitude: showVenueLongitude,
+      locationRadiusMeters: showLocationRadiusMeters,
+    });
+    if ("error" in locationGateResult) {
+      setMessage(locationGateResult.error);
+      return;
+    }
     if (showIsFeaturedPlayShow) {
       const { error: clearFeaturedError } = await supabase
         .from("shows")
@@ -1692,9 +1846,10 @@ export default function AdminPage() {
         is_featured_play_show: showIsFeaturedPlayShow,
         is_over: showIsOver,
         use_confidence_points: showUseConfidencePoints,
+        ...locationGateResult.payload,
       })
       .select(
-        "id, name, tagline, image_url, promotion_id, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points"
+        "id, name, tagline, image_url, promotion_id, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
       )
       .single();
     if (error || !newShow) {
@@ -1711,6 +1866,12 @@ export default function AdminPage() {
     setShowIsFeaturedPlayShow(false);
     setShowIsOver(false);
     setShowUseConfidencePoints(false);
+    setShowRequiresLocationVerification(false);
+    setShowVenueName("");
+    setShowVenueAddress("");
+    setShowVenueLatitude("");
+    setShowVenueLongitude("");
+    setShowLocationRadiusMeters("");
     setSelectedShowId(newShow.id);
     setEventShowId(newShow.id);
     setShowModalOpen(false);
@@ -1756,6 +1917,18 @@ export default function AdminPage() {
       setMessage("Select a promotion for the show.");
       return;
     }
+    const locationGateResult = buildShowLocationGatePayload({
+      requiresLocationVerification: showEditRequiresLocationVerification,
+      venueName: showEditVenueName,
+      venueAddress: showEditVenueAddress,
+      venueLatitude: showEditVenueLatitude,
+      venueLongitude: showEditVenueLongitude,
+      locationRadiusMeters: showEditLocationRadiusMeters,
+    });
+    if ("error" in locationGateResult) {
+      setMessage(locationGateResult.error);
+      return;
+    }
     setShowEditBusy(true);
     setMessage(null);
     if (showEditIsFeaturedPlayShow) {
@@ -1783,13 +1956,14 @@ export default function AdminPage() {
       is_featured_play_show: showEditIsFeaturedPlayShow,
       is_over: showEditIsOver,
       use_confidence_points: showEditUseConfidencePoints,
+      ...locationGateResult.payload,
     };
     const { data: updatedShow, error } = await supabase
       .from("shows")
       .update(payload)
       .eq("id", activeShow.id)
       .select(
-        "id, name, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points"
+        "id, name, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
       )
       .single();
     if (error || !updatedShow) {
@@ -3320,6 +3494,22 @@ export default function AdminPage() {
             setIsOver={setShowEditIsOver}
             useConfidencePoints={showEditUseConfidencePoints}
             setUseConfidencePoints={setShowEditUseConfidencePoints}
+            requiresLocationVerification={
+              showEditRequiresLocationVerification
+            }
+            setRequiresLocationVerification={
+              setShowEditRequiresLocationVerification
+            }
+            venueName={showEditVenueName}
+            setVenueName={setShowEditVenueName}
+            venueAddress={showEditVenueAddress}
+            setVenueAddress={setShowEditVenueAddress}
+            venueLatitude={showEditVenueLatitude}
+            setVenueLatitude={setShowEditVenueLatitude}
+            venueLongitude={showEditVenueLongitude}
+            setVenueLongitude={setShowEditVenueLongitude}
+            locationRadiusMeters={showEditLocationRadiusMeters}
+            setLocationRadiusMeters={setShowEditLocationRadiusMeters}
             startsAt={showEditStartsAt}
             setStartsAt={setShowEditStartsAt}
             saving={showEditBusy}
@@ -5811,6 +6001,58 @@ export default function AdminPage() {
                   />
                   Use confidence points for match winners
                 </label>
+                <label className="flex items-center gap-3 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                    checked={showRequiresLocationVerification}
+                    onChange={(event) =>
+                      setShowRequiresLocationVerification(event.target.checked)
+                    }
+                  />
+                  Require location verification
+                </label>
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                  placeholder="Venue name"
+                  value={showVenueName}
+                  onChange={(event) => setShowVenueName(event.target.value)}
+                />
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                  placeholder="Venue address"
+                  value={showVenueAddress}
+                  onChange={(event) => setShowVenueAddress(event.target.value)}
+                />
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <input
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                    inputMode="decimal"
+                    placeholder="Latitude"
+                    value={showVenueLatitude}
+                    onChange={(event) =>
+                      setShowVenueLatitude(event.target.value)
+                    }
+                  />
+                  <input
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                    inputMode="decimal"
+                    placeholder="Longitude"
+                    value={showVenueLongitude}
+                    onChange={(event) =>
+                      setShowVenueLongitude(event.target.value)
+                    }
+                  />
+                  <input
+                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                    inputMode="numeric"
+                    placeholder="Radius meters"
+                    value={showLocationRadiusMeters}
+                    onChange={(event) =>
+                      setShowLocationRadiusMeters(event.target.value)
+                    }
+                  />
+                </div>
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-400">
                 <span>Need a new promotion?</span>
