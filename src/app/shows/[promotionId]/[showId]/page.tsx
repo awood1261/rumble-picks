@@ -35,6 +35,125 @@ type LocationVerificationStatus =
   | "unsupported"
   | "invalid_config";
 
+type PrimaryAction =
+  | {
+      kind: "button";
+      label: string;
+      eyebrow: string;
+      title: string;
+      detail: string;
+      onClick: () => void;
+      disabled?: boolean;
+    }
+  | {
+      kind: "link";
+      label: string;
+      eyebrow: string;
+      title: string;
+      detail: string;
+      href: string;
+    }
+  | {
+      kind: "locked";
+      label: string;
+      eyebrow: string;
+      title: string;
+      detail: string;
+      href: string;
+    };
+
+const formatShowDate = (value: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const formatVenueLabel = (show: ShowRow | null) =>
+  show?.venue_name?.trim() || "the venue";
+
+const getLocationCopy = (
+  status: LocationVerificationStatus,
+  venueLabel: string,
+) => {
+  switch (status) {
+    case "checking":
+      return {
+        eyebrow: "Play at the show",
+        title: "Checking Location",
+        detail: "Confirming your device is at the venue.",
+        label: "Checking...",
+      };
+    case "verified":
+      return {
+        eyebrow: "You are in",
+        title: "Picks Are Unlocked",
+        detail: "Location is verified for this show.",
+        label: "Continue",
+      };
+    case "outside":
+      return {
+        eyebrow: "Outside play area",
+        title: "Move Closer To The Venue",
+        detail: `You need to be at ${venueLabel} to make picks.`,
+        label: "Try Again",
+      };
+    case "permission_denied":
+      return {
+        eyebrow: "Permission needed",
+        title: "Enable Location Access",
+        detail: "Allow browser location for this show, then try again.",
+        label: "Try Again",
+      };
+    case "timeout":
+      return {
+        eyebrow: "Location timed out",
+        title: "Try From The Venue",
+        detail: "Your browser took too long to verify location.",
+        label: "Try Again",
+      };
+    case "imprecise":
+      return {
+        eyebrow: "Location unclear",
+        title: "Try Again Nearby",
+        detail: "Your browser returned a location that was too imprecise.",
+        label: "Try Again",
+      };
+    case "unavailable":
+      return {
+        eyebrow: "Location unavailable",
+        title: "Location Could Not Be Checked",
+        detail: "Your browser could not determine your location.",
+        label: "Try Again",
+      };
+    case "unsupported":
+      return {
+        eyebrow: "Unsupported browser",
+        title: "Location Is Required",
+        detail: "Use a browser with geolocation support for this show.",
+        label: "Unavailable",
+      };
+    case "invalid_config":
+      return {
+        eyebrow: "Setup needed",
+        title: "Location Gate Not Ready",
+        detail: "This show is missing venue coordinates or a radius.",
+        label: "Unavailable",
+      };
+    default:
+      return {
+        eyebrow: "Play at the show",
+        title: "Verify Attendance",
+        detail: `Verify you are at ${venueLabel} to unlock tonight's picks.`,
+        label: "Verify Location",
+      };
+  }
+};
+
 export default function ShowDetailPage() {
   const params = useParams();
   const showId = typeof params?.showId === "string" ? params.showId : "";
@@ -53,6 +172,8 @@ export default function ShowDetailPage() {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [hasSavedPicks, setHasSavedPicks] = useState(false);
+  const [pickStatusChecked, setPickStatusChecked] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [locationVerificationStatus, setLocationVerificationStatus] =
     useState<LocationVerificationStatus>("idle");
@@ -70,18 +191,13 @@ export default function ShowDetailPage() {
   const requiresLocationVerification = !!show?.requires_location_verification;
   const hasValidLocationGateConfig =
     isValidLocationGateConfig(locationGateConfig);
-  const canEnterPicks =
-    !requiresLocationVerification || locationVerificationStatus === "verified";
-
-  const formattedStart = (() => {
-    if (!show?.starts_at) return null;
-    const date = new Date(show.starts_at);
-    if (Number.isNaN(date.getTime())) return null;
-    return date.toLocaleDateString(undefined, {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    });
+  const formattedStart = formatShowDate(show?.starts_at ?? null);
+  const venueLabel = formatVenueLabel(show);
+  const isShowOver = Boolean(show?.is_over);
+  const hasStarted = (() => {
+    if (!show?.starts_at) return false;
+    const startTime = new Date(show.starts_at).getTime();
+    return !Number.isNaN(startTime) && startTime <= now;
   })();
 
   const lockStatusText = (() => {
@@ -118,7 +234,7 @@ export default function ShowDetailPage() {
       const { data, error } = await supabase
         .from("shows")
         .select(
-          "id, name, tagline, image_url, starts_at, status, promotion_id, requires_email_registration, lock_picks_at_start, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+          "id, name, tagline, image_url, starts_at, status, promotion_id, requires_email_registration, lock_picks_at_start, is_over, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
         )
         .eq("id", showId)
         .maybeSingle();
@@ -159,7 +275,7 @@ export default function ShowDetailPage() {
       show_status: show.status,
       promotion_id: show.promotion_id,
     });
-  }, [show?.id]);
+  }, [show?.id, show?.name, show?.promotion_id, show?.status]);
 
   useEffect(() => {
     if (!show?.starts_at) return;
@@ -257,6 +373,34 @@ export default function ShowDetailPage() {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    const loadPickStatus = async () => {
+      if (!showId || !userId) {
+        setHasSavedPicks(false);
+        setPickStatusChecked(Boolean(authChecked));
+        return;
+      }
+
+      setPickStatusChecked(false);
+      const { data, error } = await supabase
+        .from("picks")
+        .select("id")
+        .eq("show_id", showId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (ignore) return;
+      setHasSavedPicks(!error && Boolean(data));
+      setPickStatusChecked(true);
+    };
+
+    loadPickStatus();
+    return () => {
+      ignore = true;
+    };
+  }, [authChecked, showId, userId]);
 
   useEffect(() => {
     if (!show?.id || !requiresLocationVerification) {
@@ -381,6 +525,114 @@ export default function ShowDetailPage() {
     );
   };
 
+  const isLocked =
+    !!show?.starts_at &&
+    (show.lock_picks_at_start ?? true) &&
+    new Date(show.starts_at).getTime() <= now;
+  const scoreboardHref = show ? `/scoreboard?show=${show.id}` : "/scoreboard";
+  const picksHref = show ? `/picks?show=${show.id}` : "/picks";
+  const loginHref = show ? `/login?show=${show.id}` : "/login";
+  const titleHref = promotionId ? `/title/${promotionId}` : "/title";
+  const locationCopy = getLocationCopy(locationVerificationStatus, venueLabel);
+  const canRetryLocation =
+    locationVerificationStatus !== "checking" &&
+    locationVerificationStatus !== "verified" &&
+    locationVerificationStatus !== "invalid_config" &&
+    locationVerificationStatus !== "unsupported";
+  const primaryAction: PrimaryAction | null = show
+    ? isShowOver
+      ? {
+          kind: "locked",
+          label: "View Results",
+          eyebrow: "Show complete",
+          title: "Results Are Ready",
+          detail: "See the final leaderboard and score breakdown.",
+          href: scoreboardHref,
+        }
+      : isLocked
+        ? {
+            kind: "locked",
+            label: hasStarted ? "Follow Live" : "View Leaderboard",
+            eyebrow: hasStarted ? "Picks locked" : "Locked",
+            title: hasStarted ? "Follow The Scores" : "Picks Are Locked",
+            detail: hasStarted
+              ? "Track the live leaderboard as results come in."
+              : "Picks are closed for this show.",
+            href: scoreboardHref,
+          }
+        : requiresLocationVerification &&
+            locationVerificationStatus !== "verified"
+          ? {
+              kind: "button",
+              label: locationCopy.label,
+              eyebrow: locationCopy.eyebrow,
+              title: locationCopy.title,
+              detail: locationCopy.detail,
+              onClick: handleVerifyLocation,
+              disabled:
+                locationVerificationStatus === "checking" ||
+                !canRetryLocation,
+            }
+          : !authChecked
+            ? {
+                kind: "button",
+                label: "Checking...",
+                eyebrow: "Getting ready",
+                title: "Checking Access",
+                detail: "Confirming whether you can enter picks.",
+                onClick: () => undefined,
+                disabled: true,
+              }
+          : !isSignedIn
+            ? {
+                kind: "link",
+                label: show.requires_email_registration
+                  ? "Sign In To Play"
+                  : "Create Profile",
+                eyebrow: "Join the game",
+                title: "Make Your Picks",
+                detail: show.requires_email_registration
+                  ? "Sign in to enter tonight's predictions."
+                  : "Create a quick profile to enter tonight's predictions.",
+                href: loginHref,
+              }
+            : {
+                kind: "link",
+                label:
+                  pickStatusChecked && hasSavedPicks
+                    ? "View My Picks"
+                    : "Make Your Picks",
+                eyebrow:
+                  pickStatusChecked && hasSavedPicks
+                    ? "Picks saved"
+                    : "Picks open",
+                title:
+                  pickStatusChecked && hasSavedPicks
+                    ? "Review Or Update Picks"
+                    : "Enter Tonight's Picks",
+                detail:
+                  pickStatusChecked && hasSavedPicks
+                    ? "Your picks can be updated until the show locks."
+                    : "Predict the matches before picks close.",
+                href: picksHref,
+              }
+    : null;
+
+  const championshipLabel = championshipStatus
+    ? championshipStatus.status === "inaugural"
+      ? "Inaugural"
+      : championshipStatus.status === "defending"
+        ? "Defending"
+        : "Vacant"
+    : null;
+  const championshipDetail = championshipStatus
+    ? championshipStatus.status === "inaugural"
+      ? "The first champion for this promotion can be crowned tonight."
+      : championshipStatus.status === "defending"
+        ? `${championshipStatus.champion_username ?? "The champion"} defends the title tonight.`
+        : "A new champion will be crowned tonight."
+    : null;
+
   if (!showId) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -400,7 +652,7 @@ export default function ShowDetailPage() {
   }
 
   return (
-    <div className="relative min-h-screen text-zinc-100">
+    <div className="relative min-h-[calc(100vh-73px)] overflow-hidden text-zinc-100">
       {show?.image_url ? (
         <Image
           src={show.image_url}
@@ -408,254 +660,230 @@ export default function ShowDetailPage() {
           fill
           priority
           sizes="100vw"
-          className="object-cover"
+          className="object-cover lg:object-top"
         />
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black" />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,#111827_0%,#09090b_45%,#000_100%)]" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-black/55 to-black/90" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(251,196,0,0.22),_transparent_55%)]" />
-      <main className="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-6 pb-12 pt-6">
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.72)_0%,rgba(0,0,0,0.44)_36%,rgba(0,0,0,0.92)_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.22)_0%,rgba(0,0,0,0)_54%)]" />
+      <main className="relative mx-auto flex min-h-[calc(100vh-73px)] w-full max-w-6xl flex-col px-5 pb-8 pt-5 sm:px-8 lg:px-10">
         {message && (
-          <div className="mb-6 rounded-2xl border border-zinc-800 bg-black/50 px-4 py-3 text-sm text-zinc-200">
+          <div className="mb-4 rounded-lg border border-zinc-800 bg-black/70 px-4 py-3 text-sm text-zinc-200">
             {message}
           </div>
         )}
 
         {!show ? (
-          <p className="text-sm text-zinc-400">Loading show...</p>
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-sm text-zinc-400">Loading show...</p>
+          </div>
         ) : (
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-4">
-              {promotion?.image_url ? (
-                <div className="h-12 w-12 min-h-12 min-w-12 shrink-0 aspect-square overflow-hidden rounded-full border border-amber-400/40 bg-black/40">
-                  <Image
-                    src={promotion.image_url}
-                    alt={promotion?.name ?? show.name}
-                    width={48}
-                    height={48}
-                    className="h-full w-full object-cover"
-                  />
+          <div className="grid flex-1 content-start gap-5 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-end lg:gap-8">
+            <section className="flex min-h-[42vh] flex-col justify-end pt-6 text-center sm:min-h-[48vh] lg:min-h-[calc(100vh-145px)] lg:text-left">
+              <div className="mx-auto max-w-3xl lg:mx-0">
+                <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start">
+                  {promotion?.image_url ? (
+                    <div className="flex h-16 w-16 min-h-16 min-w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-amber-300/45 bg-black/55 shadow-[0_0_30px_rgba(251,191,36,0.18)]">
+                      <Image
+                        src={promotion.image_url}
+                        alt={promotion?.name ?? show.name}
+                        width={64}
+                        height={64}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  ) : null}
+                  <div className="min-w-0">
+                    <p className="break-words text-[11px] font-semibold uppercase text-amber-200 sm:text-xs">
+                      {promotion?.name ?? "BoutPick Show"}
+                    </p>
+                    <p className="mt-1 break-words text-xs font-semibold uppercase text-zinc-300">
+                      {formattedStart ?? "Show date TBD"}
+                    </p>
+                  </div>
                 </div>
-              ) : null}
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
-                  {formattedStart ?? "Show date TBD"}
-                </p>
-                <h1 className="mt-3 text-4xl font-semibold text-amber-100 sm:text-5xl">
+
+                <h1 className="mx-auto mt-6 max-w-[12ch] break-words text-5xl font-black uppercase leading-[0.9] text-zinc-100 drop-shadow-[0_3px_18px_rgba(0,0,0,0.9)] sm:max-w-[16ch] sm:text-6xl lg:mx-0 lg:text-7xl">
                   {show.name}
                 </h1>
-                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.15em] text-zinc-200">
-                  <span className="inline-flex items-center gap-2 rounded-full bg-black/70 px-3 py-1">
-                    <span className="text-amber-200">🔒</span>
-                    {lockStatusText}
-                  </span>
+
+                {show.tagline ? (
+                  <p className="mx-auto mt-4 max-w-xl break-words text-base font-semibold text-amber-100 drop-shadow sm:text-lg lg:mx-0">
+                    {show.tagline}
+                  </p>
+                ) : null}
+
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm font-semibold uppercase text-zinc-200 lg:justify-start">
+                  <span>{venueLabel}</span>
+                  <span className="h-4 w-px bg-amber-300/60" aria-hidden="true" />
+                  <span>{lockStatusText}</span>
+                </div>
+
+                <p className="mx-auto mt-7 max-w-xl text-lg font-medium italic text-zinc-100 sm:text-xl lg:mx-0">
+                  Predict the matches. Earn points.{" "}
+                  <span className="text-amber-300">Top the leaderboard.</span>
                 </p>
               </div>
-            </div>
-            {show.tagline ? (
-              <p className="mt-4 text-sm text-amber-100 sm:text-base">
-                {show.tagline}
-              </p>
-            ) : null}
-            {requiresLocationVerification && lockStatusText !== "Show is locked" ? (
-              <section className="mt-6 rounded-3xl border border-amber-400/25 bg-black/55 p-5 backdrop-blur-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200">
-                  Location check required
-                </p>
-                <h2 className="mt-3 text-xl font-semibold text-zinc-100">
-                  Verify attendance to make picks
-                </h2>
-                <p className="mt-2 text-sm text-zinc-200">
-                  This show is limited to fans at{" "}
-                  {show.venue_name ?? "the venue"}. BoutPick will ask your
-                  browser for a one-time location check before picks open.
-                </p>
-                {show.venue_address ? (
-                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-zinc-400">
-                    {show.venue_address}
-                  </p>
-                ) : null}
-                {locationVerificationDetail ? (
-                  <p
-                    className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
-                      locationVerificationStatus === "verified"
-                        ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-100"
-                        : locationVerificationStatus === "checking"
-                          ? "border-sky-300/35 bg-sky-300/10 text-sky-100"
-                          : "border-amber-400/30 bg-amber-400/10 text-amber-100"
-                    }`}
-                  >
-                    {locationVerificationDetail}
-                  </p>
-                ) : null}
-                {locationVerificationStatus !== "verified" &&
-                locationVerificationStatus !== "invalid_config" ? (
-                  <button
-                    className="mt-4 inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
-                    type="button"
-                    onClick={handleVerifyLocation}
-                    disabled={locationVerificationStatus === "checking"}
-                  >
-                    {locationVerificationStatus === "checking"
-                      ? "Checking..."
-                      : "Verify location"}
-                  </button>
-                ) : null}
-              </section>
-            ) : null}
-            <div className="mt-6 flex flex-wrap gap-3">
-              {lockStatusText !== "Show is locked" &&
-              isSignedIn &&
-              canEnterPicks ? (
-                <Link
-                  href={`/picks?show=${show.id}`}
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
+            </section>
+
+            <aside className="space-y-4 self-end pb-1 lg:pb-6">
+              {primaryAction ? (
+                <section
+                  className={`rounded-lg border p-5 shadow-[0_0_38px_rgba(251,191,36,0.16)] backdrop-blur-md ${
+                    primaryAction.kind === "button" &&
+                    locationVerificationStatus !== "idle" &&
+                    locationVerificationStatus !== "checking"
+                      ? "border-amber-300/70 bg-black/78"
+                      : "border-amber-300/80 bg-black/72"
+                  }`}
+                  aria-live="polite"
                 >
-                  Make picks
-                </Link>
-              ) : null}
-              <Link
-                href={`/scoreboard?show=${show.id}`}
-                className="inline-flex h-12 items-center justify-center rounded-full border border-amber-400/70 px-6 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
-              >
-                View scores
-              </Link>
-            </div>
-            {championshipStatusLoading ? (
-              <section className="mt-6 overflow-hidden rounded-3xl border border-amber-400/20 bg-black/40 p-5 backdrop-blur-sm sm:p-6">
-                <div className="grid gap-4 sm:grid-cols-[9rem_1fr] sm:items-center">
-                  <div className="mx-auto h-40 w-full animate-pulse rounded-3xl bg-amber-200/10 sm:h-36 sm:w-36" />
-                  <div>
-                    <div className="h-3 w-32 animate-pulse rounded-full bg-amber-200/15" />
-                    <div className="mt-3 h-8 w-44 animate-pulse rounded-full bg-amber-200/20" />
-                    <div className="mt-4 h-16 animate-pulse rounded-2xl bg-zinc-200/10" />
-                    <div className="mt-3 h-3 w-36 animate-pulse rounded-full bg-zinc-200/10" />
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-amber-300/70 bg-amber-300/12 text-2xl text-amber-300">
+                      <span aria-hidden="true">
+                        {primaryAction.kind === "button" ? "⌖" : "›"}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="break-words text-xs font-semibold uppercase text-amber-300">
+                        {primaryAction.eyebrow}
+                      </p>
+                      <h2 className="mt-2 break-words text-2xl font-black uppercase leading-tight text-zinc-100">
+                        {primaryAction.title}
+                      </h2>
+                      <p className="mt-3 break-words text-sm leading-6 text-zinc-300">
+                        {primaryAction.detail}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </section>
-            ) : championshipStatus ? (
-              <section className="mt-6 overflow-hidden rounded-3xl border border-amber-400/35 bg-black/55 shadow-[0_0_40px_rgba(251,196,0,0.08)] backdrop-blur-sm">
-                <div className="px-5 pb-1 pt-4 sm:px-6">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300/40 bg-amber-300/10 text-base text-amber-200">
-                      🏆
-                    </span>
-                    <p className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-100">
-                      Title Status:
-                    </p>
-                    <span
-                      className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold uppercase tracking-[0.18em] ${
-                        championshipStatus.status === "inaugural"
-                          ? "border border-sky-300/40 bg-sky-300/12 text-sky-100"
-                          : championshipStatus.status === "defending"
-                            ? "border border-amber-300/40 bg-amber-300/12 text-amber-100"
-                            : "border border-zinc-300/30 bg-zinc-300/10 text-zinc-100"
-                      }`}
+
+                  {locationVerificationDetail ? (
+                    <p className="sr-only">{locationVerificationDetail}</p>
+                  ) : null}
+
+                  {primaryAction.kind === "button" ? (
+                    <button
+                      className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-amber-400 px-5 text-center text-sm font-black uppercase text-black transition hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-black disabled:cursor-not-allowed disabled:opacity-60"
+                      type="button"
+                      onClick={primaryAction.onClick}
+                      disabled={primaryAction.disabled}
                     >
-                      {championshipStatus.status === "inaugural"
-                        ? "Inaugural"
-                        : championshipStatus.status === "defending"
-                          ? "Defending"
-                          : "Vacant"}
-                    </span>
+                      {primaryAction.label}
+                    </button>
+                  ) : (
+                    <Link
+                      href={primaryAction.href}
+                      className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-amber-400 px-5 text-center text-sm font-black uppercase text-black transition hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-black"
+                    >
+                      {primaryAction.label}
+                    </Link>
+                  )}
+                </section>
+              ) : null}
+
+              <Link
+                href={scoreboardHref}
+                className="flex min-h-12 items-center justify-center gap-3 text-center text-sm font-black uppercase text-zinc-300 transition hover:text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-black"
+              >
+                <span className="text-xl text-zinc-400" aria-hidden="true">
+                  ⇧
+                </span>
+                <span>View Leaderboard</span>
+                <span className="text-xl" aria-hidden="true">
+                  →
+                </span>
+              </Link>
+
+              {championshipStatusLoading ? (
+                <section className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 rounded-lg border border-zinc-700/80 bg-black/55 p-4 backdrop-blur-md sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4">
+                  <div className="h-16 animate-pulse rounded-lg bg-amber-200/10 sm:h-20" />
+                  <div>
+                    <div className="h-3 w-28 animate-pulse rounded-full bg-zinc-300/15" />
+                    <div className="mt-3 h-7 w-24 animate-pulse rounded-full bg-amber-200/20" />
+                    <div className="mt-3 h-10 animate-pulse rounded-lg bg-zinc-300/10" />
                   </div>
-                </div>
-                <div className="grid gap-2 px-5 pb-4 pt-1 sm:grid-cols-[9rem_1fr] sm:items-center sm:px-6 sm:pb-5 sm:pt-2">
-                  <div className="relative mx-auto h-40 w-full max-w-none sm:h-36 sm:w-36 sm:max-w-[9rem]">
+                </section>
+              ) : championshipStatus ? (
+                <Link
+                  href={titleHref}
+                  className="grid grid-cols-[5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-zinc-700/80 bg-black/55 p-4 backdrop-blur-md transition hover:border-amber-300/70 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-black sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:gap-4"
+                >
+                  <div className="relative h-16 sm:h-20">
                     <Image
                       src={BOUTPICK_FPC_BELT_URL}
                       alt="BoutPick championship belt"
                       fill
-                      sizes="(min-width: 640px) 9rem, 100vw"
-                      className="object-contain drop-shadow-[0_0_26px_rgba(251,196,0,0.28)]"
+                      sizes="7rem"
+                      className="object-contain drop-shadow-[0_0_18px_rgba(251,191,36,0.28)]"
                     />
                   </div>
-                  <div>
+                  <div className="min-w-0">
+                    <p className="break-words text-xs font-black uppercase text-zinc-100">
+                      BoutPick Championship
+                    </p>
+                    <p className="mt-2 break-words text-2xl font-black uppercase text-amber-300">
+                      {championshipLabel}
+                    </p>
+                    <p className="mt-2 break-words text-sm leading-5 text-zinc-300">
+                      {championshipDetail}
+                    </p>
                     {championshipStatus.status === "defending" &&
                     championshipStatus.champion_username ? (
-                      <div className="mt-4 flex items-center gap-3 rounded-2xl border border-amber-300/25 bg-black/40 px-3 py-3">
+                      <div className="mt-3 flex min-w-0 items-center gap-2">
                         <Image
                           src={avatarSrcForKey(championshipStatus.champion_avatar)}
                           alt={`${championshipStatus.champion_username} avatar`}
-                          width={56}
-                          height={56}
-                          className="h-14 w-14 rounded-full border border-amber-300/40 bg-black/40"
+                          width={28}
+                          height={28}
+                          className="h-7 w-7 shrink-0 rounded-full border border-amber-300/40 bg-black/40"
                         />
-                        <div>
-                          <p className="text-[11px] uppercase tracking-[0.24em] text-amber-200">
-                            Reigning champion
-                          </p>
-                          <p className="mt-1 text-lg font-semibold text-zinc-100">
-                            {championshipStatus.champion_username}
-                          </p>
-                        </div>
+                        <span className="min-w-0 break-words text-xs font-semibold uppercase text-zinc-200">
+                          {championshipStatus.champion_username}
+                        </span>
                       </div>
                     ) : null}
-                    <p className="mt-3 text-sm text-zinc-200 sm:text-base">
-                      {championshipStatus.status === "inaugural"
-                        ? "This is the first championship opportunity for this promotion."
-                        : championshipStatus.status === "defending"
-                          ? "The title is on line tonight, will the champion retain or will a new contender bring down the champ? Play now!"
-                          : `${
-                              championshipStatus.champion_username ?? "The previous champion"
-                            } is not registered for tonight, so the championship is vacant.`}
-                    </p>
                   </div>
-                </div>
-              </section>
-            ) : null}
-            {championParticipants.length > 0 ? (
-              <section className="mt-6 rounded-3xl border border-amber-400/25 bg-black/45 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-[0.28em] text-amber-200">
-                  Previous Champions Playing Tonight
-                </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {championParticipants.map((participant) => (
-                    <div
-                      key={participant.user_id}
-                      className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-black/40 px-3 py-3"
-                    >
-                      <Image
-                        src={avatarSrcForKey(participant.avatar_key)}
-                        alt={`${participant.display_name} avatar`}
-                        width={40}
-                        height={40}
-                        className="h-10 w-10 rounded-full border border-zinc-700 bg-black/40"
-                      />
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-100">
-                          {participant.display_name}
-                        </p>
-                        <p className="mt-1 text-[11px] uppercase tracking-[0.24em] text-amber-200">
-                          Champion
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-            {authChecked &&
-            !isSignedIn &&
-            lockStatusText !== "Show is locked" &&
-            canEnterPicks ? (
-              <div className="mt-6 space-y-3">
-                <p className="text-sm text-zinc-200">
-                  {show?.requires_email_registration
-                    ? "Email registration is required for this show."
-                    : "Create a quick profile to lock your picks."}
-                </p>
-                <Link
-                  href={`/login?show=${show.id}`}
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
-                >
-                  {show?.requires_email_registration
-                    ? "Sign in to make picks"
-                    : "Create profile"}
+                  <span className="text-3xl text-amber-300" aria-hidden="true">
+                    →
+                  </span>
                 </Link>
-              </div>
-            ) : null}
+              ) : null}
+
+              {championParticipants.length > 0 ? (
+                <section className="rounded-lg border border-zinc-800/90 bg-black/45 p-4 backdrop-blur-sm">
+                  <p className="text-xs font-semibold uppercase text-zinc-400">
+                    Previous champions playing tonight
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {championParticipants.map((participant) => (
+                      <div
+                        key={participant.user_id}
+                        className="flex min-w-0 items-center gap-2 rounded-full border border-zinc-700/80 bg-black/50 px-3 py-2"
+                      >
+                        <Image
+                          src={avatarSrcForKey(participant.avatar_key)}
+                          alt={`${participant.display_name} avatar`}
+                          width={24}
+                          height={24}
+                          className="h-6 w-6 shrink-0 rounded-full border border-zinc-700 bg-black/40"
+                        />
+                        <span className="max-w-32 truncate text-xs font-semibold text-zinc-200">
+                          {participant.display_name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {requiresLocationVerification ? (
+                <p className="px-1 text-center text-xs text-zinc-500">
+                  Location is used once for this show and exact coordinates are
+                  not stored.
+                </p>
+              ) : null}
+            </aside>
           </div>
         )}
 
