@@ -159,6 +159,13 @@ type EliminatorEliminationRow = {
 const ENTRANT_SELECT =
   "id, name, promotion, gender, active, image_url, logo_url, roster_year, event_id, is_custom, created_by, status";
 const ENTRANT_PAGE_SIZE = 1000;
+type AdminView =
+  | "dashboard"
+  | "setup"
+  | "card"
+  | "results"
+  | "scoreboard"
+  | "advanced";
 
 async function loadAllEntrants() {
   const rows: EntrantRow[] = [];
@@ -385,8 +392,9 @@ export default function AdminPage() {
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [selectedShowId, setSelectedShowId] = useState<string>("");
+  const [adminView, setAdminView] = useState<AdminView>("dashboard");
   const [adminTab, setAdminTab] = useState<
-    "events" | "matches" | "eliminators" | "questions"
+    "events" | "eliminators" | "questions"
   >("events");
   const [newQuestionImageUrl, setNewQuestionImageUrl] = useState("");
   const [newQuestionText, setNewQuestionText] = useState("");
@@ -769,21 +777,21 @@ export default function AdminPage() {
     };
   }, [toastMessage]);
   useEffect(() => {
-    if (adminTab !== "matches" || !scrollMatchId) return;
+    if (adminView !== "card" || !scrollMatchId) return;
     const element = matchRefs.current[scrollMatchId];
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "start" });
       setScrollMatchId(null);
     }
-  }, [adminTab, scrollMatchId]);
+  }, [adminView, scrollMatchId]);
   useEffect(() => {
-    if (adminTab !== "eliminators" || !scrollEliminatorId) return;
+    if (adminView !== "advanced" || adminTab !== "eliminators" || !scrollEliminatorId) return;
     const element = eliminatorRefs.current[scrollEliminatorId];
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "start" });
       setScrollEliminatorId(null);
     }
-  }, [adminTab, scrollEliminatorId]);
+  }, [adminView, adminTab, scrollEliminatorId]);
   const scrollToEventEditor = () => {
     requestAnimationFrame(() => {
       const target = document.getElementById("event-editor");
@@ -1034,6 +1042,111 @@ export default function AdminPage() {
       return groups;
     }, {} as Record<string, EntrantRow[]>);
   }, [filteredEntrantOptions]);
+
+  const activePromotion = useMemo(() => {
+    if (!activeShow?.promotion_id) return null;
+    return (
+      promotions.find((promotion) => promotion.id === activeShow.promotion_id) ??
+      null
+    );
+  }, [activeShow?.promotion_id, promotions]);
+
+  const activeShowLinks = useMemo(() => {
+    if (!activeShow) {
+      return null;
+    }
+    const promotionId = activeShow.promotion_id ?? activePromotion?.id ?? "";
+    return {
+      show: promotionId
+        ? `/shows/${promotionId}/${activeShow.id}`
+        : `/shows/${activeShow.id}`,
+      picks: `/picks?show=${activeShow.id}`,
+      scoreboard: `/scoreboard?show=${activeShow.id}`,
+      qr: "/qr",
+    };
+  }, [activePromotion?.id, activeShow]);
+
+  const matchCompletion = useMemo(() => {
+    const completed = orderedShowMatches.filter(
+      (match) =>
+        Boolean(match.winner_side_id) ||
+        Boolean(match.winner_entrant_id) ||
+        match.status === "completed"
+    ).length;
+    return {
+      completed,
+      total: orderedShowMatches.length,
+      remaining: Math.max(orderedShowMatches.length - completed, 0),
+    };
+  }, [orderedShowMatches]);
+
+  const readinessItems = useMemo(() => {
+    const hasShowDetails = Boolean(activeShow?.name?.trim()) && Boolean(activeShow?.promotion_id);
+    const hasStartTime = Boolean(activeShow?.starts_at);
+    const hasMatches = orderedShowMatches.length > 0;
+    const participantsAssigned =
+      orderedShowMatches.length > 0 &&
+      orderedShowMatches.every((match) => {
+        const sides = matchSidesByMatch[match.id] ?? [];
+        if (match.match_type === "blind_gauntlet") {
+          return Boolean(match.known_wrestler_id);
+        }
+        return sides.length > 0 && sides.every((side) =>
+          matchEntrants.some(
+            (row) => row.match_id === match.id && row.side_id === side.id
+          )
+        );
+      });
+    const locationConfigured =
+      !activeShow?.requires_location_verification ||
+      (typeof activeShow.venue_latitude === "number" &&
+        Number.isFinite(activeShow.venue_latitude) &&
+        activeShow.venue_latitude >= -90 &&
+        activeShow.venue_latitude <= 90 &&
+        typeof activeShow.venue_longitude === "number" &&
+        Number.isFinite(activeShow.venue_longitude) &&
+        activeShow.venue_longitude >= -180 &&
+        activeShow.venue_longitude <= 180 &&
+        typeof activeShow.location_radius_meters === "number" &&
+        Number.isFinite(activeShow.location_radius_meters) &&
+        activeShow.location_radius_meters > 0);
+    const previewAvailable = Boolean(activeShowLinks?.show);
+    const picksLocked =
+      Boolean(activeShow?.starts_at) &&
+      (activeShow?.lock_picks_at_start ?? true) &&
+      new Date(activeShow?.starts_at ?? "").getTime() <= Date.now();
+    return [
+      { label: "Show details", complete: hasShowDetails },
+      { label: `Matches added (${orderedShowMatches.length})`, complete: hasMatches },
+      { label: "Participants assigned", complete: participantsAssigned },
+      {
+        label: picksLocked ? "Picks locked" : "Picks can open",
+        complete: hasStartTime,
+        warning: picksLocked,
+      },
+      {
+        label: activeShow?.requires_location_verification
+          ? "Location gate configured"
+          : "Location gate optional",
+        complete: locationConfigured,
+      },
+      { label: "Preview available", complete: previewAvailable },
+    ];
+  }, [
+    activeShow,
+    activeShowLinks?.show,
+    matchEntrants,
+    matchSidesByMatch,
+    orderedShowMatches,
+  ]);
+
+  const readinessCompleteCount = readinessItems.filter(
+    (item) => item.complete
+  ).length;
+  const readinessPercent =
+    readinessItems.length > 0
+      ? Math.round((readinessCompleteCount / readinessItems.length) * 100)
+      : 0;
 
   const pendingEntrants = useMemo(() => {
     if (!activeEvent?.id) return [];
@@ -3406,15 +3519,141 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <main className="mx-auto w-full max-w-6xl px-6 py-16">
-        <header className="flex flex-col gap-2">
-          <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">
-            Admin Console
-          </p>
-          <h1 className="text-3xl font-semibold">Rumble Operations</h1>
-          <p className="text-sm text-zinc-400">
-            Create events, manage entrants, and track eliminations live.
-          </p>
+      <main className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[220px_1fr] lg:px-6 lg:py-8">
+        <aside className="lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)]">
+          <div className="rounded-3xl border border-zinc-800 bg-black/50 p-4">
+            <p className="text-xl font-black uppercase italic tracking-wide text-amber-300">
+              BoutPick
+            </p>
+            <label className="mt-5 block text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+              Promotion
+              <select
+                className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                value={activeShow?.promotion_id ?? ""}
+                onChange={(event) => {
+                  const nextShow = shows.find(
+                    (show) => show.promotion_id === event.target.value
+                  );
+                  if (nextShow) setSelectedShowId(nextShow.id);
+                }}
+              >
+                <option value="">Select promotion</option>
+                {promotions.map((promotion) => (
+                  <option key={promotion.id} value={promotion.id}>
+                    {promotion.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <nav className="mt-5 grid gap-2">
+              {[
+                ["dashboard", "Dashboard"],
+                ["setup", "Shows"],
+                ["card", "Card Builder"],
+                ["results", "Results"],
+                ["scoreboard", "Scoreboard"],
+                ["advanced", "Advanced"],
+              ].map(([view, label]) => (
+                <button
+                  key={view}
+                  className={`flex h-11 items-center justify-between rounded-xl px-3 text-left text-sm font-medium transition ${
+                    adminView === view
+                      ? "border border-amber-400/40 bg-amber-400/15 text-amber-200"
+                      : "border border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900"
+                  }`}
+                  type="button"
+                  onClick={() => setAdminView(view as AdminView)}
+                >
+                  <span>{label}</span>
+                  {view === "advanced" ? <span className="text-zinc-500">+</span> : null}
+                </button>
+              ))}
+            </nav>
+            <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-3">
+              <p className="text-xs font-semibold text-zinc-100">
+                {sessionEmail ?? "Admin"}
+              </p>
+              <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+                Admin
+              </p>
+            </div>
+          </div>
+        </aside>
+
+        <div className="min-w-0">
+        <header className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
+                {activePromotion?.name ?? "BoutPick Admin"}
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold sm:text-3xl">
+                {activeShow?.name ?? "Promoter Console"}
+              </h1>
+              <p className="mt-2 text-sm text-zinc-400">
+                {activeShow?.starts_at
+                  ? new Date(activeShow.starts_at).toLocaleString()
+                  : "No show start time set"}
+                {activeShow?.venue_name ? ` • ${activeShow.venue_name}` : ""}
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[360px]">
+              <label className="text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+                Current show
+                <select
+                  className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  value={selectedShowId}
+                  onChange={(event) => setSelectedShowId(event.target.value)}
+                >
+                  {shows.length === 0 && <option value="">No shows</option>}
+                  {shows.map((show) => (
+                    <option key={show.id} value={show.id}>
+                      {show.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-3">
+                <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+                  Readiness
+                </p>
+                <div className="mt-2 flex items-center gap-3">
+                  <span className="text-2xl font-semibold text-emerald-300">
+                    {readinessPercent}%
+                  </span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800">
+                    <div
+                      className="h-full rounded-full bg-emerald-400"
+                      style={{ width: `${readinessPercent}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-5 flex gap-2 overflow-x-auto pb-1 lg:hidden">
+            {[
+              ["dashboard", "Dashboard"],
+              ["setup", "Setup"],
+              ["card", "Card"],
+              ["results", "Results"],
+              ["scoreboard", "Scoreboard"],
+              ["advanced", "More"],
+            ].map(([view, label]) => (
+              <button
+                key={`mobile-${view}`}
+                className={`h-10 shrink-0 rounded-full px-4 text-xs font-semibold uppercase tracking-wide ${
+                  adminView === view
+                    ? "bg-amber-400 text-zinc-950"
+                    : "border border-zinc-800 text-zinc-300"
+                }`}
+                type="button"
+                onClick={() => setAdminView(view as AdminView)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </header>
 
         {message && (
@@ -3433,7 +3672,137 @@ export default function AdminPage() {
           </div>
         )}
 
-        <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+        {adminView === "dashboard" && (
+          <section className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
+              <div className="flex flex-col gap-4 md:flex-row">
+                <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-amber-400/40 bg-zinc-950 md:w-48 md:shrink-0">
+                  {activeShow?.image_url ? (
+                    <Image
+                      src={activeShow.image_url}
+                      alt={activeShow.name}
+                      fill
+                      sizes="192px"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center p-4 text-center text-xs uppercase tracking-[0.25em] text-zinc-600">
+                      No poster
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full border border-amber-400/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                      {activeShow?.status ?? "No show"}
+                    </span>
+                    <span className="rounded-full border border-zinc-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
+                      Card: {orderedShowMatches.length} matches
+                    </span>
+                    <span className="rounded-full border border-zinc-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
+                      Picks: {activeShow?.lock_picks_at_start ? "Lock at start" : "Manual"}
+                    </span>
+                    {activeShow?.requires_location_verification ? (
+                      <span className="rounded-full border border-emerald-400/50 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                        Gate enabled
+                      </span>
+                    ) : null}
+                  </div>
+                  <h2 className="mt-4 text-2xl font-semibold">
+                    {activeShow?.name ?? "Create your next show"}
+                  </h2>
+                  <p className="mt-2 text-sm text-zinc-400">
+                    {activeShow?.tagline ??
+                      "Set up the card, verify readiness, and run results from one place."}
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <button
+                      className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300"
+                      type="button"
+                      onClick={() => setAdminView("setup")}
+                    >
+                      Open setup
+                    </button>
+                    {activeShowLinks && (
+                      <>
+                        <a
+                          className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                          href={activeShowLinks.show}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Preview show
+                        </a>
+                        <a
+                          className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                          href={activeShowLinks.picks}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open picks
+                        </a>
+                        <a
+                          className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                          href={activeShowLinks.scoreboard}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open scoreboard
+                        </a>
+                        <a
+                          className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                          href={activeShowLinks.qr}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Share QR
+                        </a>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold">Readiness overview</h2>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Status guidance only; existing admin behavior is preserved.
+                  </p>
+                </div>
+                <span className="text-3xl font-semibold text-emerald-300">
+                  {readinessPercent}%
+                </span>
+              </div>
+              <div className="mt-4 space-y-3">
+                {readinessItems.map((item) => (
+                  <div
+                    key={item.label}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-sm"
+                  >
+                    <span className="text-zinc-200">{item.label}</span>
+                    <span
+                      className={`text-xs font-semibold uppercase tracking-wide ${
+                        item.complete
+                          ? item.warning
+                            ? "text-amber-200"
+                            : "text-emerald-300"
+                          : "text-zinc-500"
+                      }`}
+                    >
+                      {item.complete ? (item.warning ? "Locked" : "Ready") : "Missing"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {(adminView === "dashboard" || adminView === "setup") && (
+        <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h2 className="text-lg font-semibold">Shows</h2>
@@ -3613,6 +3982,7 @@ export default function AdminPage() {
                               if (event?.show_id) {
                                 setSelectedShowId(event.show_id);
                               }
+                              setAdminView("advanced");
                               setFocusedEventId(item.id);
                               setSelectedEventId(item.id);
                               setAdminTab("events");
@@ -3626,14 +3996,16 @@ export default function AdminPage() {
                               if (match?.event_id) {
                                 setSelectedEventId(match.event_id);
                               }
-                              setAdminTab("matches");
+                              setAdminView("card");
                               setScrollMatchId(item.id);
                               return;
                             }
                             if (item.type === "question") {
+                              setAdminView("advanced");
                               setAdminTab("questions");
                               return;
                             }
+                            setAdminView("advanced");
                             setAdminTab("eliminators");
                             setScrollEliminatorId(item.id);
                           }}
@@ -3666,7 +4038,9 @@ export default function AdminPage() {
             </div>
           )}
         </section>
+        )}
 
+        {adminView === "advanced" && (
         <div className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-2">
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -3679,17 +4053,6 @@ export default function AdminPage() {
               onClick={() => setAdminTab("events")}
             >
               Rumble events
-            </button>
-            <button
-              className={`h-11 flex-1 rounded-2xl px-4 text-xs font-semibold uppercase tracking-[0.2em] transition sm:flex-none ${
-                adminTab === "matches"
-                  ? "bg-amber-400 text-zinc-900"
-                  : "border border-zinc-800 text-zinc-300 hover:border-amber-300 hover:text-amber-200"
-              }`}
-              type="button"
-              onClick={() => setAdminTab("matches")}
-            >
-              Matches
             </button>
             <button
               className={`h-11 flex-1 rounded-2xl px-4 text-xs font-semibold uppercase tracking-[0.2em] transition sm:flex-none ${
@@ -3715,7 +4078,9 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+        )}
 
+        {adminView === "advanced" && (
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
           {adminTab === "events" && (
             <div
@@ -3750,8 +4115,8 @@ export default function AdminPage() {
                 value={eventGender}
                 onChange={(event) => setEventGender(event.target.value)}
               >
-                <option value="men">Men's Rumble</option>
-                <option value="women">Women's Rumble</option>
+                <option value="men">Men&apos;s Rumble</option>
+                <option value="women">Women&apos;s Rumble</option>
               </select>
               <input
                 className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
@@ -4470,8 +4835,365 @@ export default function AdminPage() {
             </div>
           )}
         </section>
+        )}
 
-        {adminTab === "events" && (
+        {adminView === "results" && (
+          <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
+                  Results / Run Show
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold">Enter results</h2>
+                <p className="mt-2 text-sm text-zinc-400">
+                  {matchCompletion.completed} of {matchCompletion.total} matches completed.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm text-zinc-300">
+                <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                  Show status
+                </p>
+                <p className="mt-2 text-emerald-300">
+                  {matchCompletion.remaining === 0 && matchCompletion.total > 0
+                    ? "All match results entered"
+                    : `${matchCompletion.remaining} match${matchCompletion.remaining === 1 ? "" : "es"} remaining`}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 overflow-x-auto rounded-2xl border border-zinc-800">
+              <div className="min-w-[920px] divide-y divide-zinc-800">
+                {orderedShowMatches.length === 0 ? (
+                  <p className="p-5 text-sm text-zinc-400">No matches added yet.</p>
+                ) : (
+                  orderedShowMatches.map((match, index) => {
+                    const sides = matchSidesByMatch[match.id] ?? [];
+                    const participantRows = matchEntrantsByMatch[match.id] ?? [];
+                    const sideEntries = sides.map((side, sideIndex) => {
+                      const entrantsForSide = participantRows
+                        .filter((row) => row.side_id === side.id)
+                        .map((row) => entrantMap.get(row.entrant_id))
+                        .filter(Boolean) as EntrantRow[];
+                      return {
+                        side,
+                        label: side.label?.trim() || `Side ${sideIndex + 1}`,
+                        entrants: entrantsForSide,
+                      };
+                    });
+                    const allEntrants = participantRows
+                      .map((row) => entrantMap.get(row.entrant_id))
+                      .filter(Boolean) as EntrantRow[];
+                    const finishState = matchFinishEdits[match.id] ?? {
+                      method: match.finish_method ?? "",
+                      winner: match.finish_winner_entrant_id ?? "",
+                      loser: match.finish_loser_entrant_id ?? "",
+                    };
+                    const lengthValue =
+                      matchLengthEdits[match.id] ?? match.match_length ?? "";
+                    const interferenceValue =
+                      matchInterferenceEdits[match.id] ??
+                      match.match_interference ??
+                      "";
+                    const isCompleted =
+                      Boolean(match.winner_side_id) ||
+                      Boolean(match.winner_entrant_id) ||
+                      match.status === "completed";
+                    return (
+                      <div
+                        key={`results-${match.id}`}
+                        className="bg-zinc-950/50 p-4 text-sm"
+                      >
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-400/30 bg-amber-400/10 font-semibold text-amber-200">
+                            {index + 1}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-zinc-100">{match.name}</p>
+                            <p className="mt-1 text-xs text-zinc-500">
+                              {formatMatchTypeLabel(match.match_type)}
+                              {allEntrants.length > 0
+                                ? ` - ${allEntrants.map((entrant) => entrant.name).join(" vs ")}`
+                                : ""}
+                            </p>
+                          </div>
+                          <span
+                            className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                              isCompleted
+                                ? "bg-emerald-500/15 text-emerald-300"
+                                : "bg-zinc-800 text-zinc-400"
+                            }`}
+                          >
+                            {isCompleted ? "Saved" : "Not entered"}
+                          </span>
+                        </div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1.35fr_1fr_1fr]">
+                          <select
+                            className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={match.winner_side_id ?? ""}
+                            onChange={(event) =>
+                              handleSetMatchWinner(match.id, event.target.value)
+                            }
+                            disabled={match.match_type === "blind_gauntlet"}
+                          >
+                            <option value="">Winner</option>
+                            {sideEntries.map(({ side, label, entrants }) => (
+                              <option key={side.id} value={side.id}>
+                                {label}
+                                {entrants.length > 0
+                                  ? ` - ${entrants.map((entrant) => entrant.name).join(", ")}`
+                                  : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="grid gap-2">
+                          <select
+                            className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={finishState.method}
+                            onChange={(event) =>
+                              setMatchFinishEdits((prev) => ({
+                                ...prev,
+                                [match.id]: {
+                                  ...finishState,
+                                  method: event.target.value,
+                                },
+                              }))
+                            }
+                            disabled={match.match_type === "blind_gauntlet"}
+                          >
+                            <option value="">Finish</option>
+                            <option value="pinfall">Pinfall</option>
+                            <option value="submission">Submission</option>
+                            <option value="disqualification">Disqualification</option>
+                          </select>
+                          {(finishState.method === "pinfall" ||
+                            finishState.method === "submission") && (
+                            <div className="grid gap-2">
+                              <select
+                                className="h-9 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-100"
+                                value={finishState.winner}
+                                onChange={(event) =>
+                                  setMatchFinishEdits((prev) => ({
+                                    ...prev,
+                                    [match.id]: {
+                                      ...finishState,
+                                      winner: event.target.value,
+                                    },
+                                  }))
+                                }
+                              >
+                                <option value="">Finish winner</option>
+                                {allEntrants.map((entrant) => (
+                                  <option key={entrant.id} value={entrant.id}>
+                                    {entrant.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                className="h-9 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-100"
+                                value={finishState.loser}
+                                onChange={(event) =>
+                                  setMatchFinishEdits((prev) => ({
+                                    ...prev,
+                                    [match.id]: {
+                                      ...finishState,
+                                      loser: event.target.value,
+                                    },
+                                  }))
+                                }
+                              >
+                                <option value="">Finish loser</option>
+                                {allEntrants.map((entrant) => (
+                                  <option key={entrant.id} value={entrant.id}>
+                                    {entrant.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          </div>
+                          <select
+                            className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={lengthValue}
+                            onChange={(event) =>
+                              setMatchLengthEdits((prev) => ({
+                                ...prev,
+                                [match.id]: event.target.value,
+                              }))
+                            }
+                            disabled={match.match_type === "blind_gauntlet"}
+                          >
+                            <option value="">Length</option>
+                            <option value="sprint">Under 8 minutes</option>
+                            <option value="standard">8 - 15 minutes</option>
+                            <option value="epic">15+ minutes</option>
+                          </select>
+                          <select
+                            className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                            value={interferenceValue}
+                            onChange={(event) =>
+                              setMatchInterferenceEdits((prev) => ({
+                                ...prev,
+                                [match.id]: event.target.value,
+                              }))
+                            }
+                            disabled={match.match_type === "blind_gauntlet"}
+                          >
+                            <option value="">Interference</option>
+                            <option value="no">No</option>
+                            <option value="yes">Yes</option>
+                          </select>
+                        </div>
+                        <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-zinc-800 pt-4">
+                          <button
+                            className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-5 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            type="button"
+                            onClick={() => {
+                              void (async () => {
+                                await handleSetMatchFinish(
+                                  match.id,
+                                  finishState.method,
+                                  finishState.winner,
+                                  finishState.loser
+                                );
+                                await handleSetMatchLength(match.id, lengthValue);
+                                await handleSetMatchInterference(
+                                  match.id,
+                                  interferenceValue
+                                );
+                              })();
+                            }}
+                            disabled={match.match_type === "blind_gauntlet"}
+                          >
+                            Save details
+                          </button>
+                          {match.match_type === "blind_gauntlet" ? (
+                            <button
+                              className="text-[10px] font-semibold uppercase tracking-wide text-amber-200"
+                              type="button"
+                              onClick={() => {
+                                setAdminView("card");
+                                setScrollMatchId(match.id);
+                              }}
+                            >
+                              Edit special
+                            </button>
+                          ) : null}
+                          {allEntrants.length === 0 ? (
+                            <span className="text-[10px] uppercase tracking-wide text-red-200">
+                              No participants
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {adminView === "scoreboard" && (
+          <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.8fr]">
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
+                    Scoreboard
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold">Live leaderboard</h2>
+                  <p className="mt-2 text-sm text-zinc-400">
+                    Scoreboard behavior is unchanged; this view links to the existing public scoreboard.
+                  </p>
+                </div>
+                {activeShowLinks ? (
+                  <div className="flex flex-wrap gap-3">
+                    <a
+                      className="inline-flex h-10 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300"
+                      href={activeShowLinks.scoreboard}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open scoreboard
+                    </a>
+                    <a
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                      href={activeShowLinks.qr}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Share QR
+                    </a>
+                  </div>
+                ) : null}
+              </div>
+              <div className="mt-6 grid gap-4 md:grid-cols-3">
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                    Matches
+                  </p>
+                  <p className="mt-2 text-3xl font-semibold text-zinc-100">
+                    {matchCompletion.completed}/{matchCompletion.total}
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-400">Completed</p>
+                </div>
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                    Picks status
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-zinc-100">
+                    {activeShow?.lock_picks_at_start ? "Locks at start" : "Manual"}
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Existing lock behavior preserved.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                    Confidence points
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-zinc-100">
+                    {activeShow?.use_confidence_points ? "Enabled" : "Disabled"}
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Uses current scoring rules.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                Maintenance
+              </p>
+              <h2 className="mt-2 text-lg font-semibold">Scoring controls</h2>
+              <p className="mt-2 text-sm text-zinc-400">
+                Recalculation keeps the current brownfield event-level behavior.
+              </p>
+              <div className="mt-5 grid gap-3">
+                <button
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                  type="button"
+                  onClick={() => {
+                    void handleRecalculateScores();
+                  }}
+                  disabled={recalcBusy}
+                >
+                  {recalcBusy ? "Recalculating..." : "Recalculate scores"}
+                </button>
+                <button
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-red-500/70 px-6 text-sm font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-70"
+                  type="button"
+                  onClick={handleClearShowScores}
+                  disabled={clearScoresBusy || !activeShow}
+                >
+                  {clearScoresBusy ? "Clearing..." : "Clear picks & scores"}
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {adminView === "advanced" && adminTab === "events" && (
           <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <h2 className="text-lg font-semibold">Rumble Entry</h2>
           <p className="mt-2 text-sm text-zinc-400">
@@ -4543,11 +5265,11 @@ export default function AdminPage() {
         </section>
         )}
 
-        {adminTab === "matches" && (
+        {adminView === "card" && (
           <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          <h2 className="text-lg font-semibold">Matches</h2>
+          <h2 className="text-lg font-semibold">Card Builder</h2>
           <p className="mt-2 text-sm text-zinc-400">
-            Add matches for the show and assign participants.
+            Build the match card for the selected show and assign participants.
           </p>
           <details
             className="group mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
@@ -4565,18 +5287,12 @@ export default function AdminPage() {
                 Collapse
               </span>
             </summary>
-            <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,1fr,1fr,1fr,auto]">
+            <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,auto]">
               <input
                 className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
                 placeholder="Match name"
                 value={matchName}
                 onChange={(event) => setMatchName(event.target.value)}
-              />
-              <input
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                placeholder="Kind (match, title, tag)"
-                value={matchKind}
-                onChange={(event) => setMatchKind(event.target.value)}
               />
               <select
                 className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
@@ -4594,32 +5310,45 @@ export default function AdminPage() {
                 <option value="blind_gauntlet">Blind Gauntlet Match</option>
                 <option value="multi">Multi-person</option>
               </select>
-              <input
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                type="number"
-                min="1900"
-                max="2100"
-                placeholder="Roster year"
-                value={matchRosterYear}
-                onChange={(event) => setMatchRosterYear(event.target.value)}
-              />
-              <select
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                value={matchRosterGender}
-                onChange={(event) => setMatchRosterGender(event.target.value)}
-              >
-                <option value="men">Men</option>
-                <option value="women">Women</option>
-                <option value="intergender">Intergender</option>
-              </select>
               <button
-                className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+                className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300"
                 type="button"
                 onClick={handleAddMatch}
               >
                 Add match
               </button>
             </div>
+            <details className="mt-3 rounded-2xl border border-zinc-800 bg-black/20 p-3">
+              <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.25em] text-zinc-400">
+                Advanced match options
+              </summary>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  placeholder="Kind (match, title, tag)"
+                  value={matchKind}
+                  onChange={(event) => setMatchKind(event.target.value)}
+                />
+                <input
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  type="number"
+                  min="1900"
+                  max="2100"
+                  placeholder="Roster year"
+                  value={matchRosterYear}
+                  onChange={(event) => setMatchRosterYear(event.target.value)}
+                />
+                <select
+                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  value={matchRosterGender}
+                  onChange={(event) => setMatchRosterGender(event.target.value)}
+                >
+                  <option value="men">Men</option>
+                  <option value="women">Women</option>
+                  <option value="intergender">Intergender</option>
+                </select>
+              </div>
+            </details>
             {matchType === "blind_gauntlet" && (
               <div className="mt-3 rounded-2xl border border-amber-400/20 bg-black/30 p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
@@ -5610,7 +6339,7 @@ export default function AdminPage() {
         </section>
         )}
 
-        {adminTab === "events" && (
+        {adminView === "advanced" && adminTab === "events" && (
           <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <h2 className="text-lg font-semibold">Eliminations</h2>
           <p className="mt-2 text-sm text-zinc-400">
@@ -5657,7 +6386,7 @@ export default function AdminPage() {
         </section>
         )}
 
-        {adminTab === "events" && (
+        {adminView === "advanced" && adminTab === "events" && (
           <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <h2 className="text-lg font-semibold">Active Event Entries</h2>
           <p className="mt-2 text-sm text-zinc-400">
@@ -5826,6 +6555,7 @@ export default function AdminPage() {
         </section>
         )}
 
+        {adminView === "advanced" && (
         <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <h2 className="text-lg font-semibold">Scoring</h2>
           <p className="mt-2 text-sm text-zinc-400">
@@ -5852,6 +6582,7 @@ export default function AdminPage() {
             </button>
           </div>
         </section>
+        )}
 
         {eventLogOpen && activeEvent && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
@@ -5916,42 +6647,57 @@ export default function AdminPage() {
                 Add a new show card. This becomes the active show.
               </p>
               <div className="mt-4 space-y-3">
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                  placeholder="Show name"
-                  value={showName}
-                  onChange={(event) => setShowName(event.target.value)}
-                />
-                <select
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                  value={showPromotionId}
-                  onChange={(event) => setShowPromotionId(event.target.value)}
-                >
-                  <option value="">Select promotion</option>
-                  {promotions.map((promotion) => (
-                    <option key={promotion.id} value={promotion.id}>
-                      {promotion.name}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                  placeholder="Show image URL"
-                  value={showImageUrl}
-                  onChange={(event) => setShowImageUrl(event.target.value)}
-                />
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                  placeholder="Show tagline"
-                  value={showTagline}
-                  onChange={(event) => setShowTagline(event.target.value)}
-                />
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                  type="datetime-local"
-                  value={showStartsAt}
-                  onChange={(event) => setShowStartsAt(event.target.value)}
-                />
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Show title
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="Sunday Night's Main Event"
+                    value={showName}
+                    onChange={(event) => setShowName(event.target.value)}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Promotion
+                  <select
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    value={showPromotionId}
+                    onChange={(event) => setShowPromotionId(event.target.value)}
+                  >
+                    <option value="">Select promotion</option>
+                    {promotions.map((promotion) => (
+                      <option key={promotion.id} value={promotion.id}>
+                        {promotion.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Show poster image
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="Paste the show poster link"
+                    value={showImageUrl}
+                    onChange={(event) => setShowImageUrl(event.target.value)}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Short show description
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="A quick line fans will see on the show page"
+                    value={showTagline}
+                    onChange={(event) => setShowTagline(event.target.value)}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Show date and start time
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    type="datetime-local"
+                    value={showStartsAt}
+                    onChange={(event) => setShowStartsAt(event.target.value)}
+                  />
+                </label>
                 <label className="flex items-center gap-3 text-sm text-zinc-300">
                   <input
                     type="checkbox"
@@ -6012,46 +6758,61 @@ export default function AdminPage() {
                   />
                   Require location verification
                 </label>
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                  placeholder="Venue name"
-                  value={showVenueName}
-                  onChange={(event) => setShowVenueName(event.target.value)}
-                />
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                  placeholder="Venue address"
-                  value={showVenueAddress}
-                  onChange={(event) => setShowVenueAddress(event.target.value)}
-                />
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Venue name
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="Arena or event venue"
+                    value={showVenueName}
+                    onChange={(event) => setShowVenueName(event.target.value)}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Venue address
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="Street address or city"
+                    value={showVenueAddress}
+                    onChange={(event) => setShowVenueAddress(event.target.value)}
+                  />
+                </label>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <input
-                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                    inputMode="decimal"
-                    placeholder="Latitude"
-                    value={showVenueLatitude}
-                    onChange={(event) =>
-                      setShowVenueLatitude(event.target.value)
-                    }
-                  />
-                  <input
-                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                    inputMode="decimal"
-                    placeholder="Longitude"
-                    value={showVenueLongitude}
-                    onChange={(event) =>
-                      setShowVenueLongitude(event.target.value)
-                    }
-                  />
-                  <input
-                    className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                    inputMode="numeric"
-                    placeholder="Radius meters"
-                    value={showLocationRadiusMeters}
-                    onChange={(event) =>
-                      setShowLocationRadiusMeters(event.target.value)
-                    }
-                  />
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Venue latitude
+                    <input
+                      className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                      inputMode="decimal"
+                      placeholder="Map latitude"
+                      value={showVenueLatitude}
+                      onChange={(event) =>
+                        setShowVenueLatitude(event.target.value)
+                      }
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Venue longitude
+                    <input
+                      className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                      inputMode="decimal"
+                      placeholder="Map longitude"
+                      value={showVenueLongitude}
+                      onChange={(event) =>
+                        setShowVenueLongitude(event.target.value)
+                      }
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Location check-in radius
+                    <input
+                      className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                      inputMode="numeric"
+                      placeholder="Meters from the venue"
+                      value={showLocationRadiusMeters}
+                      onChange={(event) =>
+                        setShowLocationRadiusMeters(event.target.value)
+                      }
+                    />
+                  </label>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-400">
@@ -6126,6 +6887,7 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+        </div>
       </main>
     </div>
   );
