@@ -1,8 +1,8 @@
 ## 1. Baseline And Safety Checks
 
-- [ ] 1.1 Re-read `src/app/admin/page.tsx`, `src/components/EntrantCard.tsx`, `openspec/specs/promoter-admin-console/spec.md`, this change's spec delta, and this change's design; verify the current Card Builder handlers for match creation, side creation, participant assignment, ordering, result entry, and recalculation are identified before editing.
-- [ ] 1.2 Confirm no database, RLS, API route, server action, Edge Function, or dependency change is needed for the first implementation; verify with `git diff` after each phase that only intended frontend/OpenSpec files changed.
-- [ ] 1.3 Identify whether to keep the redesigned Card Builder inside `src/app/admin/page.tsx` or extract small presentational components; verify any extraction preserves existing props, state, and Supabase mutation behavior.
+- [x] 1.1 Re-read `src/app/admin/page.tsx`, `src/components/EntrantCard.tsx`, `openspec/specs/promoter-admin-console/spec.md`, this change's spec delta, and this change's design; verify the current Card Builder handlers for match creation, side creation, participant assignment, ordering, result entry, and recalculation are identified before editing.
+- [x] 1.2 Confirm no database, RLS, API route, server action, Edge Function, or dependency change is needed for the first implementation; verify with `git diff` after each phase that only intended frontend/OpenSpec files changed.
+- [x] 1.3 Identify whether to keep the redesigned Card Builder inside `src/app/admin/page.tsx` or extract small presentational components; verify any extraction preserves existing props, state, and Supabase mutation behavior.
 
 ## 2. Card Overview
 
@@ -45,7 +45,7 @@
 
 ## 8. Final Verification
 
-- [ ] 8.1 Run `npm run lint` and verify it completes or document the existing unrelated lint issues.
-- [ ] 8.2 Run `npm run build` and verify it completes or document any build issues.
+- [x] 8.1 Run `npm run lint` and verify it completes or document the existing unrelated lint issues.
+- [x] 8.2 Run `npm run build` and verify it completes or document any build issues.
 - [ ] 8.3 Manually verify the six-match show setup flow in browser: select show, add matches, assign participants, reorder matches, mark championship/main event, preview fan page, and confirm Card Builder keeps result entry out of the default surface.
 - [ ] 8.4 Manually verify brownfield preservation: existing submitted picks still load, Results still drives scoring fields, scoreboard still reads current data, admin writes remain RLS-backed, and no schema or Edge Function changes were introduced.
