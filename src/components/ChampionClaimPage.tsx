@@ -10,6 +10,7 @@ import {
   avatarSrcForKey,
 } from "../lib/avatarOptions";
 import { supabase } from "../lib/supabaseClient";
+import { buildPromotionShowsHref } from "../lib/friendlyUrls";
 import type {
   ChampionCompletedShow,
   ChampionPromotion,
@@ -275,7 +276,9 @@ export const ChampionClaimPage = ({
           ? `Champion status linked to ${payload.claim?.claimed_username ?? "the recorded winner"}.`
           : `Champion profile created for ${payload.claim?.claimed_username ?? profileUsername}.`
       );
-      router.push(`/shows/${promotionId}`);
+      router.push(
+        promotion ? buildPromotionShowsHref(promotion) : `/shows/${promotionId}`
+      );
     } catch (nextError) {
       const message =
         nextError instanceof Error ? nextError.message : "Champion claim failed.";

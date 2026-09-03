@@ -35,6 +35,7 @@ export type EliminatorRow = {
 export type ShowRow = {
   id: string;
   name: string;
+  slug?: string | null;
   tagline?: string | null;
   image_url: string | null;
   promotion_id: string | null;
@@ -56,6 +57,7 @@ export type ShowRow = {
 export type PromotionRow = {
   id: string;
   name: string;
+  slug?: string | null;
   image_url: string | null;
 };
 

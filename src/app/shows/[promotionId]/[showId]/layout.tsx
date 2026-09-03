@@ -8,6 +8,7 @@ type LayoutProps = {
 type ShowRow = {
   id: string;
   name: string;
+  slug?: string | null;
   tagline?: string | null;
   image_url: string | null;
   promotion_id: string | null;
@@ -16,6 +17,21 @@ type ShowRow = {
 type PromotionRow = {
   id: string;
   name: string;
+  slug?: string | null;
+};
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+
+const isUuid = (value: string) => UUID_PATTERN.test(value);
+
+const buildShowHref = (
+  show: Pick<ShowRow, "id" | "promotion_id" | "slug">,
+  promotion?: Pick<PromotionRow, "id" | "slug"> | null
+) => {
+  const promotionIdentifier = promotion?.slug || show.promotion_id;
+  if (!promotionIdentifier) return "/shows";
+  return `/shows/${promotionIdentifier}/${show.slug || show.id}`;
 };
 
 const getBaseUrl = () =>
@@ -24,10 +40,13 @@ const getBaseUrl = () =>
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
 
-const fetchShow = async (showId: string) => {
-  if (!supabaseUrl || !supabaseKey || !showId) return null;
+const fetchShow = async (showIdentifier: string, promotionId: string) => {
+  if (!supabaseUrl || !supabaseKey || !showIdentifier || !promotionId) return null;
+  const filter = isUuid(showIdentifier)
+    ? `id=eq.${showIdentifier}`
+    : `slug=eq.${encodeURIComponent(showIdentifier)}`;
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/shows?select=id,name,tagline,image_url,promotion_id&id=eq.${showId}`,
+    `${supabaseUrl}/rest/v1/shows?select=id,name,slug,tagline,image_url,promotion_id&promotion_id=eq.${promotionId}&${filter}`,
     {
       headers: {
         apikey: supabaseKey,
@@ -41,10 +60,13 @@ const fetchShow = async (showId: string) => {
   return data[0] ?? null;
 };
 
-const fetchPromotion = async (promotionId: string | null) => {
-  if (!supabaseUrl || !supabaseKey || !promotionId) return null;
+const fetchPromotion = async (promotionIdentifier: string | null) => {
+  if (!supabaseUrl || !supabaseKey || !promotionIdentifier) return null;
+  const filter = isUuid(promotionIdentifier)
+    ? `id=eq.${promotionIdentifier}`
+    : `slug=eq.${encodeURIComponent(promotionIdentifier)}`;
   const res = await fetch(
-    `${supabaseUrl}/rest/v1/promotions?select=id,name&id=eq.${promotionId}`,
+    `${supabaseUrl}/rest/v1/promotions?select=id,name,slug&${filter}`,
     {
       headers: {
         apikey: supabaseKey,
@@ -62,8 +84,10 @@ export async function generateMetadata({
   params,
 }: LayoutProps): Promise<Metadata> {
   const resolvedParams = await params;
-  const show = await fetchShow(resolvedParams.showId);
-  const promotion = await fetchPromotion(show?.promotion_id ?? null);
+  const promotion = await fetchPromotion(resolvedParams.promotionId);
+  const show = promotion
+    ? await fetchShow(resolvedParams.showId, promotion.id)
+    : null;
   const title = show
     ? `${show.name}${promotion ? ` · ${promotion.name}` : ""}`
     : "BoutPick";
@@ -72,6 +96,9 @@ export async function generateMetadata({
     (show ? `Make picks for ${show.name} on BoutPick.` : "BoutPick.");
   const imageUrl = show?.image_url || "/images/og-default.svg";
   const baseUrl = getBaseUrl();
+  const showUrl = show
+    ? `${baseUrl}${buildShowHref(show, promotion)}`
+    : `${baseUrl}/shows/${resolvedParams.promotionId}/${resolvedParams.showId}`;
 
   return {
     title,
@@ -80,7 +107,7 @@ export async function generateMetadata({
       title,
       description,
       type: "website",
-      url: `${baseUrl}/shows/${resolvedParams.promotionId}/${resolvedParams.showId}`,
+      url: showUrl,
       images: [
         {
           url: imageUrl,

@@ -4,6 +4,8 @@ type ShowEditorProps = {
   activeShowName: string | null;
   name: string;
   setName: (value: string) => void;
+  slug: string;
+  setSlug: (value: string) => void;
   promotions: { id: string; name: string }[];
   promotionId: string;
   setPromotionId: (value: string) => void;
@@ -45,6 +47,8 @@ export const ShowEditor = ({
   activeShowName,
   name,
   setName,
+  slug,
+  setSlug,
   promotions,
   promotionId,
   setPromotionId,
@@ -156,6 +160,20 @@ export const ShowEditor = ({
         {saving ? "Saving…" : "Save show"}
       </button>
     </div>
+    <label className="mt-3 block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+      Share URL name
+      <input
+        className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+        placeholder="sunday-nights-main-event"
+        value={slug}
+        onChange={(event) => setSlug(event.target.value)}
+        disabled={disabled}
+      />
+      <span className="mt-2 block text-xs font-normal normal-case tracking-normal text-amber-200/80">
+        Changing this can affect friendly links that have already been shared.
+        Use lowercase letters, numbers, and dashes.
+      </span>
+    </label>
     <label className="mt-3 block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
       Short show description
       <input

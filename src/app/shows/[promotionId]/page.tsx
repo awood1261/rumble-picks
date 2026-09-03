@@ -6,6 +6,10 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
 import type { PromotionRow, ShowRow } from "../../../lib/picksTypes";
+import {
+  buildShowHref,
+  isUuid,
+} from "../../../lib/friendlyUrls";
 
 export default function PromotionShowsPage() {
   const params = useParams();
@@ -41,29 +45,35 @@ export default function PromotionShowsPage() {
     let ignore = false;
     if (!promotionId) return;
     const load = async () => {
-      const [{ data: promoRow, error: promoError }, { data: showRows, error }] =
-        await Promise.all([
-          supabase
-            .from("promotions")
-            .select("id, name, image_url")
-            .eq("id", promotionId)
-            .maybeSingle(),
-          supabase
-            .from("shows")
-            .select("id, name, image_url, starts_at, status, promotion_id")
-            .eq("promotion_id", promotionId)
-            .order("starts_at", { ascending: true }),
-        ]);
+      const promotionQuery = supabase
+        .from("promotions")
+        .select("id, name, slug, image_url");
+      const { data: promoRow, error: promoError } = await (isUuid(promotionId)
+        ? promotionQuery.eq("id", promotionId)
+        : promotionQuery.eq("slug", promotionId)
+      ).maybeSingle();
       if (ignore) return;
       if (promoError) {
         setMessage(promoError.message);
+        setPromotion(null);
+        setShows([]);
       } else {
         setPromotion(promoRow ?? null);
-      }
-      if (error) {
-        setMessage(error.message);
-      } else {
-        setShows(showRows ?? []);
+        if (!promoRow) {
+          setShows([]);
+          return;
+        }
+        const { data: showRows, error } = await supabase
+          .from("shows")
+          .select("id, name, slug, image_url, starts_at, status, promotion_id")
+          .eq("promotion_id", promoRow.id)
+          .order("starts_at", { ascending: true });
+        if (ignore) return;
+        if (error) {
+          setMessage(error.message);
+        } else {
+          setShows(showRows ?? []);
+        }
       }
     };
     load();
@@ -127,7 +137,7 @@ export default function PromotionShowsPage() {
             </div>
           </div>
           <Link
-            href={`/title/${promotionId}`}
+            href={`/title/${promotion?.id ?? promotionId}`}
             className="rounded-full border border-amber-300/35 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-amber-100 transition hover:border-amber-200 hover:bg-amber-200/15"
           >
             View title lineage
@@ -144,7 +154,7 @@ export default function PromotionShowsPage() {
                   {formatShowDate(show.starts_at)}
                 </p>
                 <Link
-                  href={`/shows/${promotionId}/${show.id}`}
+                  href={promotion ? buildShowHref(show, promotion) : buildShowHref(show)}
                   className="group relative flex w-full flex-col overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 transition hover:border-amber-400/60"
                 >
                   {show.image_url ? (

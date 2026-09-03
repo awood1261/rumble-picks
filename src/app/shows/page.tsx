@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import type { PromotionRow } from "../../lib/picksTypes";
+import { buildPromotionShowsHref } from "../../lib/friendlyUrls";
 
 export default function ShowsPage() {
   const [promotions, setPromotions] = useState<PromotionRow[]>([]);
@@ -16,7 +17,7 @@ export default function ShowsPage() {
     const load = async () => {
       const { data, error } = await supabase
         .from("promotions")
-        .select("id, name, image_url")
+        .select("id, name, slug, image_url")
         .order("name", { ascending: true });
       if (ignore) return;
       if (error) {
@@ -57,7 +58,7 @@ export default function ShowsPage() {
             {promotions.map((promotion) => (
               <Link
                 key={promotion.id}
-                href={`/shows/${promotion.id}`}
+                href={buildPromotionShowsHref(promotion)}
                 className="group relative aspect-[3/4] overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5 transition hover:border-amber-400/60"
               >
                 <div className="relative z-10">

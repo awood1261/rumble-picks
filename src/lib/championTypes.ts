@@ -34,6 +34,7 @@ export type ChampionCompletedShow = {
 export type ChampionPromotion = {
   id: string;
   name: string;
+  slug?: string | null;
   image_url: string | null;
 };
 
@@ -98,6 +99,7 @@ export type PromotionLineagePageData = {
   status: PromotionLineageStatus;
   lineage: PromotionLineageReign[];
   call_to_action_show_id: string | null;
+  call_to_action_show_slug: string | null;
 };
 
 export type TitleLandingPromotionCard = {
