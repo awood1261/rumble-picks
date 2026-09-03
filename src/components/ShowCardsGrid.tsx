@@ -3,6 +3,7 @@
 import Link from "next/link";
 import posthog from "posthog-js";
 import type { PromotionRow, ShowRow } from "../lib/picksTypes";
+import { buildShowHref } from "../lib/friendlyUrls";
 
 const formatShowDate = (startsAt: string | null) => {
   if (!startsAt) return "Show date TBD";
@@ -77,9 +78,7 @@ export const ShowCardsGrid = ({
         return (
           <Link
             key={show.id}
-            href={
-              show.promotion_id ? `/shows/${show.promotion_id}/${show.id}` : "/shows"
-            }
+            href={buildShowHref(show, promotion)}
             className="group relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70"
             onClick={() =>
               posthog.capture("show_card_clicked", {

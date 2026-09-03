@@ -32,6 +32,7 @@ import type {
 type ShowRow = {
   id: string;
   name: string;
+  slug?: string | null;
   starts_at: string | null;
   promotion_id: string | null;
   is_over?: boolean | null;
@@ -135,7 +136,7 @@ export const getChampionPromotion = async (
 
   const { data, error } = await supabaseAdmin
     .from("promotions")
-    .select("id, name, image_url")
+    .select("id, name, slug, image_url")
     .eq("id", promotionId)
     .maybeSingle();
 
@@ -678,7 +679,7 @@ const buildPromotionLineage = async (
 ): Promise<PromotionLineageReign[]> => {
   const { data: completedShowData, error: completedShowError } = await supabaseAdmin
     .from("shows")
-    .select("id, name, starts_at")
+    .select("id, name, slug, starts_at")
     .eq("promotion_id", promotionId)
     .eq("is_over", true)
     .order("starts_at", { ascending: true, nullsFirst: true });
@@ -769,7 +770,12 @@ export const getPromotionLineagePageData = async (
   }
 
   const activeShow = (
-    (activeShowData ?? []) as { id: string; name: string; starts_at: string | null }[]
+    (activeShowData ?? []) as {
+      id: string;
+      name: string;
+      slug: string | null;
+      starts_at: string | null;
+    }[]
   )[0] ?? null;
 
   let status: PromotionLineageStatus;
@@ -820,6 +826,7 @@ export const getPromotionLineagePageData = async (
     status,
     lineage,
     call_to_action_show_id: activeShow?.id ?? null,
+    call_to_action_show_slug: activeShow?.slug ?? null,
   };
 };
 
@@ -847,7 +854,7 @@ export const getTitleLandingPromotionCards = async (): Promise<
 > => {
   const { data, error } = await supabaseAdmin
     .from("promotions")
-    .select("id, name, image_url")
+    .select("id, name, slug, image_url")
     .order("name", { ascending: true });
 
   if (error) {

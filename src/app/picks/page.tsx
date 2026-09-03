@@ -10,6 +10,7 @@ import {
   getStoredLocationVerification,
   isValidLocationGateConfig,
 } from "../../lib/locationGate";
+import { buildShowHref } from "../../lib/friendlyUrls";
 import posthog from "posthog-js";
 import {
   CustomEntrantModal,
@@ -276,8 +277,12 @@ function PicksPageInner() {
   );
   const isLocationGateSatisfied =
     !selectedShowRequiresLocationVerification || hasLocationVerification;
-  const selectedShowVerificationHref = selectedShow?.promotion_id
-    ? `/shows/${selectedShow.promotion_id}/${selectedShow.id}`
+  const selectedShowPromotion =
+    selectedShow?.promotion_id
+      ? promotions.find((promotion) => promotion.id === selectedShow.promotion_id)
+      : null;
+  const selectedShowVerificationHref = selectedShow
+    ? buildShowHref(selectedShow, selectedShowPromotion)
     : "/shows";
   const showUsesConfidencePoints = selectedShow?.use_confidence_points ?? false;
   const showLocksAtStart = selectedShow?.lock_picks_at_start ?? true;
@@ -826,11 +831,11 @@ function PicksPageInner() {
     Promise.all([
           supabase
             .from("shows")
-            .select("id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters")
+            .select("id, name, slug, image_url, promotion_id, status, starts_at, lock_picks_at_start, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters")
             .order("name", { ascending: true }),
       supabase
         .from("promotions")
-        .select("id, name, image_url")
+        .select("id, name, slug, image_url")
         .order("name", { ascending: true }),
       supabase
         .from("events")

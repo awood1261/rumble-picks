@@ -8,6 +8,10 @@ import { supabase } from "../../../../lib/supabaseClient";
 import { avatarSrcForKey } from "../../../../lib/avatarOptions";
 import type { PromotionRow, ShowRow } from "../../../../lib/picksTypes";
 import {
+  buildPromotionShowsHref,
+  isUuid,
+} from "../../../../lib/friendlyUrls";
+import {
   LOCATION_GATE_GEOLOCATION_OPTIONS,
   evaluateLocationGate,
   getStoredLocationVerification,
@@ -156,8 +160,8 @@ const getLocationCopy = (
 
 export default function ShowDetailPage() {
   const params = useParams();
-  const showId = typeof params?.showId === "string" ? params.showId : "";
-  const promotionId =
+  const showIdentifier = typeof params?.showId === "string" ? params.showId : "";
+  const promotionIdentifier =
     typeof params?.promotionId === "string" ? params.promotionId : "";
   const [show, setShow] = useState<ShowRow | null>(null);
   const [promotion, setPromotion] = useState<PromotionRow | null>(null);
@@ -191,6 +195,8 @@ export default function ShowDetailPage() {
   const requiresLocationVerification = !!show?.requires_location_verification;
   const hasValidLocationGateConfig =
     isValidLocationGateConfig(locationGateConfig);
+  const resolvedShowId = show?.id ?? "";
+  const resolvedPromotionId = promotion?.id ?? show?.promotion_id ?? "";
   const formattedStart = formatShowDate(show?.starts_at ?? null);
   const venueLabel = formatVenueLabel(show);
   const isShowOver = Boolean(show?.is_over);
@@ -229,42 +235,51 @@ export default function ShowDetailPage() {
 
   useEffect(() => {
     let ignore = false;
-    if (!showId) return;
+    if (!showIdentifier || !promotionIdentifier) return;
     const load = async () => {
-      const { data, error } = await supabase
+      const promotionQuery = supabase
+        .from("promotions")
+        .select("id, name, slug, image_url");
+      const { data: promotionRow, error: promotionError } = await (isUuid(
+        promotionIdentifier
+      )
+        ? promotionQuery.eq("id", promotionIdentifier)
+        : promotionQuery.eq("slug", promotionIdentifier)
+      ).maybeSingle();
+      if (ignore) return;
+      if (promotionError) {
+        setMessage(promotionError.message);
+        setPromotion(null);
+        setShow(null);
+        return;
+      }
+      setPromotion(promotionRow ?? null);
+      if (!promotionRow) {
+        setShow(null);
+        return;
+      }
+      const showQuery = supabase
         .from("shows")
         .select(
-          "id, name, tagline, image_url, starts_at, status, promotion_id, requires_email_registration, lock_picks_at_start, is_over, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+          "id, name, slug, tagline, image_url, starts_at, status, promotion_id, requires_email_registration, lock_picks_at_start, is_over, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
         )
-        .eq("id", showId)
-        .maybeSingle();
+        .eq("promotion_id", promotionRow.id);
+      const { data, error } = await (isUuid(showIdentifier)
+        ? showQuery.eq("id", showIdentifier)
+        : showQuery.eq("slug", showIdentifier)
+      ).maybeSingle();
       if (ignore) return;
       if (error) {
         setMessage(error.message);
       } else {
         setShow(data ?? null);
       }
-      if (data?.promotion_id) {
-        const { data: promotionRow, error: promotionError } = await supabase
-          .from("promotions")
-          .select("id, name, image_url")
-          .eq("id", data.promotion_id)
-          .maybeSingle();
-        if (ignore) return;
-        if (promotionError) {
-          setMessage(promotionError.message);
-        } else {
-          setPromotion(promotionRow ?? null);
-        }
-      } else {
-        setPromotion(null);
-      }
     };
     load();
     return () => {
       ignore = true;
     };
-  }, [showId]);
+  }, [promotionIdentifier, showIdentifier]);
 
   useEffect(() => {
     if (!show?.id || typeof window === "undefined") return;
@@ -285,15 +300,15 @@ export default function ShowDetailPage() {
 
   useEffect(() => {
     let ignore = false;
-    if (!showId || !promotionId) return;
+    if (!resolvedShowId || !resolvedPromotionId) return;
 
     const loadChampionParticipants = async () => {
       const response = await fetch("/api/champion/participants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          showId,
-          promotionId,
+          showId: resolvedShowId,
+          promotionId: resolvedPromotionId,
         }),
       });
       const payload = (await response.json()) as {
@@ -312,11 +327,11 @@ export default function ShowDetailPage() {
     return () => {
       ignore = true;
     };
-  }, [promotionId, showId]);
+  }, [resolvedPromotionId, resolvedShowId]);
 
   useEffect(() => {
     let ignore = false;
-    if (!showId || !promotionId) return;
+    if (!resolvedShowId || !resolvedPromotionId) return;
 
     const loadChampionshipStatus = async () => {
       setChampionshipStatusLoading(true);
@@ -325,8 +340,8 @@ export default function ShowDetailPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            showId,
-            promotionId,
+            showId: resolvedShowId,
+            promotionId: resolvedPromotionId,
           }),
         });
         const payload = (await response.json()) as {
@@ -352,7 +367,7 @@ export default function ShowDetailPage() {
     return () => {
       ignore = true;
     };
-  }, [promotionId, showId]);
+  }, [resolvedPromotionId, resolvedShowId]);
 
   useEffect(() => {
     let ignore = false;
@@ -377,7 +392,7 @@ export default function ShowDetailPage() {
   useEffect(() => {
     let ignore = false;
     const loadPickStatus = async () => {
-      if (!showId || !userId) {
+      if (!resolvedShowId || !userId) {
         setHasSavedPicks(false);
         setPickStatusChecked(Boolean(authChecked));
         return;
@@ -387,7 +402,7 @@ export default function ShowDetailPage() {
       const { data, error } = await supabase
         .from("picks")
         .select("id")
-        .eq("show_id", showId)
+        .eq("show_id", resolvedShowId)
         .eq("user_id", userId)
         .maybeSingle();
 
@@ -400,7 +415,7 @@ export default function ShowDetailPage() {
     return () => {
       ignore = true;
     };
-  }, [authChecked, showId, userId]);
+  }, [authChecked, resolvedShowId, userId]);
 
   useEffect(() => {
     if (!show?.id || !requiresLocationVerification) {
@@ -532,7 +547,10 @@ export default function ShowDetailPage() {
   const scoreboardHref = show ? `/scoreboard?show=${show.id}` : "/scoreboard";
   const picksHref = show ? `/picks?show=${show.id}` : "/picks";
   const loginHref = show ? `/login?show=${show.id}` : "/login";
-  const titleHref = promotionId ? `/title/${promotionId}` : "/title";
+  const titleHref = resolvedPromotionId ? `/title/${resolvedPromotionId}` : "/title";
+  const promotionShowsHref = promotion
+    ? buildPromotionShowsHref(promotion)
+    : "/shows";
   const locationCopy = getLocationCopy(locationVerificationStatus, venueLabel);
   const canRetryLocation =
     locationVerificationStatus !== "checking" &&
@@ -633,14 +651,14 @@ export default function ShowDetailPage() {
         : "A new champion will be crowned tonight."
     : null;
 
-  if (!showId) {
+  if (!showIdentifier) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100">
         <main className="mx-auto w-full max-w-4xl px-6 py-10">
           <div className="mb-6">
             <Link
               className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200 hover:text-amber-100"
-              href={promotionId ? `/shows/${promotionId}` : "/shows"}
+              href={promotionShowsHref}
             >
               ← Back to shows
             </Link>

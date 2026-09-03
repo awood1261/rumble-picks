@@ -6,6 +6,7 @@ import posthog from "posthog-js";
 import { supabase } from "../../lib/supabaseClient";
 import type { PromotionRow, ShowRow } from "../../lib/picksTypes";
 import { ShowCardsGrid } from "../../components/ShowCardsGrid";
+import { buildShowHref } from "../../lib/friendlyUrls";
 
 export default function PlayPage() {
   const router = useRouter();
@@ -29,6 +30,9 @@ export default function PlayPage() {
       return !(show.lock_picks_at_start ?? true);
     });
   }, [shows, now]);
+  const promotionById = useMemo(() => {
+    return new Map(promotions.map((promotion) => [promotion.id, promotion]));
+  }, [promotions]);
 
   useEffect(() => {
     let ignore = false;
@@ -39,12 +43,12 @@ export default function PlayPage() {
           supabase
             .from("shows")
             .select(
-              "id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start, is_featured_play_show, is_over"
+              "id, name, slug, image_url, promotion_id, status, starts_at, lock_picks_at_start, is_featured_play_show, is_over"
             )
             .order("starts_at", { ascending: true }),
           supabase
             .from("promotions")
-            .select("id, name, image_url")
+            .select("id, name, slug, image_url")
             .order("name", { ascending: true }),
         ]);
       if (ignore) return;
@@ -74,11 +78,7 @@ export default function PlayPage() {
         show_name: featuredShow.name,
         promotion_id: featuredShow.promotion_id,
       });
-      if (featuredShow.promotion_id) {
-        router.replace(`/shows/${featuredShow.promotion_id}/${featuredShow.id}`);
-      } else {
-        router.replace("/shows");
-      }
+      router.replace(buildShowHref(featuredShow, promotionById.get(featuredShow.promotion_id ?? "") ?? null));
       return;
     }
     if (activeShows.length === 1) {
@@ -89,13 +89,9 @@ export default function PlayPage() {
         show_name: target.name,
         promotion_id: target.promotion_id,
       });
-      if (target?.promotion_id) {
-        router.replace(`/shows/${target.promotion_id}/${target.id}`);
-      } else {
-        router.replace("/shows");
-      }
+      router.replace(buildShowHref(target, promotionById.get(target.promotion_id ?? "") ?? null));
     }
-  }, [activeShows, featuredShow, loading, router]);
+  }, [activeShows, featuredShow, loading, promotionById, router]);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);

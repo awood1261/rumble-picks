@@ -3,6 +3,10 @@ import Link from "next/link";
 import { Cinzel } from "next/font/google";
 import { avatarSrcForKey } from "../../../lib/avatarOptions";
 import { getPromotionLineagePageData } from "../../../lib/championData";
+import {
+  buildPromotionShowsHref,
+  buildShowHref,
+} from "../../../lib/friendlyUrls";
 
 export const revalidate = 300;
 
@@ -62,9 +66,19 @@ export default async function TitleLineagePage({
   const promotion = pageData.promotion;
   const status = pageData.status;
   const currentReign = pageData.lineage[0] ?? null;
-  const playHref = pageData.call_to_action_show_id
-    ? `/shows/${promotionId}/${pageData.call_to_action_show_id}`
+  const promotionShowsHref = promotion
+    ? buildPromotionShowsHref(promotion)
     : `/shows/${promotionId}`;
+  const playHref = pageData.call_to_action_show_id
+    ? buildShowHref(
+        {
+          id: pageData.call_to_action_show_id,
+          slug: pageData.call_to_action_show_slug,
+          promotion_id: promotion?.id ?? promotionId,
+        },
+        promotion
+      )
+    : promotionShowsHref;
 
   if (!promotion) {
     return (
@@ -131,7 +145,7 @@ export default async function TitleLineagePage({
       <main className="relative mx-auto w-full max-w-5xl px-4 pb-20 pt-6 sm:px-6 lg:px-8">
         <div className="mb-5 flex items-center justify-between gap-4">
           <Link
-            href={`/shows/${promotionId}`}
+            href={promotionShowsHref}
             className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200 hover:text-amber-100"
           >
             ← Back to Shows

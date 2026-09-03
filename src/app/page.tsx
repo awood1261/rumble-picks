@@ -34,11 +34,11 @@ export default function Home() {
         await Promise.all([
           supabase
             .from("shows")
-            .select("id, name, image_url, promotion_id, status, starts_at, lock_picks_at_start")
+            .select("id, name, slug, image_url, promotion_id, status, starts_at, lock_picks_at_start")
             .order("starts_at", { ascending: true }),
           supabase
             .from("promotions")
-            .select("id, name, image_url")
+            .select("id, name, slug, image_url")
             .order("name", { ascending: true }),
         ]);
 

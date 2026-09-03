@@ -7,6 +7,11 @@ import { EntrantCard } from "../../components/EntrantCard";
 import { ShowEditor } from "../../components/ShowEditor";
 import { calculateScore, type PicksPayload } from "../../lib/scoring";
 import { scoringRules } from "../../lib/scoringRules";
+import {
+  buildShowHref,
+  isValidSlug,
+  normalizeSlug,
+} from "../../lib/friendlyUrls";
 
 type EventRow = {
   id: string;
@@ -34,6 +39,7 @@ type EliminatorRow = {
 type ShowRow = {
   id: string;
   name: string;
+  slug?: string | null;
   tagline?: string | null;
   image_url: string | null;
   promotion_id: string | null;
@@ -55,6 +61,7 @@ type ShowRow = {
 type PromotionRow = {
   id: string;
   name: string;
+  slug?: string | null;
   image_url: string | null;
 };
 
@@ -346,6 +353,7 @@ export default function AdminPage() {
   const [eliminatorEliminationOrder, setEliminatorEliminationOrder] =
     useState("");
   const [showName, setShowName] = useState("");
+  const [showSlug, setShowSlug] = useState("");
   const [showPromotionId, setShowPromotionId] = useState("");
   const [showImageUrl, setShowImageUrl] = useState("");
   const [showStartsAt, setShowStartsAt] = useState("");
@@ -365,8 +373,10 @@ export default function AdminPage() {
   const [showModalOpen, setShowModalOpen] = useState(false);
   const [promotionModalOpen, setPromotionModalOpen] = useState(false);
   const [promotionName, setPromotionName] = useState("");
+  const [promotionSlug, setPromotionSlug] = useState("");
   const [promotionImageUrl, setPromotionImageUrl] = useState("");
   const [showEditName, setShowEditName] = useState("");
+  const [showEditSlug, setShowEditSlug] = useState("");
   const [showEditPromotionId, setShowEditPromotionId] = useState("");
   const [showEditImageUrl, setShowEditImageUrl] = useState("");
   const [showEditStartsAt, setShowEditStartsAt] = useState("");
@@ -650,6 +660,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!activeShow) {
       setShowEditName("");
+      setShowEditSlug("");
       setShowEditPromotionId("");
       setShowEditImageUrl("");
       setShowEditStartsAt("");
@@ -668,6 +679,7 @@ export default function AdminPage() {
       return;
     }
     setShowEditName(activeShow.name ?? "");
+    setShowEditSlug(activeShow.slug ?? "");
     setShowEditPromotionId(activeShow.promotion_id ?? "");
     setShowEditImageUrl(activeShow.image_url ?? "");
     setShowEditStartsAt(formatLocalDateTime(activeShow.starts_at ?? null));
@@ -703,6 +715,7 @@ export default function AdminPage() {
   }, [
     activeShow?.id,
     activeShow?.name,
+    activeShow?.slug,
     activeShow?.image_url,
     activeShow?.promotion_id,
     activeShow?.starts_at,
@@ -1059,16 +1072,13 @@ export default function AdminPage() {
     if (!activeShow) {
       return null;
     }
-    const promotionId = activeShow.promotion_id ?? activePromotion?.id ?? "";
     return {
-      show: promotionId
-        ? `/shows/${promotionId}/${activeShow.id}`
-        : `/shows/${activeShow.id}`,
+      show: buildShowHref(activeShow, activePromotion),
       picks: `/picks?show=${activeShow.id}`,
       scoreboard: `/scoreboard?show=${activeShow.id}`,
       qr: "/qr",
     };
-  }, [activePromotion?.id, activeShow]);
+  }, [activePromotion, activeShow]);
 
   const matchCompletion = useMemo(() => {
     const completed = orderedShowMatches.filter(
@@ -1183,12 +1193,12 @@ export default function AdminPage() {
         supabase
           .from("shows")
           .select(
-            "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+            "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
           )
           .order("created_at", { ascending: false }),
         supabase
           .from("promotions")
-          .select("id, name, image_url")
+          .select("id, name, slug, image_url")
           .order("name", { ascending: true }),
         supabase
           .from("events")
@@ -1472,12 +1482,12 @@ export default function AdminPage() {
           supabase
             .from("shows")
             .select(
-              "id, name, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+              "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
             )
             .order("created_at", { ascending: false }),
           supabase
             .from("promotions")
-            .select("id, name, image_url")
+            .select("id, name, slug, image_url")
             .order("name", { ascending: true }),
           supabase
             .from("events")
@@ -1927,6 +1937,21 @@ export default function AdminPage() {
       setMessage("Select a promotion for the show.");
       return;
     }
+    const nextShowSlug = normalizeSlug(showSlug || showName);
+    if (!nextShowSlug || !isValidSlug(nextShowSlug)) {
+      setMessage("Enter a share URL name using letters, numbers, and dashes.");
+      return;
+    }
+    if (
+      shows.some(
+        (show) =>
+          show.promotion_id === showPromotionId &&
+          show.slug === nextShowSlug
+      )
+    ) {
+      setMessage("That show share URL is already used by this promotion.");
+      return;
+    }
     const locationGateResult = buildShowLocationGatePayload({
       requiresLocationVerification: showRequiresLocationVerification,
       venueName: showVenueName,
@@ -1953,6 +1978,7 @@ export default function AdminPage() {
       .from("shows")
       .insert({
         name: showName.trim(),
+        slug: nextShowSlug,
         promotion_id: showPromotionId,
         image_url: showImageUrl.trim() || null,
         tagline: showTagline.trim() || null,
@@ -1966,7 +1992,7 @@ export default function AdminPage() {
         ...locationGateResult.payload,
       })
       .select(
-        "id, name, tagline, image_url, promotion_id, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+        "id, name, slug, tagline, image_url, promotion_id, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
       )
       .single();
     if (error || !newShow) {
@@ -1974,6 +2000,7 @@ export default function AdminPage() {
       return;
     }
     setShowName("");
+    setShowSlug("");
     setShowPromotionId("");
     setShowImageUrl("");
     setShowStartsAt("");
@@ -2002,19 +2029,30 @@ export default function AdminPage() {
       setMessage("Promotion name is required.");
       return;
     }
+    const nextPromotionSlug = normalizeSlug(promotionSlug || promotionName);
+    if (!nextPromotionSlug || !isValidSlug(nextPromotionSlug)) {
+      setMessage("Enter a promotion URL name using letters, numbers, and dashes.");
+      return;
+    }
+    if (promotions.some((promotion) => promotion.slug === nextPromotionSlug)) {
+      setMessage("That promotion URL name is already in use.");
+      return;
+    }
     const { data: newPromotion, error } = await supabase
       .from("promotions")
       .insert({
         name: promotionName.trim(),
+        slug: nextPromotionSlug,
         image_url: promotionImageUrl.trim() || null,
       })
-      .select("id, name, image_url")
+      .select("id, name, slug, image_url")
       .single();
     if (error || !newPromotion) {
       setMessage(error?.message ?? "Failed to create promotion.");
       return;
     }
     setPromotionName("");
+    setPromotionSlug("");
     setPromotionImageUrl("");
     setPromotionModalOpen(false);
     setToastMessage(`Promotion created: ${newPromotion.name}.`);
@@ -2032,6 +2070,22 @@ export default function AdminPage() {
     }
     if (!showEditPromotionId) {
       setMessage("Select a promotion for the show.");
+      return;
+    }
+    const nextShowSlug = normalizeSlug(showEditSlug || showEditName);
+    if (!nextShowSlug || !isValidSlug(nextShowSlug)) {
+      setMessage("Enter a share URL name using letters, numbers, and dashes.");
+      return;
+    }
+    if (
+      shows.some(
+        (show) =>
+          show.id !== activeShow.id &&
+          show.promotion_id === showEditPromotionId &&
+          show.slug === nextShowSlug
+      )
+    ) {
+      setMessage("That show share URL is already used by this promotion.");
       return;
     }
     const locationGateResult = buildShowLocationGatePayload({
@@ -2062,6 +2116,7 @@ export default function AdminPage() {
     }
     const payload = {
       name: showEditName.trim(),
+      slug: nextShowSlug,
       promotion_id: showEditPromotionId,
       image_url: showEditImageUrl.trim() || null,
       tagline: showEditTagline.trim() || null,
@@ -2080,7 +2135,7 @@ export default function AdminPage() {
       .update(payload)
       .eq("id", activeShow.id)
       .select(
-        "id, name, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+        "id, name, slug, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
       )
       .single();
     if (error || !updatedShow) {
@@ -3850,6 +3905,8 @@ export default function AdminPage() {
             activeShowName={activeShow?.name ?? null}
             name={showEditName}
             setName={setShowEditName}
+            slug={showEditSlug}
+            setSlug={setShowEditSlug}
             promotions={promotions}
             promotionId={showEditPromotionId}
             setPromotionId={setShowEditPromotionId}
@@ -6763,6 +6820,18 @@ export default function AdminPage() {
                   />
                 </label>
                 <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Share URL name
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="sunday-nights-main-event"
+                    value={showSlug}
+                    onChange={(event) => setShowSlug(event.target.value)}
+                  />
+                  <span className="mt-2 block text-xs font-normal normal-case tracking-normal text-zinc-400">
+                    Leave blank to create one from the show title.
+                  </span>
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
                   Promotion
                   <select
                     className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
@@ -6961,18 +7030,36 @@ export default function AdminPage() {
                 Add a promotion grouping for shows.
               </p>
               <div className="mt-4 space-y-3">
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                  placeholder="Promotion name"
-                  value={promotionName}
-                  onChange={(event) => setPromotionName(event.target.value)}
-                />
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                  placeholder="Promotion image URL"
-                  value={promotionImageUrl}
-                  onChange={(event) => setPromotionImageUrl(event.target.value)}
-                />
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Promotion name
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="AWR Wrestling"
+                    value={promotionName}
+                    onChange={(event) => setPromotionName(event.target.value)}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Promotion URL name
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="awr-wrestling"
+                    value={promotionSlug}
+                    onChange={(event) => setPromotionSlug(event.target.value)}
+                  />
+                  <span className="mt-2 block text-xs font-normal normal-case tracking-normal text-zinc-400">
+                    Leave blank to create one from the promotion name.
+                  </span>
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Promotion image
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="Paste the promotion image link"
+                    value={promotionImageUrl}
+                    onChange={(event) => setPromotionImageUrl(event.target.value)}
+                  />
+                </label>
               </div>
               <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
                 <button
