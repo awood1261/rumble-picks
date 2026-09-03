@@ -430,8 +430,12 @@ export default function AdminPage() {
   const [matchKnownWrestlerId, setMatchKnownWrestlerId] = useState("");
   const [matchCandidateIds, setMatchCandidateIds] = useState<string[]>([]);
   const [matchCreateOpen, setMatchCreateOpen] = useState(false);
+  const [focusedMatchId, setFocusedMatchId] = useState<string | null>(null);
   const [matchEntrantSelection, setMatchEntrantSelection] = useState<Record<string, string>>({});
   const [matchSideSelection, setMatchSideSelection] = useState<Record<string, string>>({});
+  const [matchParticipantSearch, setMatchParticipantSearch] = useState<
+    Record<string, string>
+  >({});
   const [matchNameEdits, setMatchNameEdits] = useState<Record<string, string>>({});
   const [matchMainEventEdits, setMatchMainEventEdits] = useState<
     Record<string, boolean>
@@ -4894,6 +4898,23 @@ export default function AdminPage() {
                       matchInterferenceEdits[match.id] ??
                       match.match_interference ??
                       "";
+                    const isBlindGauntlet = match.match_type === "blind_gauntlet";
+                    const gauntletCandidates =
+                      gauntletCandidateEntrantsByMatch[match.id] ?? [];
+                    const gauntletActuals =
+                      gauntletActualEntrantsByMatch[match.id] ?? [];
+                    const gauntletActualIds = new Set(
+                      gauntletActuals.map((row) => row.entrant_id)
+                    );
+                    const gauntletSurvivalState =
+                      matchGauntletSurvivalEdits[match.id] ??
+                      (typeof match.gauntlet_survival_result === "boolean"
+                        ? String(match.gauntlet_survival_result)
+                        : "");
+                    const gauntletFinalState =
+                      matchGauntletFinalEdits[match.id] ??
+                      match.gauntlet_final_entrant_id ??
+                      "";
                     const isCompleted =
                       Boolean(match.winner_side_id) ||
                       Boolean(match.winner_entrant_id) ||
@@ -4926,158 +4947,275 @@ export default function AdminPage() {
                             {isCompleted ? "Saved" : "Not entered"}
                           </span>
                         </div>
-                        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1.35fr_1fr_1fr]">
-                          <select
-                            className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                            value={match.winner_side_id ?? ""}
-                            onChange={(event) =>
-                              handleSetMatchWinner(match.id, event.target.value)
-                            }
-                            disabled={match.match_type === "blind_gauntlet"}
-                          >
-                            <option value="">Winner</option>
-                            {sideEntries.map(({ side, label, entrants }) => (
-                              <option key={side.id} value={side.id}>
-                                {label}
-                                {entrants.length > 0
-                                  ? ` - ${entrants.map((entrant) => entrant.name).join(", ")}`
-                                  : ""}
-                              </option>
-                            ))}
-                          </select>
-                          <div className="grid gap-2">
-                          <select
-                            className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                            value={finishState.method}
-                            onChange={(event) =>
-                              setMatchFinishEdits((prev) => ({
-                                ...prev,
-                                [match.id]: {
-                                  ...finishState,
-                                  method: event.target.value,
-                                },
-                              }))
-                            }
-                            disabled={match.match_type === "blind_gauntlet"}
-                          >
-                            <option value="">Finish</option>
-                            <option value="pinfall">Pinfall</option>
-                            <option value="submission">Submission</option>
-                            <option value="disqualification">Disqualification</option>
-                          </select>
-                          {(finishState.method === "pinfall" ||
-                            finishState.method === "submission") && (
+                        {isBlindGauntlet ? (
+                          <div className="mt-4 grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 lg:grid-cols-3">
                             <div className="grid gap-2">
+                              <label className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-500">
+                                Survival result
+                              </label>
                               <select
-                                className="h-9 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-100"
-                                value={finishState.winner}
+                                className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                                value={gauntletSurvivalState}
                                 onChange={(event) =>
-                                  setMatchFinishEdits((prev) => ({
+                                  setMatchGauntletSurvivalEdits((prev) => ({
                                     ...prev,
-                                    [match.id]: {
-                                      ...finishState,
-                                      winner: event.target.value,
-                                    },
+                                    [match.id]: event.target.value,
                                   }))
                                 }
                               >
-                                <option value="">Finish winner</option>
-                                {allEntrants.map((entrant) => (
-                                  <option key={entrant.id} value={entrant.id}>
-                                    {entrant.name}
-                                  </option>
-                                ))}
+                                <option value="">Choose result</option>
+                                <option value="true">Known wrestler survived</option>
+                                <option value="false">Known wrestler eliminated</option>
                               </select>
-                              <select
-                                className="h-9 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-100"
-                                value={finishState.loser}
-                                onChange={(event) =>
-                                  setMatchFinishEdits((prev) => ({
-                                    ...prev,
-                                    [match.id]: {
-                                      ...finishState,
-                                      loser: event.target.value,
-                                    },
-                                  }))
-                                }
+                              <button
+                                className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                                type="button"
+                                onClick={() => handleSetGauntletSurvivalResult(match.id)}
                               >
-                                <option value="">Finish loser</option>
-                                {allEntrants.map((entrant) => (
-                                  <option key={entrant.id} value={entrant.id}>
-                                    {entrant.name}
-                                  </option>
-                                ))}
-                              </select>
+                                Save survival
+                              </button>
                             </div>
-                          )}
+                            <div className="grid gap-2">
+                              <label className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-500">
+                                Actual entrants
+                              </label>
+                              <select
+                                className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                                value={matchGauntletActualSelection[match.id] ?? ""}
+                                onChange={(event) =>
+                                  setMatchGauntletActualSelection((prev) => ({
+                                    ...prev,
+                                    [match.id]: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">Add entrant</option>
+                                {gauntletCandidates
+                                  .filter((row) => !gauntletActualIds.has(row.entrant_id))
+                                  .map((row) => {
+                                    const entrant = entrantMap.get(row.entrant_id);
+                                    return entrant ? (
+                                      <option key={row.id} value={row.entrant_id}>
+                                        {entrant.name}
+                                      </option>
+                                    ) : null;
+                                  })}
+                              </select>
+                              <button
+                                className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                                type="button"
+                                onClick={() => handleAddGauntletActual(match.id)}
+                              >
+                                Add actual
+                              </button>
+                              <div className="grid gap-2">
+                                {gauntletActuals.length === 0 ? (
+                                  <p className="text-xs text-zinc-500">
+                                    No actual entrants entered.
+                                  </p>
+                                ) : (
+                                  gauntletActuals.map((row) => {
+                                    const entrant = entrantMap.get(row.entrant_id);
+                                    return entrant ? (
+                                      <div
+                                        key={row.id}
+                                        className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2"
+                                      >
+                                        <EntrantCard
+                                          name={entrant.name}
+                                          promotion={entrant.promotion}
+                                          imageUrl={entrant.image_url}
+                                        />
+                                        <button
+                                          className="text-[10px] font-semibold uppercase tracking-wide text-red-300"
+                                          type="button"
+                                          onClick={() =>
+                                            handleRemoveGauntletActual(
+                                              match.id,
+                                              row.entrant_id
+                                            )
+                                          }
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                    ) : null;
+                                  })
+                                )}
+                              </div>
+                            </div>
+                            <div className="grid gap-2">
+                              <label className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-500">
+                                Final entrant
+                              </label>
+                              <select
+                                className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                                value={gauntletFinalState}
+                                onChange={(event) =>
+                                  setMatchGauntletFinalEdits((prev) => ({
+                                    ...prev,
+                                    [match.id]: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">Choose final entrant</option>
+                                {gauntletActuals.map((row) => {
+                                  const entrant = entrantMap.get(row.entrant_id);
+                                  return entrant ? (
+                                    <option key={row.id} value={row.entrant_id}>
+                                      {entrant.name}
+                                    </option>
+                                  ) : null;
+                                })}
+                              </select>
+                              <button
+                                className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                                type="button"
+                                onClick={() => handleSetGauntletFinalEntrant(match.id)}
+                              >
+                                Save final entrant
+                              </button>
+                            </div>
                           </div>
-                          <select
-                            className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                            value={lengthValue}
-                            onChange={(event) =>
-                              setMatchLengthEdits((prev) => ({
-                                ...prev,
-                                [match.id]: event.target.value,
-                              }))
-                            }
-                            disabled={match.match_type === "blind_gauntlet"}
-                          >
-                            <option value="">Length</option>
-                            <option value="sprint">Under 8 minutes</option>
-                            <option value="standard">8 - 15 minutes</option>
-                            <option value="epic">15+ minutes</option>
-                          </select>
-                          <select
-                            className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                            value={interferenceValue}
-                            onChange={(event) =>
-                              setMatchInterferenceEdits((prev) => ({
-                                ...prev,
-                                [match.id]: event.target.value,
-                              }))
-                            }
-                            disabled={match.match_type === "blind_gauntlet"}
-                          >
-                            <option value="">Interference</option>
-                            <option value="no">No</option>
-                            <option value="yes">Yes</option>
-                          </select>
-                        </div>
+                        ) : (
+                          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1.35fr_1fr_1fr]">
+                            <select
+                              className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                              value={match.winner_side_id ?? ""}
+                              onChange={(event) =>
+                                handleSetMatchWinner(match.id, event.target.value)
+                              }
+                            >
+                              <option value="">Winner</option>
+                              {sideEntries.map(({ side, label, entrants }) => (
+                                <option key={side.id} value={side.id}>
+                                  {label}
+                                  {entrants.length > 0
+                                    ? ` - ${entrants.map((entrant) => entrant.name).join(", ")}`
+                                    : ""}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="grid gap-2">
+                            <select
+                              className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                              value={finishState.method}
+                              onChange={(event) =>
+                                setMatchFinishEdits((prev) => ({
+                                  ...prev,
+                                  [match.id]: {
+                                    ...finishState,
+                                    method: event.target.value,
+                                  },
+                                }))
+                              }
+                            >
+                              <option value="">Finish</option>
+                              <option value="pinfall">Pinfall</option>
+                              <option value="submission">Submission</option>
+                              <option value="disqualification">Disqualification</option>
+                            </select>
+                            {(finishState.method === "pinfall" ||
+                              finishState.method === "submission") && (
+                              <div className="grid gap-2">
+                                <select
+                                  className="h-9 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-100"
+                                  value={finishState.winner}
+                                  onChange={(event) =>
+                                    setMatchFinishEdits((prev) => ({
+                                      ...prev,
+                                      [match.id]: {
+                                        ...finishState,
+                                        winner: event.target.value,
+                                      },
+                                    }))
+                                  }
+                                >
+                                  <option value="">Finish winner</option>
+                                  {allEntrants.map((entrant) => (
+                                    <option key={entrant.id} value={entrant.id}>
+                                      {entrant.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <select
+                                  className="h-9 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-100"
+                                  value={finishState.loser}
+                                  onChange={(event) =>
+                                    setMatchFinishEdits((prev) => ({
+                                      ...prev,
+                                      [match.id]: {
+                                        ...finishState,
+                                        loser: event.target.value,
+                                      },
+                                    }))
+                                  }
+                                >
+                                  <option value="">Finish loser</option>
+                                  {allEntrants.map((entrant) => (
+                                    <option key={entrant.id} value={entrant.id}>
+                                      {entrant.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            </div>
+                            <select
+                              className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                              value={lengthValue}
+                              onChange={(event) =>
+                                setMatchLengthEdits((prev) => ({
+                                  ...prev,
+                                  [match.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Length</option>
+                              <option value="sprint">Under 8 minutes</option>
+                              <option value="standard">8 - 15 minutes</option>
+                              <option value="epic">15+ minutes</option>
+                            </select>
+                            <select
+                              className="h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+                              value={interferenceValue}
+                              onChange={(event) =>
+                                setMatchInterferenceEdits((prev) => ({
+                                  ...prev,
+                                  [match.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Interference</option>
+                              <option value="no">No</option>
+                              <option value="yes">Yes</option>
+                            </select>
+                          </div>
+                        )}
                         <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-zinc-800 pt-4">
-                          <button
-                            className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-5 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                            type="button"
-                            onClick={() => {
-                              void (async () => {
-                                await handleSetMatchFinish(
-                                  match.id,
-                                  finishState.method,
-                                  finishState.winner,
-                                  finishState.loser
-                                );
-                                await handleSetMatchLength(match.id, lengthValue);
-                                await handleSetMatchInterference(
-                                  match.id,
-                                  interferenceValue
-                                );
-                              })();
-                            }}
-                            disabled={match.match_type === "blind_gauntlet"}
-                          >
-                            Save details
-                          </button>
-                          {match.match_type === "blind_gauntlet" ? (
+                          {isBlindGauntlet ? null : (
                             <button
-                              className="text-[10px] font-semibold uppercase tracking-wide text-amber-200"
+                              className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-5 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
                               type="button"
                               onClick={() => {
-                                setAdminView("card");
-                                setScrollMatchId(match.id);
+                                void (async () => {
+                                  await handleSetMatchFinish(
+                                    match.id,
+                                    finishState.method,
+                                    finishState.winner,
+                                    finishState.loser
+                                  );
+                                  await handleSetMatchLength(match.id, lengthValue);
+                                  await handleSetMatchInterference(
+                                    match.id,
+                                    interferenceValue
+                                  );
+                                })();
                               }}
                             >
-                              Edit special
+                              Save details
                             </button>
-                          ) : null}
+                          )}
                           {allEntrants.length === 0 ? (
                             <span className="text-[10px] uppercase tracking-wide text-red-200">
                               No participants
@@ -5267,10 +5405,62 @@ export default function AdminPage() {
 
         {adminView === "card" && (
           <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
-          <h2 className="text-lg font-semibold">Card Builder</h2>
-          <p className="mt-2 text-sm text-zinc-400">
-            Build the match card for the selected show and assign participants.
-          </p>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
+                Card Builder
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold">Build the card</h2>
+              <p className="mt-2 text-sm text-zinc-400">
+                Add matches, assign participants, and check whether the card is ready for fans.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {activeShowLinks ? (
+                <a
+                  className="inline-flex h-10 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300"
+                  href={activeShowLinks.show}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Fan preview
+                </a>
+              ) : null}
+              <button
+                className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                type="button"
+                onClick={() => setMatchCreateOpen((current) => !current)}
+              >
+                {matchCreateOpen ? "Close add match" : "Add match"}
+              </button>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                Matches
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-zinc-100">
+                {orderedShowMatches.length}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                Participants
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-zinc-100">
+                {matchEntrants.length}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                Preview
+              </p>
+              <p className="mt-2 text-sm font-semibold text-zinc-100">
+                {activeShowLinks ? "Available" : "Select a show"}
+              </p>
+            </div>
+          </div>
           <details
             className="group mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
             open={matchCreateOpen}
@@ -5288,30 +5478,36 @@ export default function AdminPage() {
               </span>
             </summary>
             <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,auto]">
-              <input
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                placeholder="Match name"
-                value={matchName}
-                onChange={(event) => setMatchName(event.target.value)}
-              />
-              <select
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                value={matchType}
-                onChange={(event) => setMatchType(event.target.value)}
-              >
-                <option value="singles">Singles (1 vs 1)</option>
-                <option value="tag">Tag (2 vs 2)</option>
-                <option value="tag_3">Tag (3 vs 3)</option>
-                <option value="tag_4">Tag (4 vs 4)</option>
-                <option value="tag_4_way">4-Way Tag (2 v 2 v 2 v 2)</option>
-                <option value="triple_threat">Triple Threat</option>
-                <option value="fatal_4_way">Fatal 4-Way</option>
-                <option value="ladder_6">6-Man Ladder</option>
-                <option value="blind_gauntlet">Blind Gauntlet Match</option>
-                <option value="multi">Multi-person</option>
-              </select>
+              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Match title
+                <input
+                  className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                  placeholder="Wrestler A vs Wrestler B"
+                  value={matchName}
+                  onChange={(event) => setMatchName(event.target.value)}
+                />
+              </label>
+              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Match type
+                <select
+                  className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                  value={matchType}
+                  onChange={(event) => setMatchType(event.target.value)}
+                >
+                  <option value="singles">Singles (1 vs 1)</option>
+                  <option value="tag">Tag (2 vs 2)</option>
+                  <option value="tag_3">Tag (3 vs 3)</option>
+                  <option value="tag_4">Tag (4 vs 4)</option>
+                  <option value="tag_4_way">4-Way Tag (2 v 2 v 2 v 2)</option>
+                  <option value="triple_threat">Triple Threat</option>
+                  <option value="fatal_4_way">Fatal 4-Way</option>
+                  <option value="ladder_6">6-Man Ladder</option>
+                  <option value="blind_gauntlet">Blind Gauntlet Match</option>
+                  <option value="multi">Multi-person</option>
+                </select>
+              </label>
               <button
-                className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300"
+                className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300 md:self-end"
                 type="button"
                 onClick={handleAddMatch}
               >
@@ -5323,30 +5519,39 @@ export default function AdminPage() {
                 Advanced match options
               </summary>
               <div className="mt-3 grid gap-3 md:grid-cols-3">
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  placeholder="Kind (match, title, tag)"
-                  value={matchKind}
-                  onChange={(event) => setMatchKind(event.target.value)}
-                />
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  type="number"
-                  min="1900"
-                  max="2100"
-                  placeholder="Roster year"
-                  value={matchRosterYear}
-                  onChange={(event) => setMatchRosterYear(event.target.value)}
-                />
-                <select
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  value={matchRosterGender}
-                  onChange={(event) => setMatchRosterGender(event.target.value)}
-                >
-                  <option value="men">Men</option>
-                  <option value="women">Women</option>
-                  <option value="intergender">Intergender</option>
-                </select>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Match category
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="match"
+                    value={matchKind}
+                    onChange={(event) => setMatchKind(event.target.value)}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Roster year
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    type="number"
+                    min="1900"
+                    max="2100"
+                    placeholder="2026"
+                    value={matchRosterYear}
+                    onChange={(event) => setMatchRosterYear(event.target.value)}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Roster group
+                  <select
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    value={matchRosterGender}
+                    onChange={(event) => setMatchRosterGender(event.target.value)}
+                  >
+                    <option value="men">Men</option>
+                    <option value="women">Women</option>
+                    <option value="intergender">Intergender</option>
+                  </select>
+                </label>
               </div>
             </details>
             {matchType === "blind_gauntlet" && (
@@ -5421,29 +5626,35 @@ export default function AdminPage() {
             </div>
             {matchIsChampionship && (
               <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  placeholder="Championship name"
-                  value={matchChampionshipName}
-                  onChange={(event) => setMatchChampionshipName(event.target.value)}
-                />
-                <input
-                  className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  placeholder="Championship image URL"
-                  value={matchChampionshipImageUrl}
-                  onChange={(event) =>
-                    setMatchChampionshipImageUrl(event.target.value)
-                  }
-                />
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Championship name
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="World Championship"
+                    value={matchChampionshipName}
+                    onChange={(event) => setMatchChampionshipName(event.target.value)}
+                  />
+                </label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Championship image
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    placeholder="Paste the title image link"
+                    value={matchChampionshipImageUrl}
+                    onChange={(event) =>
+                      setMatchChampionshipImageUrl(event.target.value)
+                    }
+                  />
+                </label>
               </div>
             )}
           </details>
 
-          {matches.length === 0 ? (
+          {orderedShowMatches.length === 0 ? (
             <p className="mt-6 text-sm text-zinc-400">No matches added yet.</p>
           ) : (
             <div className="mt-6 space-y-4">
-              {matches.map((match) => {
+              {orderedShowMatches.map((match, index) => {
                 const sides = matchSidesByMatch[match.id] ?? [];
                 const participantRows = matchEntrantsByMatch[match.id] ?? [];
                 const eligibleEntrants = entrantOptions.filter((entrant) => {
@@ -5469,43 +5680,8 @@ export default function AdminPage() {
                 const allEntrants = participantRows
                   .map((row) => entrantMap.get(row.entrant_id))
                   .filter(Boolean) as EntrantRow[];
-                const sortedEntrants = [...allEntrants].sort((a, b) =>
-                  a.name.localeCompare(b.name)
-                );
-                const finishState = matchFinishEdits[match.id] ?? {
-                  method: match.finish_method ?? "",
-                  winner: match.finish_winner_entrant_id ?? "",
-                  loser: match.finish_loser_entrant_id ?? "",
-                };
-                const matchLengthState =
-                  matchLengthEdits[match.id] ?? match.match_length ?? "";
-                const matchInterferenceState =
-                  matchInterferenceEdits[match.id] ?? match.match_interference ?? "";
-                const matchLengthOptions = [
-                  { value: "sprint", label: "UNDER 8 MINUTES" },
-                  { value: "standard", label: "8 - 15 MINUTES" },
-                  { value: "epic", label: "15 + MINUTES" },
-                ];
-                const matchInterferenceOptions = [
-                  { value: "yes", label: "Yes" },
-                  { value: "no", label: "No" },
-                ];
-                const finishRequiresEntrants =
-                  finishState.method === "pinfall" ||
-                  finishState.method === "submission";
                 const matchType = match.match_type;
                 const isBlindGauntlet = matchType === "blind_gauntlet";
-                const isSingles = matchType === "singles";
-                const isMultiSideSingles =
-                  matchType === "triple_threat" ||
-                  matchType === "fatal_4_way" ||
-                  matchType === "ladder_6";
-                const isTag =
-                  matchType === "tag" ||
-                  matchType === "tag_3" ||
-                  matchType === "tag_4" ||
-                  matchType === "tag_4_way";
-                const winnerSideId = match.winner_side_id ?? "";
                 const isMainEventEdit =
                   matchMainEventEdits[match.id] ?? Boolean(match.is_main_event);
                 const isChampionshipEdit =
@@ -5528,37 +5704,72 @@ export default function AdminPage() {
                   "";
                 const gauntletCandidates =
                   gauntletCandidateEntrantsByMatch[match.id] ?? [];
-                const gauntletActuals =
-                  gauntletActualEntrantsByMatch[match.id] ?? [];
                 const gauntletCandidateIds = new Set(
                   gauntletCandidates.map((row) => row.entrant_id)
                 );
-                const gauntletActualIds = new Set(
-                  gauntletActuals.map((row) => row.entrant_id)
-                );
-                const gauntletSurvivalState =
-                  matchGauntletSurvivalEdits[match.id] ??
-                  (typeof match.gauntlet_survival_result === "boolean"
-                    ? String(match.gauntlet_survival_result)
-                    : "");
-                const gauntletFinalState =
-                  matchGauntletFinalEdits[match.id] ??
-                  match.gauntlet_final_entrant_id ??
-                  "";
-                const winningSideEntrants =
-                  sideEntries.find((side) => side.side.id === winnerSideId)?.entrants ??
-                  [];
-                const losingSideEntrants = sideEntries
-                  .filter((side) => side.side.id !== winnerSideId)
-                  .flatMap((side) => side.entrants);
-                const showFinishWinner = !isSingles && !isMultiSideSingles;
-                const showFinishLoser = !isSingles && !isMultiSideSingles;
                 const selection = matchEntrantSelection[match.id] ?? "";
                 const sideSelection = matchSideSelection[match.id] ?? "";
                 const participantsExist =
                   sideEntries.length > 0 || participantRows.length > 0;
                 const participantsOpen =
                   matchParticipantsOpen[match.id] ?? !participantsExist;
+                const isFocused = focusedMatchId === match.id;
+                const missingSides = !isBlindGauntlet && sideEntries.length === 0;
+                const emptySides = sideEntries.filter(
+                  (side) => side.entrants.length === 0
+                );
+                const missingImages = allEntrants.filter(
+                  (entrant) => !entrant.image_url
+                );
+                const genericSides = sideEntries.filter((side, sideIndex) => {
+                  const expected = `Side ${sideIndex + 1}`;
+                  return !side.side.label?.trim() || side.label === expected;
+                });
+                const championshipIncomplete =
+                  isChampionshipEdit && !beltNameEdit.trim();
+                const gauntletIncomplete =
+                  isBlindGauntlet &&
+                  (!knownWrestlerEdit || gauntletCandidates.length < 3);
+                const blockerCount =
+                  (missingSides ? 1 : 0) +
+                  emptySides.length +
+                  (gauntletIncomplete ? 1 : 0);
+                const warningCount =
+                  missingImages.length +
+                  genericSides.length +
+                  (championshipIncomplete ? 1 : 0);
+                const sideSummary =
+                  isBlindGauntlet
+                    ? knownWrestlerEdit
+                      ? entrantMap.get(knownWrestlerEdit)?.name ?? "Known wrestler set"
+                      : "Known wrestler needed"
+                    : sideEntries.length > 0
+                      ? sideEntries
+                          .map(({ label, entrants }) =>
+                            entrants.length > 0
+                              ? entrants.map((entrant) => entrant.name).join(" & ")
+                              : label
+                          )
+                          .join(" vs ")
+                      : "No sides added";
+                const resultSummary =
+                  match.winner_side_id ||
+                  match.winner_entrant_id ||
+                  match.finish_method ||
+                  match.match_length ||
+                  match.match_interference ||
+                  typeof match.gauntlet_survival_result === "boolean" ||
+                  match.gauntlet_final_entrant_id
+                    ? "Results entered"
+                    : "No results yet";
+                const searchValue =
+                  matchParticipantSearch[match.id]?.trim().toLowerCase() ?? "";
+                const visibleEntrants = eligibleEntrants.filter((entrant) => {
+                  if (!searchValue) return true;
+                  return `${entrant.name} ${entrant.promotion ?? ""}`
+                    .toLowerCase()
+                    .includes(searchValue);
+                });
                 return (
                   <div
                     key={match.id}
@@ -5567,6 +5778,114 @@ export default function AdminPage() {
                     }}
                     className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"
                   >
+                    <div className="grid gap-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-amber-400/30 bg-amber-400/10 text-lg font-semibold text-amber-200">
+                          {index + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-semibold text-zinc-100">
+                            {match.name}
+                          </p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-zinc-500">
+                            {formatMatchTypeLabel(match.match_type)}
+                            {match.roster_year ? ` · ${match.roster_year}` : ""}
+                            {match.roster_gender ? ` · ${match.roster_gender}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex min-h-12 flex-wrap items-center gap-2">
+                          {sideEntries.length > 0 ? (
+                            sideEntries.map(({ side, label, entrants }, sideIndex) => (
+                              <div
+                                key={`${match.id}-summary-${side.id}`}
+                                className="flex min-w-0 items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/70 px-2 py-2"
+                              >
+                                <div className="flex -space-x-2">
+                                  {entrants.slice(0, 3).map((entrant) => (
+                                    <Image
+                                      key={entrant.id}
+                                      src={entrant.image_url || "/images/placeholder-avatar.svg"}
+                                      alt={entrant.name}
+                                      width={32}
+                                      height={32}
+                                      sizes="32px"
+                                      className="h-8 w-8 rounded-full border border-zinc-950 bg-zinc-800 object-cover"
+                                    />
+                                  ))}
+                                  {entrants.length === 0 ? (
+                                    <span className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700 bg-zinc-950 text-[10px] font-semibold text-zinc-500">
+                                      {sideIndex + 1}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <span className="max-w-[12rem] truncate text-xs text-zinc-300">
+                                  {entrants.length > 0
+                                    ? entrants.map((entrant) => entrant.name).join(" & ")
+                                    : label}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200">
+                              No sides yet
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-2 truncate text-xs text-zinc-500">
+                          {sideSummary}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                        {match.is_main_event ? (
+                          <span className="rounded-full border border-amber-400/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                            Main event
+                          </span>
+                        ) : null}
+                        {match.is_championship ? (
+                          <span className="rounded-full border border-amber-400/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                            Championship
+                          </span>
+                        ) : null}
+                        {isBlindGauntlet ? (
+                          <span className="rounded-full border border-sky-400/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-sky-200">
+                            Blind Gauntlet
+                          </span>
+                        ) : null}
+                        <span
+                          className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                            blockerCount > 0
+                              ? "bg-red-500/15 text-red-200"
+                              : warningCount > 0
+                                ? "bg-amber-400/15 text-amber-200"
+                                : "bg-emerald-500/15 text-emerald-200"
+                          }`}
+                        >
+                          {blockerCount > 0
+                            ? `${blockerCount} blocker${blockerCount === 1 ? "" : "s"}`
+                            : warningCount > 0
+                              ? `${warningCount} warning${warningCount === 1 ? "" : "s"}`
+                              : "Ready"}
+                        </span>
+                        <span className="rounded-full border border-zinc-700 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                          {resultSummary}
+                        </span>
+                        <button
+                          className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                          type="button"
+                          onClick={() =>
+                            setFocusedMatchId((current) =>
+                              current === match.id ? null : match.id
+                            )
+                          }
+                        >
+                          {isFocused ? "Close" : "Edit match"}
+                        </button>
+                      </div>
+                    </div>
+                    {isFocused && (
+                    <>
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div className="flex flex-col gap-2">
                         <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
@@ -5605,26 +5924,23 @@ export default function AdminPage() {
                           Edit the match name and click “Save match”.
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
-                        {!isBlindGauntlet && (
-                          <select
-                            className="h-10 min-w-[220px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                            value={match.winner_side_id ?? ""}
-                            onChange={(event) =>
-                              handleSetMatchWinner(match.id, event.target.value)
-                            }
-                          >
-                            <option value="">Select winner</option>
-                            {sideEntries.map(({ side, label, entrants }) => (
-                              <option key={side.id} value={side.id}>
-                                {label}
-                                {entrants.length > 0
-                                  ? ` — ${entrants.map((entrant) => entrant.name).join(", ")}`
-                                  : ""}
-                              </option>
-                            ))}
-                          </select>
-                        )}
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
+                          type="button"
+                          onClick={() => handleMoveMatchOrder(match.id, "up")}
+                          disabled={index === 0}
+                        >
+                          Move up
+                        </button>
+                        <button
+                          className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
+                          type="button"
+                          onClick={() => handleMoveMatchOrder(match.id, "down")}
+                          disabled={index === orderedShowMatches.length - 1}
+                        >
+                          Move down
+                        </button>
                         <button
                           className="inline-flex h-10 items-center justify-center rounded-full border border-red-500/60 px-4 text-[10px] font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
                           type="button"
@@ -5828,300 +6144,22 @@ export default function AdminPage() {
                       </div>
                     )}
 
-                    <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-3">
-                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                        {isBlindGauntlet ? "Blind Gauntlet results" : "Match finish"}
-                      </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {matchLengthOptions.map((option) => {
-                          const isSelected = matchLengthState === option.value;
-                          return (
-                            <button
-                              key={`${match.id}-${option.value}`}
-                              type="button"
-                              onClick={() =>
-                                setMatchLengthEdits((prev) => ({
-                                  ...prev,
-                                  [match.id]: option.value,
-                                }))
-                              }
-                              className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${
-                                isSelected
-                                  ? "border-amber-400/70 bg-amber-400/20 text-amber-100"
-                                  : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-amber-400/60 hover:text-amber-200"
-                              }`}
-                            >
-                              {option.label}
-                            </button>
-                          );
-                        })}
-                        <button
-                          className="ml-auto inline-flex h-8 items-center justify-center rounded-full border border-amber-400 px-3 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                          type="button"
-                          onClick={() =>
-                            handleSetMatchLength(match.id, matchLengthState)
-                          }
-                        >
-                          Save length
-                        </button>
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Results
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-300">
+                          {resultSummary}. Winner and result details are managed from Results.
+                        </p>
                       </div>
-                      {isBlindGauntlet && (
-                        <div className="mt-4 space-y-3">
-                          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                            <select
-                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                              value={gauntletSurvivalState}
-                              onChange={(event) =>
-                                setMatchGauntletSurvivalEdits((prev) => ({
-                                  ...prev,
-                                  [match.id]: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="">Survival result</option>
-                              <option value="true">Survived</option>
-                              <option value="false">Did not survive</option>
-                            </select>
-                            <button
-                              className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                              type="button"
-                              onClick={() =>
-                                handleSetGauntletSurvivalResult(match.id)
-                              }
-                            >
-                              Save survival
-                            </button>
-                          </div>
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                            <select
-                              className="h-10 min-w-[240px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                              value={matchGauntletActualSelection[match.id] ?? ""}
-                              onChange={(event) =>
-                                setMatchGauntletActualSelection((prev) => ({
-                                  ...prev,
-                                  [match.id]: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="">Add actual entrant</option>
-                              {gauntletCandidates
-                                .filter((row) => !gauntletActualIds.has(row.entrant_id))
-                                .map((row) => {
-                                  const entrant = entrantMap.get(row.entrant_id);
-                                  return (
-                                    <option key={row.entrant_id} value={row.entrant_id}>
-                                      {entrant?.name ?? "Entrant"}
-                                    </option>
-                                  );
-                                })}
-                            </select>
-                            <button
-                              className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
-                              type="button"
-                              onClick={() => handleAddGauntletActual(match.id)}
-                            >
-                              Add actual
-                            </button>
-                            <span className="text-xs text-zinc-500">
-                              {gauntletActuals.length} actual entrant
-                              {gauntletActuals.length === 1 ? "" : "s"}
-                            </span>
-                          </div>
-                          {gauntletActuals.length > 0 && (
-                            <div className="grid gap-2 md:grid-cols-2">
-                              {gauntletActuals.map((row) => {
-                                const entrant = entrantMap.get(row.entrant_id);
-                                return (
-                                  <div
-                                    key={row.id}
-                                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"
-                                  >
-                                    <EntrantCard
-                                      name={entrant?.name ?? "Entrant"}
-                                      promotion={entrant?.promotion ?? null}
-                                      imageUrl={entrant?.image_url ?? null}
-                                    />
-                                    <button
-                                      className="inline-flex h-8 items-center justify-center rounded-full border border-red-500/70 px-3 text-[10px] font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
-                                      type="button"
-                                      onClick={() =>
-                                        handleRemoveGauntletActual(
-                                          match.id,
-                                          row.entrant_id
-                                        )
-                                      }
-                                    >
-                                      Remove
-                                    </button>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                            <select
-                              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                              value={gauntletFinalState}
-                              onChange={(event) =>
-                                setMatchGauntletFinalEdits((prev) => ({
-                                  ...prev,
-                                  [match.id]: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="">Final entrant</option>
-                              {gauntletActuals.map((row) => {
-                                const entrant = entrantMap.get(row.entrant_id);
-                                return (
-                                  <option key={row.entrant_id} value={row.entrant_id}>
-                                    {entrant?.name ?? "Entrant"}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                            <button
-                              className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                              type="button"
-                              onClick={() =>
-                                handleSetGauntletFinalEntrant(match.id)
-                              }
-                            >
-                              Save final entrant
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      {!isBlindGauntlet && (
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {matchInterferenceOptions.map((option) => {
-                          const isSelected = matchInterferenceState === option.value;
-                          return (
-                            <button
-                              key={`${match.id}-interference-${option.value}`}
-                              type="button"
-                              onClick={() =>
-                                setMatchInterferenceEdits((prev) => ({
-                                  ...prev,
-                                  [match.id]: option.value,
-                                }))
-                              }
-                              className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${
-                                isSelected
-                                  ? "border-amber-400/70 bg-amber-400/20 text-amber-100"
-                                  : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-amber-400/60 hover:text-amber-200"
-                              }`}
-                            >
-                              {option.label}
-                            </button>
-                          );
-                        })}
-                        <button
-                          className="ml-auto inline-flex h-8 items-center justify-center rounded-full border border-amber-400 px-3 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                          type="button"
-                          onClick={() =>
-                            handleSetMatchInterference(
-                              match.id,
-                              matchInterferenceState
-                            )
-                          }
-                        >
-                          Save interference
-                        </button>
-                      </div>
-                      )}
-                      {!isBlindGauntlet && (
-                      <div className="mt-3 grid gap-3 md:grid-cols-3">
-                        <select
-                          className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                          value={finishState.method}
-                          onChange={(event) =>
-                            setMatchFinishEdits((prev) => ({
-                              ...prev,
-                              [match.id]: {
-                                ...finishState,
-                                method: event.target.value,
-                              },
-                            }))
-                          }
-                        >
-                          <option value="">Select finish</option>
-                          <option value="pinfall">Pinfall</option>
-                          <option value="submission">Submission</option>
-                          <option value="disqualification">Disqualification</option>
-                        </select>
-                        {showFinishWinner && (
-                          <select
-                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                            value={finishState.winner}
-                            onChange={(event) =>
-                              setMatchFinishEdits((prev) => ({
-                                ...prev,
-                                [match.id]: {
-                                  ...finishState,
-                                  winner: event.target.value,
-                                },
-                              }))
-                            }
-                            disabled={
-                              !finishRequiresEntrants || (isTag && !winnerSideId)
-                            }
-                          >
-                            <option value="">Winner (pin/sub)</option>
-                            {(isTag ? winningSideEntrants : sortedEntrants).map(
-                              (entrant) => (
-                              <option key={entrant.id} value={entrant.id}>
-                                {entrant.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                        {showFinishLoser && (
-                          <select
-                            className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-                            value={finishState.loser}
-                            onChange={(event) =>
-                              setMatchFinishEdits((prev) => ({
-                                ...prev,
-                                [match.id]: {
-                                  ...finishState,
-                                  loser: event.target.value,
-                                },
-                              }))
-                            }
-                            disabled={
-                              !finishRequiresEntrants || (isTag && !winnerSideId)
-                            }
-                          >
-                            <option value="">Loser (pin/sub)</option>
-                            {(isTag ? losingSideEntrants : sortedEntrants).map(
-                              (entrant) => (
-                              <option key={entrant.id} value={entrant.id}>
-                                {entrant.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-                      )}
-                      {!isBlindGauntlet && (
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
-                        <span>Set the finish to score these picks.</span>
-                        <button
-                          className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-4 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                          type="button"
-                          onClick={() =>
-                            handleSetMatchFinish(
-                              match.id,
-                              finishState.method,
-                              finishState.winner,
-                              finishState.loser
-                            )
-                          }
-                        >
-                          Save finish
-                        </button>
-                      </div>
-                      )}
+                      <button
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-4 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+                        type="button"
+                        onClick={() => setAdminView("results")}
+                      >
+                        Open Results
+                      </button>
                     </div>
 
                     {!isBlindGauntlet && (!participantsOpen ? (
@@ -6141,7 +6179,72 @@ export default function AdminPage() {
                         </button>
                       </div>
                     ) : (
-                      <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+                      <div className="mt-4 grid gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-3">
+                        <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+                          <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                            Find wrestler
+                            <input
+                              className="mt-2 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                              placeholder="Search by wrestler or promotion"
+                              value={matchParticipantSearch[match.id] ?? ""}
+                              onChange={(event) =>
+                                setMatchParticipantSearch((prev) => ({
+                                  ...prev,
+                                  [match.id]: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <span className="text-xs text-zinc-500">
+                            {visibleEntrants.length} available
+                          </span>
+                        </div>
+                        {searchValue ? (
+                          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                            {visibleEntrants.slice(0, 9).map((entrant) => {
+                              const selected = selection === entrant.id;
+                              return (
+                                <button
+                                  key={entrant.id}
+                                  className={`flex items-center justify-between gap-3 rounded-xl border p-2 text-left transition ${
+                                    selected
+                                      ? "border-amber-400 bg-amber-400/10"
+                                      : "border-zinc-800 bg-zinc-900/70 hover:border-amber-400/60"
+                                  }`}
+                                  type="button"
+                                  onClick={() =>
+                                    setMatchEntrantSelection((prev) => ({
+                                      ...prev,
+                                      [match.id]: entrant.id,
+                                    }))
+                                  }
+                                >
+                                  <EntrantCard
+                                    name={entrant.name}
+                                    promotion={entrant.promotion}
+                                    imageUrl={entrant.image_url}
+                                  />
+                                  {selected ? (
+                                    <span className="rounded-full bg-amber-400 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-950">
+                                      Selected
+                                    </span>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                            {visibleEntrants.length === 0 ? (
+                              <p className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-3 text-sm text-zinc-500 md:col-span-2 xl:col-span-3">
+                                No wrestlers match this search.
+                              </p>
+                            ) : null}
+                            {visibleEntrants.length > 9 ? (
+                              <p className="text-xs text-zinc-500 md:col-span-2 xl:col-span-3">
+                                Showing first 9 matches. Keep typing to narrow results.
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
                         <select
                           className="h-10 min-w-[200px] rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
                           value={sideSelection}
@@ -6170,7 +6273,7 @@ export default function AdminPage() {
                           }
                         >
                           <option value="">Add participant</option>
-                          {eligibleEntrants.map((entrant) => (
+                          {visibleEntrants.map((entrant) => (
                             <option key={entrant.id} value={entrant.id}>
                               {entrant.name}
                             </option>
@@ -6211,6 +6314,7 @@ export default function AdminPage() {
                         >
                           Add side
                         </button>
+                      </div>
                       </div>
                     ))}
 
@@ -6331,6 +6435,8 @@ export default function AdminPage() {
                         })}
                       </div>
                     ))}
+                    </>
+                    )}
                   </div>
                 );
               })}

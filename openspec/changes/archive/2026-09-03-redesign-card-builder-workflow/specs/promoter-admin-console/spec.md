@@ -1,30 +1,4 @@
-## Purpose
-
-Defines the promoter/admin console experience for setting up, reviewing, and running BoutPick shows while preserving the current brownfield prediction, scoring, authorization, and data behavior.
-
-## Requirements
-
-### Requirement: Show-First Admin Navigation
-The system SHALL present admin operations around a selected promotion-scoped show rather than requiring promoters to start from rumble/event data structures.
-
-#### Scenario: Admin opens the console with shows available
-- **WHEN** an authorized admin opens the admin console
-- **THEN** the system presents a show-first entry point with the active or selected show, its promotion, show status, and primary workflow areas
-
-#### Scenario: Admin changes the selected show
-- **WHEN** an authorized admin selects a different show
-- **THEN** the admin workflow areas update to operate on that selected show without changing prediction, scoring, or database contracts
-
-### Requirement: Guided Basic Show Setup
-The system SHALL provide a basic show setup workflow for creating or editing a promotion-scoped show with the fields needed for ordinary fan play.
-
-#### Scenario: Admin creates a basic show
-- **WHEN** an authorized admin provides the required show identity fields and saves the show
-- **THEN** the system creates a promotion-scoped show using the existing show persistence behavior
-
-#### Scenario: Admin edits show details
-- **WHEN** an authorized admin edits show details such as name, promotion, image, tagline, start time, registration, lock, featured play, show-over, confidence, or location-gate settings
-- **THEN** the system persists those settings using existing show fields and validation behavior
+## MODIFIED Requirements
 
 ### Requirement: Card Builder Workflow
 The system SHALL provide a card-builder workflow for adding, ordering, reviewing, and editing show-level matches around an ordered wrestling card rather than an always-expanded record-editing surface.
@@ -136,13 +110,6 @@ The system SHALL keep advanced domains and specialized match configuration avail
 #### Scenario: Admin configures prediction-related match details
 - **WHEN** an authorized admin edits prediction-related options such as match length, interference, finish, championship, or main-event details
 - **THEN** the system keeps those controls available without requiring them in the default normal-match creation path
-
-### Requirement: Destructive Operation Safeguards
-The system SHALL preserve explicit safeguards for destructive admin operations.
-
-#### Scenario: Admin attempts to delete or clear show data
-- **WHEN** an authorized admin invokes a destructive operation such as deleting a show or clearing picks and scores
-- **THEN** the system requires explicit confirmation and communicates the consequence before performing the operation
 
 ### Requirement: Brownfield Behavior Preservation
 The redesigned admin console SHALL preserve existing authorization, prediction, scoring, scoreboard, championship, and database behavior unless a separate OpenSpec change explicitly modifies it.
