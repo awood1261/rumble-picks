@@ -3581,10 +3581,7 @@ export default function AdminPage() {
       <main className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[220px_1fr] lg:px-6 lg:py-8">
         <aside className="lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)]">
           <div className="rounded-3xl border border-zinc-800 bg-black/50 p-4">
-            <p className="text-xl font-black uppercase italic tracking-wide text-amber-300">
-              BoutPick
-            </p>
-            <label className="mt-5 block text-[10px] uppercase tracking-[0.25em] text-zinc-500">
+            <label className="block text-[10px] uppercase tracking-[0.25em] text-zinc-500">
               Promotion
               <select
                 className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
@@ -5249,7 +5246,7 @@ export default function AdminPage() {
                             </select>
                           </div>
                         )}
-                        <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-zinc-800 pt-4">
+                        <div className="mt-4 flex flex-wrap items-center justify-start gap-3 border-t border-zinc-800 pt-4">
                           {isBlindGauntlet ? null : (
                             <button
                               className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-5 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
