@@ -174,6 +174,19 @@ type AdminView =
   | "scoreboard"
   | "advanced";
 
+const ADMIN_NAV_ITEMS: Array<{
+  view: AdminView;
+  label: string;
+  mobileLabel: string;
+}> = [
+  { view: "dashboard", label: "Dashboard", mobileLabel: "Dash" },
+  { view: "setup", label: "Shows", mobileLabel: "Shows" },
+  { view: "card", label: "Card Builder", mobileLabel: "Card" },
+  { view: "results", label: "Results", mobileLabel: "Results" },
+  { view: "scoreboard", label: "Scoreboard", mobileLabel: "Scores" },
+  { view: "advanced", label: "Advanced", mobileLabel: "More" },
+];
+
 async function loadAllEntrants() {
   const rows: EntrantRow[] = [];
   let from = 0;
@@ -3578,8 +3591,8 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <main className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[220px_1fr] lg:px-6 lg:py-8">
-        <aside className="lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)]">
+      <main className="mx-auto grid w-full max-w-7xl gap-4 px-4 py-4 pb-28 lg:grid-cols-[220px_1fr] lg:gap-6 lg:px-6 lg:py-8">
+        <aside className="hidden lg:sticky lg:top-6 lg:block lg:h-[calc(100vh-3rem)]">
           <div className="rounded-3xl border border-zinc-800 bg-black/50 p-4">
             <label className="block text-[10px] uppercase tracking-[0.25em] text-zinc-500">
               Promotion
@@ -3602,14 +3615,7 @@ export default function AdminPage() {
               </select>
             </label>
             <nav className="mt-5 grid gap-2">
-              {[
-                ["dashboard", "Dashboard"],
-                ["setup", "Shows"],
-                ["card", "Card Builder"],
-                ["results", "Results"],
-                ["scoreboard", "Scoreboard"],
-                ["advanced", "Advanced"],
-              ].map(([view, label]) => (
+              {ADMIN_NAV_ITEMS.map(({ view, label }) => (
                 <button
                   key={view}
                   className={`flex h-11 items-center justify-between rounded-xl px-3 text-left text-sm font-medium transition ${
@@ -3618,7 +3624,7 @@ export default function AdminPage() {
                       : "border border-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900"
                   }`}
                   type="button"
-                  onClick={() => setAdminView(view as AdminView)}
+                  onClick={() => setAdminView(view)}
                 >
                   <span>{label}</span>
                   {view === "advanced" ? <span className="text-zinc-500">+</span> : null}
@@ -3637,13 +3643,13 @@ export default function AdminPage() {
         </aside>
 
         <div className="min-w-0">
-        <header className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
+        <header className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 lg:rounded-3xl lg:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
               <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
                 {activePromotion?.name ?? "BoutPick Admin"}
               </p>
-              <h1 className="mt-2 text-2xl font-semibold sm:text-3xl">
+              <h1 className="mt-2 text-xl font-semibold sm:text-2xl lg:text-3xl">
                 {activeShow?.name ?? "Promoter Console"}
               </h1>
               <p className="mt-2 text-sm text-zinc-400">
@@ -3686,29 +3692,6 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
-          </div>
-          <div className="mt-5 flex gap-2 overflow-x-auto pb-1 lg:hidden">
-            {[
-              ["dashboard", "Dashboard"],
-              ["setup", "Setup"],
-              ["card", "Card"],
-              ["results", "Results"],
-              ["scoreboard", "Scoreboard"],
-              ["advanced", "More"],
-            ].map(([view, label]) => (
-              <button
-                key={`mobile-${view}`}
-                className={`h-10 shrink-0 rounded-full px-4 text-xs font-semibold uppercase tracking-wide ${
-                  adminView === view
-                    ? "bg-amber-400 text-zinc-950"
-                    : "border border-zinc-800 text-zinc-300"
-                }`}
-                type="button"
-                onClick={() => setAdminView(view as AdminView)}
-              >
-                {label}
-              </button>
-            ))}
           </div>
         </header>
 
@@ -7079,6 +7062,32 @@ export default function AdminPage() {
         )}
         </div>
       </main>
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-800 bg-zinc-950/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-2xl shadow-black/60 backdrop-blur lg:hidden"
+        aria-label="Admin sections"
+      >
+        <div className="mx-auto grid max-w-lg grid-cols-6 gap-1">
+          {ADMIN_NAV_ITEMS.map(({ view, mobileLabel }) => (
+            <button
+              key={`mobile-${view}`}
+              className={`flex h-12 flex-col items-center justify-center rounded-xl px-1 text-[10px] font-semibold uppercase tracking-wide transition ${
+                adminView === view
+                  ? "bg-amber-400 text-zinc-950"
+                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+              }`}
+              type="button"
+              onClick={() => setAdminView(view)}
+            >
+              <span
+                className={`mb-1 h-1 w-5 rounded-full ${
+                  adminView === view ? "bg-zinc-950" : "bg-transparent"
+                }`}
+              />
+              {mobileLabel}
+            </button>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 }
