@@ -11,6 +11,7 @@ import {
   isValidLocationGateConfig,
 } from "../../lib/locationGate";
 import { buildShowHref } from "../../lib/friendlyUrls";
+import type { ShowReviewValidation } from "../../lib/showReviewLinks";
 import posthog from "posthog-js";
 import {
   CustomEntrantModal,
@@ -188,10 +189,14 @@ const emptyActuals: EventActuals = {
 function PicksPageInner() {
   const searchParams = useSearchParams();
   const queryShowId = searchParams.get("show");
+  const reviewToken = searchParams.get("review")?.trim() ?? "";
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [reviewValidation, setReviewValidation] =
+    useState<ShowReviewValidation | null>(null);
+  const [reviewValidationLoading, setReviewValidationLoading] = useState(false);
 
   const [shows, setShows] = useState<ShowRow[]>([]);
   const [promotions, setPromotions] = useState<PromotionRow[]>([]);
@@ -258,6 +263,10 @@ function PicksPageInner() {
     () => shows.find((show) => show.id === selectedShowId) ?? null,
     [shows, selectedShowId],
   );
+  const isReviewMode =
+    !!reviewToken &&
+    reviewValidation?.valid === true &&
+    reviewValidation.showId === selectedShowId;
   const selectedShowRequiresLocationVerification =
     !!selectedShow?.requires_location_verification;
   const selectedShowLocationGateConfig = useMemo(
@@ -827,7 +836,43 @@ function PicksPageInner() {
   }, []);
 
   useEffect(() => {
-    if (!userId) return;
+    let ignore = false;
+    setReviewValidation(null);
+    if (!reviewToken || !selectedShowId) {
+      setReviewValidationLoading(false);
+      return;
+    }
+
+    const validateReviewToken = async () => {
+      setReviewValidationLoading(true);
+      try {
+        const response = await fetch("/api/show-review/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: reviewToken, showId: selectedShowId }),
+        });
+        const payload = (await response.json()) as ShowReviewValidation;
+        if (ignore) return;
+        setReviewValidation(payload);
+      } catch {
+        if (!ignore) {
+          setReviewValidation({ valid: false, reason: "invalid" });
+        }
+      } finally {
+        if (!ignore) {
+          setReviewValidationLoading(false);
+        }
+      }
+    };
+
+    void validateReviewToken();
+    return () => {
+      ignore = true;
+    };
+  }, [reviewToken, selectedShowId]);
+
+  useEffect(() => {
+    if (!userId && !reviewToken) return;
     Promise.all([
           supabase
             .from("shows")
@@ -887,12 +932,13 @@ function PicksPageInner() {
         setSelectedShowId((prev) => prev || preferredShowId);
       }
     });
-  }, [queryShowId, userId]);
+  }, [queryShowId, reviewToken, userId]);
 
   useEffect(() => {
     if (!selectedShowId || typeof window === "undefined") return;
+    if (reviewToken) return;
     window.localStorage.setItem("bp:lastShowId", selectedShowId);
-  }, [selectedShowId]);
+  }, [reviewToken, selectedShowId]);
 
   useEffect(() => {
     if (!selectedShow?.starts_at && !selectedShowRequiresLocationVerification) {
@@ -903,7 +949,7 @@ function PicksPageInner() {
   }, [selectedShow?.starts_at, selectedShowRequiresLocationVerification]);
 
   useEffect(() => {
-    if (!selectedShow?.id || !selectedShowRequiresLocationVerification) {
+    if (isReviewMode || !selectedShow?.id || !selectedShowRequiresLocationVerification) {
       setHasLocationVerification(false);
       return;
     }
@@ -922,6 +968,7 @@ function PicksPageInner() {
     );
   }, [
     hasValidSelectedShowLocationGateConfig,
+    isReviewMode,
     now,
     selectedShow?.id,
     selectedShowRequiresLocationVerification,
@@ -1109,15 +1156,20 @@ function PicksPageInner() {
   }, [selectedShowId]);
 
   useEffect(() => {
-    if (!selectedShowId || !userId) return;
+    if (!selectedShowId || (!userId && !isReviewMode)) return;
     const showChanged = lastLoadedShowIdRef.current !== selectedShowId;
-    const userChanged = lastLoadedUserIdRef.current !== userId;
+    const userKey = isReviewMode ? "review" : userId;
+    const userChanged = lastLoadedUserIdRef.current !== userKey;
     const hasLoadedForShow = picksLoadedForShowIdRef.current === selectedShowId;
+    const currentDraftKey =
+      !isReviewMode && userId
+        ? `picks:draft:${selectedShowId}:${userId}`
+        : null;
     if (!showChanged && !userChanged && hasLoadedForShow) {
       return;
     }
     lastLoadedShowIdRef.current = selectedShowId;
-    lastLoadedUserIdRef.current = userId;
+    lastLoadedUserIdRef.current = userKey;
     const needsSkeleton = picksLoadedForShowIdRef.current !== selectedShowId;
     setMessage(null);
     if (showChanged) {
@@ -1134,16 +1186,19 @@ function PicksPageInner() {
 
     const loadShowData = async () => {
       try {
+        const pickRowsPromise = isReviewMode
+          ? Promise.resolve({ data: null })
+          : supabase
+              .from("picks")
+              .select(
+                "updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_confidence_picks:payload->match_confidence_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks, blind_gauntlet_picks:payload->blind_gauntlet_picks"
+              )
+              .eq("show_id", selectedShowId)
+              .eq("user_id", userId ?? "")
+              .maybeSingle();
         const [{ data: pickRows }, { data: entrantRows, error: entrantError }] =
           await Promise.all([
-          supabase
-            .from("picks")
-            .select(
-              "updated_at, rumbles:payload->rumbles, eliminators:payload->eliminators, question_picks:payload->question_picks, match_picks:payload->match_picks, match_confidence_picks:payload->match_confidence_picks, match_finish_picks:payload->match_finish_picks, match_length_picks:payload->match_length_picks, match_interference_picks:payload->match_interference_picks, blind_gauntlet_picks:payload->blind_gauntlet_picks"
-            )
-            .eq("show_id", selectedShowId)
-            .eq("user_id", userId)
-            .maybeSingle(),
+            pickRowsPromise,
             loadAllEntrants(),
           ]);
 
@@ -1162,7 +1217,7 @@ function PicksPageInner() {
         loadMatchPickStatsRef.current();
         loadRankRef.current();
 
-        const hasServerPicks = Boolean(pickRows);
+        const hasServerPicks = !isReviewMode && Boolean(pickRows);
         let savedPayload = pickRows
           ? ({
               rumbles: pickRows.rumbles ?? {},
@@ -1178,9 +1233,14 @@ function PicksPageInner() {
           : null;
         const savedUpdatedAt =
           pickRows?.updated_at ? Date.parse(pickRows.updated_at) : 0;
-        if (hasServerPicks && draftKey && typeof window !== "undefined") {
+        if (
+          !isReviewMode &&
+          hasServerPicks &&
+          currentDraftKey &&
+          typeof window !== "undefined"
+        ) {
           try {
-            const draftRaw = window.localStorage.getItem(draftKey);
+            const draftRaw = window.localStorage.getItem(currentDraftKey);
             if (draftRaw) {
               const parsed = JSON.parse(draftRaw) as {
                 payload?: Partial<PicksPayload>;
@@ -1195,9 +1255,9 @@ function PicksPageInner() {
             console.warn("Failed to restore draft picks", error);
           }
         }
-        if (!hasServerPicks && typeof window !== "undefined") {
-          if (draftKey) {
-            window.localStorage.removeItem(draftKey);
+        if (!isReviewMode && !hasServerPicks && typeof window !== "undefined") {
+          if (currentDraftKey) {
+            window.localStorage.removeItem(currentDraftKey);
           }
           const resetLastStepKey = `picks:lastStep:${selectedShowId}:${userId}`;
           window.localStorage.removeItem(resetLastStepKey);
@@ -1289,10 +1349,7 @@ function PicksPageInner() {
     };
 
     loadShowData();
-  }, [
-    selectedShowId,
-    userId,
-  ]);
+  }, [isReviewMode, selectedShowId, userId]);
 
   useEffect(() => {
     if (isHydratingPayloadRef.current) return;
@@ -1301,6 +1358,10 @@ function PicksPageInner() {
   }, [isPicksLoading, payload]);
 
   const loadRank = useCallback(async () => {
+    if (isReviewMode) {
+      setRankInfo({ rank: null, total: 0 });
+      return;
+    }
     if (!selectedShowId || !userId) return;
 
     const { data, error } = await supabase
@@ -1317,7 +1378,7 @@ function PicksPageInner() {
     const total = data.length;
     const index = data.findIndex((row) => row.user_id === userId);
     setRankInfo({ rank: index === -1 ? null : index + 1, total });
-  }, [selectedShowId, userId]);
+  }, [isReviewMode, selectedShowId, userId]);
 
   useEffect(() => {
     loadRank();
@@ -1548,6 +1609,7 @@ function PicksPageInner() {
   };
 
   const handleAddCustomEntrant = async () => {
+    if (isReviewMode) return;
     if (!userId || !customModalEventId || !customModalEvent) return;
     if (isLocked) {
       setMessage("Picks are locked for this show.");
@@ -1617,6 +1679,10 @@ function PicksPageInner() {
   };
 
   const handleSave = async () => {
+    if (isReviewMode) {
+      setMessage(null);
+      return true;
+    }
     if (!userId || !selectedShowId) return false;
     if (selectedShowRequiresLocationVerification) {
       const storedVerification =
@@ -1771,6 +1837,7 @@ function PicksPageInner() {
   const loadingStepType: "event" | "match" | "eliminator" | "question" =
     currentStep?.type ?? "match";
   useEffect(() => {
+    if (isReviewMode) return;
     if (!userId || !selectedShowId || !currentStep || totalSteps === 0) return;
     const trackingKey = `${userId}:${selectedShowId}:${currentStep.type}:${currentStep.id}:${stepIndex}`;
     if (lastTrackedStepViewRef.current === trackingKey) return;
@@ -1790,17 +1857,20 @@ function PicksPageInner() {
     stepIndex,
     totalSteps,
     userId,
+    isReviewMode,
   ]);
 
   const draftKey = useMemo(() => {
+    if (isReviewMode) return null;
     if (!selectedShowId || !userId) return null;
     return `picks:draft:${selectedShowId}:${userId}`;
-  }, [selectedShowId, userId]);
+  }, [isReviewMode, selectedShowId, userId]);
 
   const lastStepKey = useMemo(() => {
+    if (isReviewMode) return null;
     if (!selectedShowId || !userId) return null;
     return `picks:lastStep:${selectedShowId}:${userId}`;
-  }, [selectedShowId, userId]);
+  }, [isReviewMode, selectedShowId, userId]);
 
   useEffect(() => {
     hasRestoredStepRef.current = false;
@@ -1847,6 +1917,11 @@ function PicksPageInner() {
   };
 
   const handleStepContinue = async () => {
+    if (isReviewMode) {
+      setStepIndex((prev) => Math.min(prev + 1, totalSteps));
+      scrollToTop();
+      return;
+    }
     const didSave = await handleSave();
     if (!didSave) return;
     setStepIndex((prev) => Math.min(prev + 1, totalSteps));
@@ -1854,6 +1929,7 @@ function PicksPageInner() {
   };
 
   const currentStepMatchReady =
+    isReviewMode ||
     currentStep?.type !== "match" ||
     (() => {
       const match = matches.find((item) => item.id === currentStep.id);
@@ -2110,20 +2186,46 @@ function PicksPageInner() {
     );
   }
 
-  if (!userId) {
+  if (
+    !userId &&
+    reviewToken &&
+    (!selectedShowId || reviewValidationLoading || !reviewValidation)
+  ) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
         <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
-          <h1 className="text-2xl font-semibold">Sign in required</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+            Review mode
+          </p>
+          <h1 className="mt-4 text-2xl font-semibold">Checking review link</h1>
           <p className="mt-4 text-sm text-zinc-400">
-            Visit the login screen to make your picks.
+            Confirming this preview is available for the selected show.
           </p>
         </main>
       </div>
     );
   }
 
-  if (selectedShowRequiresLocationVerification && !isLocationGateSatisfied) {
+  if (!userId && !isReviewMode) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-200">
+        <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
+          <h1 className="text-2xl font-semibold">Sign in required</h1>
+          <p className="mt-4 text-sm text-zinc-400">
+            {reviewToken && reviewValidation?.valid === false
+              ? "This review link is unavailable. Visit the login screen to make picks normally."
+              : "Visit the login screen to make your picks."}
+          </p>
+        </main>
+      </div>
+    );
+  }
+
+  if (
+    !isReviewMode &&
+    selectedShowRequiresLocationVerification &&
+    !isLocationGateSatisfied
+  ) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
         <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
@@ -2196,6 +2298,11 @@ function PicksPageInner() {
           <div className="relative z-10 mt-2">
             <MessageBanner message={message} />
           </div>
+          {isReviewMode ? (
+            <div className="relative z-10 mt-3 rounded-2xl border border-amber-300/40 bg-amber-300/10 px-4 py-3 text-center text-sm font-semibold text-amber-100">
+              Review mode: choices are temporary and no picks will be saved.
+            </div>
+          ) : null}
         </div>
 
         {hasEvents && !hasEntrantsForShow && (
@@ -2216,12 +2323,14 @@ function PicksPageInner() {
         ) : stepIndex >= totalSteps ? (
           <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
             <h2 className="text-xl font-semibold text-zinc-100">
-              All picks are in
+              {isReviewMode ? "Review complete" : "All picks are in"}
             </h2>
             <p className="mt-2 text-sm text-zinc-400">
-              {showLocksAtStart
-                ? "You can edit your picks until the show starts."
-                : "Only the picks you made are shown here. Unresolved matches stay open until results are entered."}
+              {isReviewMode
+                ? "You reviewed the configured show flow. Nothing was submitted or scored."
+                : showLocksAtStart
+                  ? "You can edit your picks until the show starts."
+                  : "Only the picks you made are shown here. Unresolved matches stay open until results are entered."}
             </p>
             <div className="mt-6 space-y-4">
               {[
@@ -2600,14 +2709,16 @@ function PicksPageInner() {
                 type="button"
                 onClick={() => setStepIndex(0)}
               >
-                Edit picks
+                {isReviewMode ? "Review again" : "Edit picks"}
               </button>
-              <Link
-                className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
-                href={`/scoreboard?show=${selectedShowId}`}
-              >
-                View scoreboard
-              </Link>
+              {!isReviewMode ? (
+                <Link
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
+                  href={`/scoreboard?show=${selectedShowId}`}
+                >
+                  View scoreboard
+                </Link>
+              ) : null}
             </div>
           </section>
         ) : (
@@ -2641,12 +2752,13 @@ function PicksPageInner() {
                           setEntrantSearch={setEntrantSearch}
                           toggleEntrant={toggleEntrant}
                           hasSaved={false}
-                          isLocked={isLocked}
+                          isLocked={!isReviewMode && isLocked}
                           onCancel={() => undefined}
                           onSave={handleSave}
                           saving={saving}
-                          userId={userId}
+                          userId={isReviewMode ? null : userId}
                           onOpenCustomModal={() => {
+                            if (isReviewMode) return;
                             setCustomModalEventId(event.id);
                             setCustomModalOpen(true);
                           }}
@@ -2657,7 +2769,7 @@ function PicksPageInner() {
                           selectedEntrants={selectedEntrants}
                           toggleFinalFour={toggleFinalFour}
                           hasSaved={false}
-                          isLocked={isLocked}
+                          isLocked={!isReviewMode && isLocked}
                           onCancel={() => undefined}
                           onSave={handleSave}
                           saving={saving}
@@ -2667,7 +2779,7 @@ function PicksPageInner() {
                           eventPick={eventPick}
                           selectedEntrants={selectedEntrants}
                           selectedFinalFour={selectedFinalFour}
-                          isLocked={isLocked}
+                          isLocked={!isReviewMode && isLocked}
                           hasSaved={false}
                           onCancel={() => undefined}
                           onSave={handleSave}
@@ -2707,7 +2819,7 @@ function PicksPageInner() {
                       entrantByIdAll={entrantByIdAll}
                       payload={payload}
                       setPayload={setPayload}
-                      isLocked={isLocked}
+                      isLocked={!isReviewMode && isLocked}
                     />
                   ))}
               </div>
@@ -2744,17 +2856,19 @@ function PicksPageInner() {
                               <button
                                 key={`${question.id}-${answer}`}
                                 type="button"
-                                disabled={isLocked}
+                                disabled={!isReviewMode && isLocked}
                                 onClick={() => {
-                                  posthog.capture("question_answer_selected", {
-                                    show_id: selectedShowId,
-                                    show_name: selectedShow?.name ?? null,
-                                    promotion_id: selectedShow?.promotion_id ?? null,
-                                    question_id: question.id,
-                                    question_text: question.question,
-                                    answer,
-                                    step_index: stepIndex + 1,
-                                  });
+                                  if (!isReviewMode) {
+                                    posthog.capture("question_answer_selected", {
+                                      show_id: selectedShowId,
+                                      show_name: selectedShow?.name ?? null,
+                                      promotion_id: selectedShow?.promotion_id ?? null,
+                                      question_id: question.id,
+                                      question_text: question.question,
+                                      answer,
+                                      step_index: stepIndex + 1,
+                                    });
+                                  }
                                   setPayload((prev) => ({
                                     ...prev,
                                     question_picks: {
@@ -2806,7 +2920,7 @@ function PicksPageInner() {
                         matchPickStats={matchPickStats}
                         payload={payload}
                         setPayload={setPayload}
-                        isLocked={isLocked}
+                        isLocked={!isReviewMode && isLocked}
                         hasSaved={false}
                         onCancel={() => undefined}
                         onSave={handleSave}
@@ -2832,19 +2946,25 @@ function PicksPageInner() {
                 className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
                 type="button"
                 onClick={handleStepContinue}
-                disabled={saving || isLocked || !currentStepMatchReady}
+                disabled={saving || (!isReviewMode && isLocked) || !currentStepMatchReady}
               >
-                {stepIndex + 1 === totalSteps ? "Finish picks" : "Save & next"}
+                {isReviewMode
+                  ? stepIndex + 1 === totalSteps
+                    ? "Finish review"
+                    : "Next"
+                  : stepIndex + 1 === totalSteps
+                    ? "Finish picks"
+                    : "Save & next"}
               </button>
             </div>
           </>
         )}
         <CustomEntrantModal
-          open={customModalOpen}
+          open={!isReviewMode && customModalOpen}
           event={customModalEvent}
           entrantName={customEntrantName}
           setEntrantName={setCustomEntrantName}
-          isLocked={isLocked}
+          isLocked={!isReviewMode && isLocked}
           onClose={() => {
             setCustomModalOpen(false);
             setCustomModalEventId(null);

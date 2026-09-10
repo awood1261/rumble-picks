@@ -12,6 +12,10 @@ import {
   isValidSlug,
   normalizeSlug,
 } from "../../lib/friendlyUrls";
+import {
+  getReviewLinkStatus,
+  type ShowReviewLinkSummary,
+} from "../../lib/showReviewLinks";
 
 type EventRow = {
   id: string;
@@ -256,6 +260,11 @@ type PickRow = {
   payload: Record<string, unknown> | null;
 };
 
+type ReviewLinkCreationResult = {
+  link: ShowReviewLinkSummary;
+  reviewPath: string;
+};
+
 type ShowLocationGateForm = {
   requiresLocationVerification: boolean;
   venueName: string;
@@ -441,6 +450,11 @@ export default function AdminPage() {
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [selectedShowId, setSelectedShowId] = useState<string>("");
+  const [reviewLinks, setReviewLinks] = useState<ShowReviewLinkSummary[]>([]);
+  const [reviewLinksLoading, setReviewLinksLoading] = useState(false);
+  const [reviewLinkBusy, setReviewLinkBusy] = useState(false);
+  const [reviewLinkLabel, setReviewLinkLabel] = useState("");
+  const [latestReviewUrl, setLatestReviewUrl] = useState("");
   const [adminView, setAdminView] = useState<AdminView>("dashboard");
   const [adminTab, setAdminTab] = useState<AdvancedAdminTab>("events");
   const [rosterName, setRosterName] = useState("");
@@ -1139,6 +1153,162 @@ export default function AdminPage() {
       qr: "/qr",
     };
   }, [activePromotion, activeShow]);
+
+  const getAuthHeader = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : null;
+  }, []);
+
+  const loadReviewLinks = useCallback(async () => {
+    if (!activeShow?.id || !isAdmin) {
+      setReviewLinks([]);
+      return;
+    }
+
+    setReviewLinksLoading(true);
+    try {
+      const authHeader = await getAuthHeader();
+      if (!authHeader) {
+        setReviewLinks([]);
+        return;
+      }
+      const response = await fetch(
+        `/api/show-review-links?showId=${encodeURIComponent(activeShow.id)}`,
+        { headers: authHeader }
+      );
+      const payload = (await response.json()) as {
+        links?: ShowReviewLinkSummary[];
+        error?: string;
+      };
+      if (!response.ok) {
+        setMessage(payload.error ?? "Failed to load review links.");
+        setReviewLinks([]);
+        return;
+      }
+      setReviewLinks(payload.links ?? []);
+    } catch (error) {
+      setReviewLinks([]);
+      setMessage(
+        error instanceof Error ? error.message : "Failed to load review links."
+      );
+    } finally {
+      setReviewLinksLoading(false);
+    }
+  }, [activeShow?.id, getAuthHeader, isAdmin]);
+
+  useEffect(() => {
+    loadReviewLinks();
+  }, [loadReviewLinks]);
+
+  const createReviewLink = useCallback(
+    async (options?: { label?: string; open?: boolean }) => {
+      if (!activeShow?.id) return null;
+      setReviewLinkBusy(true);
+      setMessage(null);
+      try {
+        const authHeader = await getAuthHeader();
+        if (!authHeader) {
+          setMessage("Sign in as an admin to create review links.");
+          return null;
+        }
+        const response = await fetch("/api/show-review-links", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeader,
+          },
+          body: JSON.stringify({
+            showId: activeShow.id,
+            label: options?.label ?? reviewLinkLabel,
+          }),
+        });
+        const payload = (await response.json()) as
+          | ReviewLinkCreationResult
+          | { error?: string };
+        if (!response.ok || !("reviewPath" in payload)) {
+          setMessage(
+            "error" in payload && payload.error
+              ? payload.error
+              : "Failed to create review link."
+          );
+          return null;
+        }
+        const absoluteUrl = `${window.location.origin}${payload.reviewPath}`;
+        setLatestReviewUrl(absoluteUrl);
+        setReviewLinkLabel("");
+        setReviewLinks((prev) => [payload.link, ...prev]);
+        if (options?.open) {
+          window.open(absoluteUrl, "_blank", "noopener,noreferrer");
+        }
+        return absoluteUrl;
+      } catch (error) {
+        setMessage(
+          error instanceof Error ? error.message : "Failed to create review link."
+        );
+        return null;
+      } finally {
+        setReviewLinkBusy(false);
+      }
+    },
+    [activeShow?.id, getAuthHeader, reviewLinkLabel]
+  );
+
+  const handleCreateReviewLink = () => {
+    void createReviewLink();
+  };
+
+  const handleOpenReviewMode = () => {
+    void createReviewLink({ label: "Admin review", open: true });
+  };
+
+  const handleCopyReviewLink = async (url: string) => {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setToastMessage("Review link copied.");
+    } catch {
+      setMessage("Copy failed. Select and copy the review link manually.");
+    }
+  };
+
+  const handleRevokeReviewLink = async (id: string) => {
+    setReviewLinkBusy(true);
+    setMessage(null);
+    try {
+      const authHeader = await getAuthHeader();
+      if (!authHeader) {
+        setMessage("Sign in as an admin to revoke review links.");
+        return;
+      }
+      const response = await fetch("/api/show-review-links", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeader,
+        },
+        body: JSON.stringify({ id }),
+      });
+      const payload = (await response.json()) as {
+        link?: ShowReviewLinkSummary;
+        error?: string;
+      };
+      if (!response.ok || !payload.link) {
+        setMessage(payload.error ?? "Failed to revoke review link.");
+        return;
+      }
+      setReviewLinks((prev) =>
+        prev.map((link) => (link.id === payload.link?.id ? payload.link : link))
+      );
+      setToastMessage("Review link revoked.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Failed to revoke review link."
+      );
+    } finally {
+      setReviewLinkBusy(false);
+    }
+  };
 
   const matchCompletion = useMemo(() => {
     const completed = orderedShowMatches.filter(
@@ -4077,13 +4247,21 @@ export default function AdminPage() {
                     </button>
                     {activeShowLinks && (
                       <>
+                        <button
+                          className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                          type="button"
+                          onClick={handleOpenReviewMode}
+                          disabled={reviewLinkBusy}
+                        >
+                          {reviewLinkBusy ? "Opening..." : "Review show"}
+                        </button>
                         <a
                           className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
                           href={activeShowLinks.show}
                           target="_blank"
                           rel="noreferrer"
                         >
-                          Preview show
+                          Fan link
                         </a>
                         <a
                           className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
@@ -4113,6 +4291,131 @@ export default function AdminPage() {
                     )}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
+                    Show review
+                  </p>
+                  <h2 className="mt-2 text-lg font-semibold">
+                    Stakeholder review links
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+                    Share a preview that bypasses location checks and never saves picks.
+                  </p>
+                </div>
+                <button
+                  className="inline-flex h-10 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                  type="button"
+                  onClick={handleOpenReviewMode}
+                  disabled={!activeShow || reviewLinkBusy}
+                >
+                  {reviewLinkBusy ? "Opening..." : "Open review"}
+                </button>
+              </div>
+              <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                    Link label
+                  </span>
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    placeholder="Stakeholder review"
+                    value={reviewLinkLabel}
+                    onChange={(event) => setReviewLinkLabel(event.target.value)}
+                  />
+                </label>
+                <button
+                  className="mt-6 inline-flex h-11 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-70 lg:mt-auto"
+                  type="button"
+                  onClick={handleCreateReviewLink}
+                  disabled={!activeShow || reviewLinkBusy}
+                >
+                  {reviewLinkBusy ? "Creating..." : "Create link"}
+                </button>
+              </div>
+              {latestReviewUrl ? (
+                <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">
+                    Latest review link
+                  </p>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      className="h-10 min-w-0 flex-1 rounded-xl border border-amber-300/30 bg-black/40 px-3 text-xs text-zinc-100"
+                      readOnly
+                      value={latestReviewUrl}
+                    />
+                    <button
+                      className="inline-flex h-10 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300"
+                      type="button"
+                      onClick={() => void handleCopyReviewLink(latestReviewUrl)}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              <div className="mt-4 space-y-2">
+                {reviewLinksLoading ? (
+                  <p className="text-sm text-zinc-500">Loading review links...</p>
+                ) : reviewLinks.length === 0 ? (
+                  <p className="text-sm text-zinc-500">
+                    No review links have been created for this show.
+                  </p>
+                ) : (
+                  reviewLinks.map((link) => {
+                    const status = getReviewLinkStatus(link);
+                    const expiresLabel = new Date(link.expires_at).toLocaleDateString(
+                      undefined,
+                      {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      }
+                    );
+                    return (
+                      <div
+                        key={link.id}
+                        className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-100">
+                            {link.label || "Review link"}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            Expires {expiresLabel}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                              status === "active"
+                                ? "border-emerald-400/40 text-emerald-200"
+                                : status === "expired"
+                                  ? "border-zinc-700 text-zinc-400"
+                                  : "border-red-400/40 text-red-200"
+                            }`}
+                          >
+                            {status}
+                          </span>
+                          {status === "active" ? (
+                            <button
+                              className="inline-flex h-9 items-center justify-center rounded-full border border-red-500/50 px-4 text-xs font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              type="button"
+                              onClick={() => void handleRevokeReviewLink(link.id)}
+                              disabled={reviewLinkBusy}
+                            >
+                              Revoke
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
