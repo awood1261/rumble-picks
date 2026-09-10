@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabaseClient";
 import { avatarSrcForKey } from "../../../../lib/avatarOptions";
 import type { PromotionRow, ShowRow } from "../../../../lib/picksTypes";
+import type { ShowReviewValidation } from "../../../../lib/showReviewLinks";
 import {
   buildPromotionShowsHref,
   isUuid,
@@ -160,12 +161,17 @@ const getLocationCopy = (
 
 export default function ShowDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const showIdentifier = typeof params?.showId === "string" ? params.showId : "";
   const promotionIdentifier =
     typeof params?.promotionId === "string" ? params.promotionId : "";
+  const reviewToken = searchParams.get("review")?.trim() ?? "";
   const [show, setShow] = useState<ShowRow | null>(null);
   const [promotion, setPromotion] = useState<PromotionRow | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [reviewValidation, setReviewValidation] =
+    useState<ShowReviewValidation | null>(null);
+  const [reviewValidationLoading, setReviewValidationLoading] = useState(false);
   const [championParticipants, setChampionParticipants] = useState<
     ChampionParticipant[]
   >([]);
@@ -195,6 +201,10 @@ export default function ShowDetailPage() {
   const requiresLocationVerification = !!show?.requires_location_verification;
   const hasValidLocationGateConfig =
     isValidLocationGateConfig(locationGateConfig);
+  const isReviewMode =
+    !!reviewToken &&
+    reviewValidation?.valid === true &&
+    reviewValidation.showId === show?.id;
   const resolvedShowId = show?.id ?? "";
   const resolvedPromotionId = promotion?.id ?? show?.promotion_id ?? "";
   const formattedStart = formatShowDate(show?.starts_at ?? null);
@@ -371,6 +381,42 @@ export default function ShowDetailPage() {
 
   useEffect(() => {
     let ignore = false;
+    setReviewValidation(null);
+    if (!reviewToken || !show?.id) {
+      setReviewValidationLoading(false);
+      return;
+    }
+
+    const validateReviewToken = async () => {
+      setReviewValidationLoading(true);
+      try {
+        const response = await fetch("/api/show-review/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: reviewToken, showId: show.id }),
+        });
+        const payload = (await response.json()) as ShowReviewValidation;
+        if (ignore) return;
+        setReviewValidation(payload);
+      } catch {
+        if (!ignore) {
+          setReviewValidation({ valid: false, reason: "invalid" });
+        }
+      } finally {
+        if (!ignore) {
+          setReviewValidationLoading(false);
+        }
+      }
+    };
+
+    void validateReviewToken();
+    return () => {
+      ignore = true;
+    };
+  }, [reviewToken, show?.id]);
+
+  useEffect(() => {
+    let ignore = false;
     const loadUser = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (ignore) return;
@@ -418,7 +464,7 @@ export default function ShowDetailPage() {
   }, [authChecked, resolvedShowId, userId]);
 
   useEffect(() => {
-    if (!show?.id || !requiresLocationVerification) {
+    if (isReviewMode || !show?.id || !requiresLocationVerification) {
       setLocationVerificationStatus("idle");
       setLocationVerificationDetail(null);
       return;
@@ -446,6 +492,7 @@ export default function ShowDetailPage() {
     }
   }, [
     hasValidLocationGateConfig,
+    isReviewMode,
     requiresLocationVerification,
     show?.id,
     userId,
@@ -546,6 +593,10 @@ export default function ShowDetailPage() {
     new Date(show.starts_at).getTime() <= now;
   const scoreboardHref = show ? `/scoreboard?show=${show.id}` : "/scoreboard";
   const picksHref = show ? `/picks?show=${show.id}` : "/picks";
+  const reviewPicksHref =
+    show && reviewToken
+      ? `/picks?show=${show.id}&review=${encodeURIComponent(reviewToken)}`
+      : picksHref;
   const loginHref = show ? `/login?show=${show.id}` : "/login";
   const titleHref = resolvedPromotionId ? `/title/${resolvedPromotionId}` : "/title";
   const promotionShowsHref = promotion
@@ -558,7 +609,27 @@ export default function ShowDetailPage() {
     locationVerificationStatus !== "invalid_config" &&
     locationVerificationStatus !== "unsupported";
   const primaryAction: PrimaryAction | null = show
-    ? isShowOver
+    ? reviewValidationLoading && reviewToken
+      ? {
+          kind: "button",
+          label: "Checking...",
+          eyebrow: "Review mode",
+          title: "Checking Review Link",
+          detail: "Confirming this review link is active for the show.",
+          onClick: () => undefined,
+          disabled: true,
+        }
+      : isReviewMode
+        ? {
+            kind: "link",
+            label: "Review Show",
+            eyebrow: "Preview mode",
+            title: "Review Experience",
+            detail:
+              "Step through the show without saving picks or affecting scores.",
+            href: reviewPicksHref,
+          }
+        : isShowOver
       ? {
           kind: "locked",
           label: "View Results",
@@ -691,6 +762,15 @@ export default function ShowDetailPage() {
             {message}
           </div>
         )}
+        {isReviewMode ? (
+          <div className="mb-4 rounded-lg border border-amber-300/50 bg-amber-300/12 px-4 py-3 text-sm font-semibold text-amber-100">
+            Review mode: location checks are bypassed and no picks will be saved.
+          </div>
+        ) : reviewToken && reviewValidation?.valid === false ? (
+          <div className="mb-4 rounded-lg border border-red-500/50 bg-red-950/60 px-4 py-3 text-sm text-red-100">
+            This review link is unavailable. Normal show access rules still apply.
+          </div>
+        ) : null}
 
         {!show ? (
           <div className="flex flex-1 items-center justify-center">
