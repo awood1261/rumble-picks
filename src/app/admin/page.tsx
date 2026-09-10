@@ -166,6 +166,12 @@ type EliminatorEliminationRow = {
 const ENTRANT_SELECT =
   "id, name, promotion, gender, active, image_url, logo_url, roster_year, event_id, is_custom, created_by, status";
 const ENTRANT_PAGE_SIZE = 1000;
+const ENTRANT_IMAGE_BUCKET = "entrant-images";
+const ALLOWED_ENTRANT_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 type AdminView =
   | "dashboard"
   | "setup"
@@ -173,6 +179,7 @@ type AdminView =
   | "results"
   | "scoreboard"
   | "advanced";
+type AdvancedAdminTab = "events" | "eliminators" | "questions" | "roster";
 
 const ADMIN_NAV_ITEMS: Array<{
   view: AdminView;
@@ -186,6 +193,25 @@ const ADMIN_NAV_ITEMS: Array<{
   { view: "scoreboard", label: "Scoreboard", mobileLabel: "Scores" },
   { view: "advanced", label: "Advanced", mobileLabel: "More" },
 ];
+
+const slugifyStorageSegment = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "") || "wrestler";
+
+const getEntrantImageExtension = (file: File) => {
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  return "jpg";
+};
+
+const formatDivisionLabel = (value: string | null) => {
+  if (value === "men") return "Men";
+  if (value === "women") return "Women";
+  return "Unspecified";
+};
 
 async function loadAllEntrants() {
   const rows: EntrantRow[] = [];
@@ -416,9 +442,30 @@ export default function AdminPage() {
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [selectedShowId, setSelectedShowId] = useState<string>("");
   const [adminView, setAdminView] = useState<AdminView>("dashboard");
-  const [adminTab, setAdminTab] = useState<
-    "events" | "eliminators" | "questions"
-  >("events");
+  const [adminTab, setAdminTab] = useState<AdvancedAdminTab>("events");
+  const [rosterName, setRosterName] = useState("");
+  const [rosterPromotion, setRosterPromotion] = useState("");
+  const [rosterGender, setRosterGender] = useState("men");
+  const [rosterYear, setRosterYear] = useState("2026");
+  const [rosterActive, setRosterActive] = useState(true);
+  const [rosterImageFile, setRosterImageFile] = useState<File | null>(null);
+  const [rosterSearch, setRosterSearch] = useState("");
+  const [rosterPromotionFilter, setRosterPromotionFilter] = useState("");
+  const [rosterGenderFilter, setRosterGenderFilter] = useState("");
+  const [rosterYearFilter, setRosterYearFilter] = useState("");
+  const [rosterActiveFilter, setRosterActiveFilter] = useState<
+    "active" | "inactive" | "all"
+  >("active");
+  const [rosterEditId, setRosterEditId] = useState("");
+  const [rosterEditName, setRosterEditName] = useState("");
+  const [rosterEditPromotion, setRosterEditPromotion] = useState("");
+  const [rosterEditGender, setRosterEditGender] = useState("men");
+  const [rosterEditYear, setRosterEditYear] = useState("");
+  const [rosterEditActive, setRosterEditActive] = useState(true);
+  const [rosterEditImageFile, setRosterEditImageFile] = useState<File | null>(
+    null
+  );
+  const [rosterBusy, setRosterBusy] = useState(false);
   const [newQuestionImageUrl, setNewQuestionImageUrl] = useState("");
   const [newQuestionText, setNewQuestionText] = useState("");
   const [newQuestionAnswerInput, setNewQuestionAnswerInput] = useState("");
@@ -1185,6 +1232,99 @@ export default function AdminPage() {
       )
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [activeEvent?.id, entrants]);
+
+  const globalRosterEntrants = useMemo(() => {
+    return entrants
+      .filter((entrant) => !entrant.event_id && !entrant.is_custom)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [entrants]);
+  const rosterPromotionOptions = useMemo(() => {
+    const values = new Set<string>();
+    globalRosterEntrants.forEach((entrant) => {
+      if (entrant.promotion?.trim()) {
+        values.add(entrant.promotion.trim());
+      }
+    });
+    return Array.from(values).sort((a, b) => a.localeCompare(b));
+  }, [globalRosterEntrants]);
+  const rosterYearOptions = useMemo(() => {
+    const values = new Set<number>();
+    globalRosterEntrants.forEach((entrant) => {
+      if (entrant.roster_year) {
+        values.add(entrant.roster_year);
+      }
+    });
+    return Array.from(values).sort((a, b) => b - a);
+  }, [globalRosterEntrants]);
+  const filteredRosterEntrants = useMemo(() => {
+    const search = rosterSearch.trim().toLowerCase();
+    return globalRosterEntrants.filter((entrant) => {
+      const matchesSearch =
+        !search ||
+        entrant.name.toLowerCase().includes(search) ||
+        (entrant.promotion ?? "").toLowerCase().includes(search);
+      const matchesPromotion =
+        !rosterPromotionFilter ||
+        (entrant.promotion ?? "") === rosterPromotionFilter;
+      const matchesGender =
+        !rosterGenderFilter || entrant.gender === rosterGenderFilter;
+      const matchesYear =
+        !rosterYearFilter || String(entrant.roster_year ?? "") === rosterYearFilter;
+      const matchesActive =
+        rosterActiveFilter === "all" ||
+        (rosterActiveFilter === "active" && entrant.active) ||
+        (rosterActiveFilter === "inactive" && !entrant.active);
+      return (
+        matchesSearch &&
+        matchesPromotion &&
+        matchesGender &&
+        matchesYear &&
+        matchesActive
+      );
+    });
+  }, [
+    globalRosterEntrants,
+    rosterActiveFilter,
+    rosterGenderFilter,
+    rosterPromotionFilter,
+    rosterSearch,
+    rosterYearFilter,
+  ]);
+  const selectedRosterEntrant = useMemo(() => {
+    if (!rosterEditId) return null;
+    return entrants.find((entrant) => entrant.id === rosterEditId) ?? null;
+  }, [entrants, rosterEditId]);
+  const likelyRosterDuplicate = useMemo(() => {
+    const name = (rosterEditId ? rosterEditName : rosterName).trim().toLowerCase();
+    if (!name) return null;
+    const promotion = (rosterEditId ? rosterEditPromotion : rosterPromotion)
+      .trim()
+      .toLowerCase();
+    const gender = rosterEditId ? rosterEditGender : rosterGender;
+    const year = rosterEditId ? rosterEditYear : rosterYear;
+    return (
+      globalRosterEntrants.find((entrant) => {
+        if (entrant.id === rosterEditId) return false;
+        return (
+          entrant.name.trim().toLowerCase() === name &&
+          (entrant.promotion ?? "").trim().toLowerCase() === promotion &&
+          (entrant.gender ?? "") === gender &&
+          String(entrant.roster_year ?? "") === year.trim()
+        );
+      }) ?? null
+    );
+  }, [
+    globalRosterEntrants,
+    rosterEditGender,
+    rosterEditId,
+    rosterEditName,
+    rosterEditPromotion,
+    rosterEditYear,
+    rosterGender,
+    rosterName,
+    rosterPromotion,
+    rosterYear,
+  ]);
 
   const refreshData = async () => {
     if (!activeEvent) {
@@ -2331,6 +2471,179 @@ export default function AdminPage() {
     }
     setMessage("Custom entrant rejected.");
     refreshData();
+  };
+
+  const resetRosterCreateForm = () => {
+    setRosterName("");
+    setRosterPromotion("");
+    setRosterGender("men");
+    setRosterYear("2026");
+    setRosterActive(true);
+    setRosterImageFile(null);
+  };
+
+  const selectRosterEntrantForEdit = (entrant: EntrantRow) => {
+    setRosterEditId(entrant.id);
+    setRosterEditName(entrant.name);
+    setRosterEditPromotion(entrant.promotion ?? "");
+    setRosterEditGender(entrant.gender ?? "men");
+    setRosterEditYear(entrant.roster_year ? String(entrant.roster_year) : "");
+    setRosterEditActive(entrant.active);
+    setRosterEditImageFile(null);
+    setMessage(null);
+  };
+
+  const uploadRosterImage = async (file: File, name: string, year: string) => {
+    if (!ALLOWED_ENTRANT_IMAGE_TYPES.has(file.type)) {
+      throw new Error("Upload a JPG, PNG, or WebP wrestler photo.");
+    }
+
+    const yearSegment = year.trim() || "unspecified";
+    const fileName = `${slugifyStorageSegment(name)}-${Date.now()}.${getEntrantImageExtension(
+      file
+    )}`;
+    const objectPath = `${slugifyStorageSegment(yearSegment)}/${fileName}`;
+    const { error } = await supabase.storage
+      .from(ENTRANT_IMAGE_BUCKET)
+      .upload(objectPath, file, {
+        cacheControl: "31536000",
+        contentType: file.type,
+        upsert: false,
+      });
+    if (error) throw error;
+
+    const { data } = supabase.storage
+      .from(ENTRANT_IMAGE_BUCKET)
+      .getPublicUrl(objectPath);
+    if (!data.publicUrl) {
+      throw new Error("The uploaded photo did not return a public URL.");
+    }
+    return data.publicUrl;
+  };
+
+  const parseRosterYear = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return { value: null, error: false };
+    const parsed = Number(trimmed);
+    return Number.isInteger(parsed) && parsed >= 1900 && parsed <= 2100
+      ? { value: parsed, error: false }
+      : { value: null, error: true };
+  };
+
+  const handleCreateRosterEntrant = async () => {
+    const trimmedName = rosterName.trim();
+    if (!trimmedName) {
+      setMessage("Wrestler name is required.");
+      return;
+    }
+    const parsedYear = parseRosterYear(rosterYear);
+    if (parsedYear.error) {
+      setMessage("Roster year should be a year between 1900 and 2100.");
+      return;
+    }
+
+    setRosterBusy(true);
+    setMessage(null);
+    try {
+      const imageUrl = rosterImageFile
+        ? await uploadRosterImage(rosterImageFile, trimmedName, rosterYear)
+        : null;
+      const { error } = await supabase.from("entrants").insert({
+        name: trimmedName,
+        promotion: rosterPromotion.trim() || null,
+        gender: rosterGender || null,
+        roster_year: parsedYear.value,
+        active: rosterActive,
+        image_url: imageUrl,
+        event_id: null,
+        is_custom: false,
+        status: "approved",
+      });
+      if (error) throw error;
+      resetRosterCreateForm();
+      setMessage("Wrestler saved to the roster.");
+      refreshData();
+    } catch (error) {
+      const err = error as { message?: string };
+      setMessage(err.message ?? "Failed to save wrestler.");
+    } finally {
+      setRosterBusy(false);
+    }
+  };
+
+  const handleUpdateRosterEntrant = async () => {
+    if (!selectedRosterEntrant) {
+      setMessage("Select a wrestler to edit.");
+      return;
+    }
+    const trimmedName = rosterEditName.trim();
+    if (!trimmedName) {
+      setMessage("Wrestler name is required.");
+      return;
+    }
+    const parsedYear = parseRosterYear(rosterEditYear);
+    if (parsedYear.error) {
+      setMessage("Roster year should be a year between 1900 and 2100.");
+      return;
+    }
+
+    setRosterBusy(true);
+    setMessage(null);
+    try {
+      const imageUrl = rosterEditImageFile
+        ? await uploadRosterImage(rosterEditImageFile, trimmedName, rosterEditYear)
+        : selectedRosterEntrant.image_url;
+      const { data, error } = await supabase
+        .from("entrants")
+        .update({
+          name: trimmedName,
+          promotion: rosterEditPromotion.trim() || null,
+          gender: rosterEditGender || null,
+          roster_year: parsedYear.value,
+          active: rosterEditActive,
+          image_url: imageUrl,
+        })
+        .eq("id", selectedRosterEntrant.id)
+        .select(ENTRANT_SELECT)
+        .single();
+      if (error) throw error;
+      if (data) {
+        selectRosterEntrantForEdit(data as EntrantRow);
+      }
+      setMessage("Wrestler updated.");
+      refreshData();
+    } catch (error) {
+      const err = error as { message?: string };
+      setMessage(err.message ?? "Failed to update wrestler.");
+    } finally {
+      setRosterBusy(false);
+    }
+  };
+
+  const handleDeactivateRosterEntrant = async (entrant: EntrantRow) => {
+    const shouldDeactivate = window.confirm(
+      `Mark ${entrant.name} inactive? Existing cards will keep their wrestler references.`
+    );
+    if (!shouldDeactivate) return;
+    setRosterBusy(true);
+    setMessage(null);
+    try {
+      const { error } = await supabase
+        .from("entrants")
+        .update({ active: false })
+        .eq("id", entrant.id);
+      if (error) throw error;
+      if (rosterEditId === entrant.id) {
+        setRosterEditActive(false);
+      }
+      setMessage("Wrestler marked inactive.");
+      refreshData();
+    } catch (error) {
+      const err = error as { message?: string };
+      setMessage(err.message ?? "Failed to mark wrestler inactive.");
+    } finally {
+      setRosterBusy(false);
+    }
   };
 
   const handleUpdateEvent = async () => {
@@ -4117,12 +4430,381 @@ export default function AdminPage() {
             >
               Questions
             </button>
+            <button
+              className={`h-11 flex-1 rounded-2xl px-4 text-xs font-semibold uppercase tracking-[0.2em] transition sm:flex-none ${
+                adminTab === "roster"
+                  ? "bg-amber-400 text-zinc-900"
+                  : "border border-zinc-800 text-zinc-300 hover:border-amber-300 hover:text-amber-200"
+              }`}
+              type="button"
+              onClick={() => setAdminTab("roster")}
+            >
+              Roster
+            </button>
           </div>
         </div>
         )}
 
         {adminView === "advanced" && (
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
+          {adminTab === "roster" && (
+            <div className="lg:col-span-2 grid gap-6 xl:grid-cols-[minmax(0,0.9fr),minmax(0,1.4fr)]">
+              <div className="space-y-6">
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                  <h2 className="text-lg font-semibold">Add wrestler</h2>
+                  <p className="mt-2 text-sm text-zinc-400">
+                    Create a global roster record for card building.
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      Wrestler name
+                      <input
+                        className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                        placeholder="Enter the wrestler's ring name"
+                        value={rosterName}
+                        onChange={(event) => setRosterName(event.target.value)}
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      Promotion
+                      <input
+                        className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                        list="roster-promotion-options"
+                        placeholder="Promotion or roster group"
+                        value={rosterPromotion}
+                        onChange={(event) =>
+                          setRosterPromotion(event.target.value)
+                        }
+                      />
+                    </label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Division
+                        <select
+                          className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                          value={rosterGender}
+                          onChange={(event) =>
+                            setRosterGender(event.target.value)
+                          }
+                        >
+                          <option value="men">Men</option>
+                          <option value="women">Women</option>
+                        </select>
+                      </label>
+                      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Roster year
+                        <input
+                          className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                          inputMode="numeric"
+                          placeholder="2026"
+                          value={rosterYear}
+                          onChange={(event) => setRosterYear(event.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <label className="flex items-center gap-3 text-sm text-zinc-300">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                        checked={rosterActive}
+                        onChange={(event) =>
+                          setRosterActive(event.target.checked)
+                        }
+                      />
+                      Available for new cards
+                    </label>
+                    <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      Wrestler photo
+                      <input
+                        className="mt-2 block w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-normal normal-case tracking-normal text-zinc-100 file:mr-4 file:rounded-full file:border-0 file:bg-amber-400 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-zinc-950"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(event) =>
+                          setRosterImageFile(event.target.files?.[0] ?? null)
+                        }
+                      />
+                    </label>
+                    {likelyRosterDuplicate && !rosterEditId ? (
+                      <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                        A similar wrestler already exists for this promotion,
+                        division, and year. You can still save if this is a
+                        separate roster record.
+                      </p>
+                    ) : null}
+                    <button
+                      className="inline-flex h-11 w-full items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                      type="button"
+                      onClick={handleCreateRosterEntrant}
+                      disabled={rosterBusy}
+                    >
+                      {rosterBusy ? "Saving..." : "Save wrestler"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                  <h2 className="text-lg font-semibold">Edit wrestler</h2>
+                  {!selectedRosterEntrant ? (
+                    <p className="mt-2 text-sm text-zinc-400">
+                      Select a wrestler from the roster to update their details.
+                    </p>
+                  ) : (
+                    <div className="mt-4 space-y-3">
+                      {selectedRosterEntrant.image_url ? (
+                        <div className="relative h-44 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
+                          <Image
+                            src={selectedRosterEntrant.image_url}
+                            alt={`${selectedRosterEntrant.name} preview`}
+                            fill
+                            sizes="(max-width: 768px) 100vw, 420px"
+                            className="object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex h-28 items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-950 text-sm text-zinc-500">
+                          No photo saved
+                        </div>
+                      )}
+                      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Wrestler name
+                        <input
+                          className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                          value={rosterEditName}
+                          onChange={(event) =>
+                            setRosterEditName(event.target.value)
+                          }
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Promotion
+                        <input
+                          className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                          list="roster-promotion-options"
+                          value={rosterEditPromotion}
+                          onChange={(event) =>
+                            setRosterEditPromotion(event.target.value)
+                          }
+                        />
+                      </label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                          Division
+                          <select
+                            className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                            value={rosterEditGender}
+                            onChange={(event) =>
+                              setRosterEditGender(event.target.value)
+                            }
+                          >
+                            <option value="men">Men</option>
+                            <option value="women">Women</option>
+                          </select>
+                        </label>
+                        <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                          Roster year
+                          <input
+                            className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                            inputMode="numeric"
+                            value={rosterEditYear}
+                            onChange={(event) =>
+                              setRosterEditYear(event.target.value)
+                            }
+                          />
+                        </label>
+                      </div>
+                      <label className="flex items-center gap-3 text-sm text-zinc-300">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                          checked={rosterEditActive}
+                          onChange={(event) =>
+                            setRosterEditActive(event.target.checked)
+                          }
+                        />
+                        Available for new cards
+                      </label>
+                      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Replace photo
+                        <input
+                          className="mt-2 block w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm font-normal normal-case tracking-normal text-zinc-100 file:mr-4 file:rounded-full file:border-0 file:bg-amber-400 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-zinc-950"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={(event) =>
+                            setRosterEditImageFile(event.target.files?.[0] ?? null)
+                          }
+                        />
+                      </label>
+                      {likelyRosterDuplicate && rosterEditId ? (
+                        <p className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                          Another wrestler has the same name, promotion,
+                          division, and year. Save only if this should remain a
+                          separate roster record.
+                        </p>
+                      ) : null}
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <button
+                          className="inline-flex h-11 flex-1 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                          type="button"
+                          onClick={handleUpdateRosterEntrant}
+                          disabled={rosterBusy}
+                        >
+                          {rosterBusy ? "Saving..." : "Save changes"}
+                        </button>
+                        {selectedRosterEntrant.active ? (
+                          <button
+                            className="inline-flex h-11 flex-1 items-center justify-center rounded-full border border-zinc-700 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-70"
+                            type="button"
+                            onClick={() =>
+                              handleDeactivateRosterEntrant(selectedRosterEntrant)
+                            }
+                            disabled={rosterBusy}
+                          >
+                            Mark inactive
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold">Roster</h2>
+                    <p className="mt-2 text-sm text-zinc-400">
+                      {filteredRosterEntrants.length} of{" "}
+                      {globalRosterEntrants.length} wrestlers shown.
+                    </p>
+                  </div>
+                </div>
+                <datalist id="roster-promotion-options">
+                  {rosterPromotionOptions.map((promotion) => (
+                    <option key={promotion} value={promotion} />
+                  ))}
+                </datalist>
+                <div className="mt-4 grid gap-3 md:grid-cols-5">
+                  <input
+                    className="h-11 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 md:col-span-2"
+                    placeholder="Search by wrestler or promotion"
+                    value={rosterSearch}
+                    onChange={(event) => setRosterSearch(event.target.value)}
+                  />
+                  <select
+                    className="h-11 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    value={rosterPromotionFilter}
+                    onChange={(event) =>
+                      setRosterPromotionFilter(event.target.value)
+                    }
+                  >
+                    <option value="">All promotions</option>
+                    {rosterPromotionOptions.map((promotion) => (
+                      <option key={promotion} value={promotion}>
+                        {promotion}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="h-11 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    value={rosterGenderFilter}
+                    onChange={(event) =>
+                      setRosterGenderFilter(event.target.value)
+                    }
+                  >
+                    <option value="">All divisions</option>
+                    <option value="men">Men</option>
+                    <option value="women">Women</option>
+                  </select>
+                  <select
+                    className="h-11 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    value={rosterActiveFilter}
+                    onChange={(event) =>
+                      setRosterActiveFilter(
+                        event.target.value as "active" | "inactive" | "all"
+                      )
+                    }
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="all">All</option>
+                  </select>
+                  <select
+                    className="h-11 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 md:col-span-2"
+                    value={rosterYearFilter}
+                    onChange={(event) => setRosterYearFilter(event.target.value)}
+                  >
+                    <option value="">All roster years</option>
+                    {rosterYearOptions.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-5 max-h-[780px] space-y-3 overflow-y-auto pr-1">
+                  {filteredRosterEntrants.length === 0 ? (
+                    <p className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-5 text-sm text-zinc-400">
+                      No wrestlers match the current filters.
+                    </p>
+                  ) : (
+                    filteredRosterEntrants.map((entrant) => (
+                      <button
+                        key={entrant.id}
+                        className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                          rosterEditId === entrant.id
+                            ? "border-amber-400 bg-amber-400/10"
+                            : "border-zinc-800 bg-zinc-950/60 hover:border-zinc-700"
+                        }`}
+                        type="button"
+                        onClick={() => selectRosterEntrantForEdit(entrant)}
+                      >
+                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+                          {entrant.image_url ? (
+                            <Image
+                              src={entrant.image_url}
+                              alt=""
+                              fill
+                              sizes="56px"
+                              className="object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-full items-center justify-center text-lg font-semibold text-zinc-500">
+                              {entrant.name.slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-sm font-semibold text-zinc-100">
+                              {entrant.name}
+                            </p>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                entrant.active
+                                  ? "bg-emerald-500/15 text-emerald-200"
+                                  : "bg-zinc-700/70 text-zinc-300"
+                              }`}
+                            >
+                              {entrant.active ? "Active" : "Inactive"}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-zinc-400">
+                            {entrant.promotion ?? "No promotion"} •{" "}
+                            {formatDivisionLabel(entrant.gender)} •{" "}
+                            {entrant.roster_year ?? "No year"}
+                          </p>
+                          <p className="mt-1 text-[11px] text-zinc-500">
+                            {entrant.image_url ? "Photo saved" : "No photo"}
+                          </p>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {adminTab === "events" && (
             <div
               id="event-editor"
