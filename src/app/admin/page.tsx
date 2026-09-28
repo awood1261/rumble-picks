@@ -69,6 +69,29 @@ type PromotionRow = {
   image_url: string | null;
 };
 
+type ProfileRow = {
+  id: string;
+  display_name: string | null;
+  is_admin?: boolean | null;
+};
+
+type PromotionMemberRow = {
+  id: string;
+  promotion_id: string;
+  user_id: string;
+  role: "owner" | "manager";
+  revoked_at: string | null;
+  created_at: string;
+};
+
+type PromotionRosterMemberRow = {
+  id: string;
+  promotion_id: string;
+  entrant_id: string;
+  deactivated_at: string | null;
+  created_at: string;
+};
+
 type EntrantRow = {
   id: string;
   name: string;
@@ -183,7 +206,12 @@ type AdminView =
   | "results"
   | "scoreboard"
   | "advanced";
-type AdvancedAdminTab = "events" | "eliminators" | "questions" | "roster";
+type AdvancedAdminTab =
+  | "events"
+  | "eliminators"
+  | "questions"
+  | "roster"
+  | "members";
 
 const ADMIN_NAV_ITEMS: Array<{
   view: AdminView;
@@ -351,6 +379,7 @@ const buildShowLocationGatePayload = (
 
 export default function AdminPage() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -359,6 +388,11 @@ export default function AdminPage() {
   const [eliminators, setEliminators] = useState<EliminatorRow[]>([]);
   const [shows, setShows] = useState<ShowRow[]>([]);
   const [promotions, setPromotions] = useState<PromotionRow[]>([]);
+  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [promotionMembers, setPromotionMembers] = useState<PromotionMemberRow[]>([]);
+  const [promotionRosterMembers, setPromotionRosterMembers] = useState<
+    PromotionRosterMemberRow[]
+  >([]);
   const [entrants, setEntrants] = useState<EntrantRow[]>([]);
   const [entries, setEntries] = useState<RumbleEntryRow[]>([]);
   const [entriesSnapshot, setEntriesSnapshot] = useState<RumbleEntryRow[]>([]);
@@ -420,6 +454,9 @@ export default function AdminPage() {
   const [showLocationRadiusMeters, setShowLocationRadiusMeters] = useState("");
   const [showModalOpen, setShowModalOpen] = useState(false);
   const [promotionModalOpen, setPromotionModalOpen] = useState(false);
+  const [memberUserId, setMemberUserId] = useState("");
+  const [memberRole, setMemberRole] = useState<"owner" | "manager">("manager");
+  const [memberBusy, setMemberBusy] = useState(false);
   const [promotionName, setPromotionName] = useState("");
   const [promotionSlug, setPromotionSlug] = useState("");
   const [promotionImageUrl, setPromotionImageUrl] = useState("");
@@ -626,10 +663,39 @@ export default function AdminPage() {
 
   const activeShow = useMemo(() => {
     if (selectedShowId) {
-      return shows.find((show) => show.id === selectedShowId) ?? null;
+      return shows.find((show) => show.id === selectedShowId) ?? shows[0] ?? null;
     }
     return shows[0] ?? null;
   }, [shows, selectedShowId]);
+  const activePromotionId = activeShow?.promotion_id ?? promotions[0]?.id ?? "";
+  const hasAdminAccess = isAdmin || promotionMembers.length > 0;
+  const manageablePromotionIds = useMemo(() => {
+    if (isAdmin) return new Set(promotions.map((promotion) => promotion.id));
+    return new Set(
+      promotionMembers
+        .filter((member) => !member.revoked_at)
+        .map((member) => member.promotion_id)
+    );
+  }, [isAdmin, promotionMembers, promotions]);
+  const canManageActivePromotion =
+    isAdmin || (activePromotionId ? manageablePromotionIds.has(activePromotionId) : false);
+  const activePromotionMembers = useMemo(() => {
+    if (!activePromotionId) return [];
+    return promotionMembers.filter(
+      (member) => member.promotion_id === activePromotionId && !member.revoked_at
+    );
+  }, [activePromotionId, promotionMembers]);
+  const activePromotionRoster = useMemo(() => {
+    if (!activePromotionId) return [];
+    return promotionRosterMembers.filter(
+      (member) =>
+        member.promotion_id === activePromotionId && !member.deactivated_at
+    );
+  }, [activePromotionId, promotionRosterMembers]);
+  const activePromotionRosterEntrantIds = useMemo(
+    () => new Set(activePromotionRoster.map((member) => member.entrant_id)),
+    [activePromotionRoster]
+  );
   const showEvents = useMemo(() => {
     if (!activeShow) return [];
     return events
@@ -807,7 +873,7 @@ export default function AdminPage() {
     activeShow?.location_radius_meters,
   ]);
   useEffect(() => {
-    if (!selectedShowId && activeShow?.id) {
+    if (activeShow?.id && selectedShowId !== activeShow.id) {
       setSelectedShowId(activeShow.id);
     }
   }, [activeShow?.id, selectedShowId]);
@@ -1074,8 +1140,13 @@ export default function AdminPage() {
     }, {} as Record<string, GauntletEntrantRow[]>);
   }, [gauntletActualEntrants]);
   const entrantOptions = useMemo(() => {
-    return [...entrants].sort((a, b) => a.name.localeCompare(b.name));
-  }, [entrants]);
+    return [...entrants].sort((a, b) => {
+      const aRoster = activePromotionRosterEntrantIds.has(a.id);
+      const bRoster = activePromotionRosterEntrantIds.has(b.id);
+      if (aRoster !== bRoster) return aRoster ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [activePromotionRosterEntrantIds, entrants]);
   const filteredEntrantOptions = useMemo(() => {
     const gender = activeEvent?.rumble_gender;
     const rosterYear = activeEvent?.roster_year;
@@ -1135,12 +1206,12 @@ export default function AdminPage() {
   }, [filteredEntrantOptions]);
 
   const activePromotion = useMemo(() => {
-    if (!activeShow?.promotion_id) return null;
+    if (!activePromotionId) return null;
     return (
-      promotions.find((promotion) => promotion.id === activeShow.promotion_id) ??
+      promotions.find((promotion) => promotion.id === activePromotionId) ??
       null
     );
-  }, [activeShow?.promotion_id, promotions]);
+  }, [activePromotionId, promotions]);
 
   const activeShowLinks = useMemo(() => {
     if (!activeShow) {
@@ -1497,6 +1568,22 @@ export default function AdminPage() {
   ]);
 
   const refreshData = async () => {
+    const allowedPromotionIds = new Set(
+      isAdmin
+        ? promotions.map((promotion) => promotion.id)
+        : promotionMembers
+            .filter((member) => !member.revoked_at)
+            .map((member) => member.promotion_id)
+    );
+    const scopePromotions = (rows: PromotionRow[]) =>
+      isAdmin ? rows : rows.filter((row) => allowedPromotionIds.has(row.id));
+    const scopeShows = (rows: ShowRow[]) =>
+      isAdmin
+        ? rows
+        : rows.filter(
+            (row) => row.promotion_id && allowedPromotionIds.has(row.promotion_id)
+          );
+
     if (!activeEvent) {
       const showIdForQuery = selectedShowId || null;
       const [
@@ -1568,12 +1655,26 @@ export default function AdminPage() {
             "id, eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
           ),
       ]);
-      setShows(showRows ?? []);
-      setPromotions(promotionRows ?? []);
-      setEvents(eventRows ?? []);
-      setEliminators((eliminatorRows ?? []) as EliminatorRow[]);
+      const visiblePromotions = scopePromotions((promotionRows ?? []) as PromotionRow[]);
+      const visibleShows = scopeShows((showRows ?? []) as ShowRow[]);
+      const visibleShowIds = new Set(visibleShows.map((show) => show.id));
+      const visibleEvents = (eventRows ?? []).filter((event) =>
+        event.show_id ? visibleShowIds.has(event.show_id) : isAdmin
+      ) as EventRow[];
+      const visibleEventIds = new Set(visibleEvents.map((event) => event.id));
+      const visibleEliminators = (eliminatorRows ?? []).filter((eliminator) =>
+        eliminator.show_id ? visibleShowIds.has(eliminator.show_id) : isAdmin
+      ) as EliminatorRow[];
+      setShows(visibleShows);
+      setPromotions(visiblePromotions);
+      setEvents(visibleEvents);
+      setEliminators(visibleEliminators);
       setEntrants(entrantRows ?? []);
-      const matchListAll = (matchRows ?? []) as MatchRow[];
+      const matchListAll = ((matchRows ?? []) as MatchRow[]).filter((match) => {
+        if (match.show_id) return visibleShowIds.has(match.show_id);
+        if (match.event_id) return visibleEventIds.has(match.event_id);
+        return isAdmin;
+      });
       const matchIdSet = new Set(matchListAll.map((match) => match.id));
       const matchSideList = (matchSideRows ?? []).filter((row) =>
         matchIdSet.has(row.match_id)
@@ -1595,9 +1696,18 @@ export default function AdminPage() {
           matchIdSet.has(row.match_id)
         )
       );
-      setEliminatorEntries((eliminatorEntryRows ?? []) as EliminatorEntryRow[]);
+      const visibleEliminatorIds = new Set(
+        visibleEliminators.map((eliminator) => eliminator.id)
+      );
+      setEliminatorEntries(
+        ((eliminatorEntryRows ?? []) as EliminatorEntryRow[]).filter((row) =>
+          visibleEliminatorIds.has(row.eliminator_id)
+        )
+      );
       setEliminatorEliminations(
-        (eliminatorEliminationRows ?? []) as EliminatorEliminationRow[]
+        ((eliminatorEliminationRows ?? []) as EliminatorEliminationRow[]).filter(
+          (row) => visibleEliminatorIds.has(row.eliminator_id)
+        )
       );
       setMatchNameEdits((prev) => {
         const next = { ...prev };
@@ -1864,17 +1974,31 @@ export default function AdminPage() {
               "id, eliminator_id, eliminated_entrant_id, eliminated_by_entrant_id, elimination_type, elimination_order"
             ),
         ]);
-      setShows(showRows ?? []);
-      setPromotions(promotionRows ?? []);
-      setEvents(eventRows ?? []);
-      setEliminators((eliminatorRows ?? []) as EliminatorRow[]);
-      if (!selectedShowId && showRows && showRows.length > 0) {
-        setSelectedShowId(showRows[0].id);
+      const visiblePromotions = scopePromotions((promotionRows ?? []) as PromotionRow[]);
+      const visibleShows = scopeShows((showRows ?? []) as ShowRow[]);
+      const visibleShowIds = new Set(visibleShows.map((show) => show.id));
+      const visibleEvents = (eventRows ?? []).filter((event) =>
+        event.show_id ? visibleShowIds.has(event.show_id) : isAdmin
+      ) as EventRow[];
+      const visibleEventIds = new Set(visibleEvents.map((event) => event.id));
+      const visibleEliminators = (eliminatorRows ?? []).filter((eliminator) =>
+        eliminator.show_id ? visibleShowIds.has(eliminator.show_id) : isAdmin
+      ) as EliminatorRow[];
+      setShows(visibleShows);
+      setPromotions(visiblePromotions);
+      setEvents(visibleEvents);
+      setEliminators(visibleEliminators);
+      if (!selectedShowId && visibleShows.length > 0) {
+        setSelectedShowId(visibleShows[0].id);
       }
       setEntrants(entrantRows ?? []);
       setEntries(entryRows ?? []);
       setEntriesSnapshot(entryRows ?? []);
-      const matchListAll = (matchRows ?? []) as MatchRow[];
+      const matchListAll = ((matchRows ?? []) as MatchRow[]).filter((match) => {
+        if (match.show_id) return visibleShowIds.has(match.show_id);
+        if (match.event_id) return visibleEventIds.has(match.event_id);
+        return isAdmin;
+      });
       const matchIdSet = new Set(matchListAll.map((match) => match.id));
       const matchSideList = (matchSideRows ?? []).filter((row) =>
         matchIdSet.has(row.match_id)
@@ -1896,9 +2020,18 @@ export default function AdminPage() {
           matchIdSet.has(row.match_id)
         )
       );
-      setEliminatorEntries((eliminatorEntryRows ?? []) as EliminatorEntryRow[]);
+      const visibleEliminatorIds = new Set(
+        visibleEliminators.map((eliminator) => eliminator.id)
+      );
+      setEliminatorEntries(
+        ((eliminatorEntryRows ?? []) as EliminatorEntryRow[]).filter((row) =>
+          visibleEliminatorIds.has(row.eliminator_id)
+        )
+      );
       setEliminatorEliminations(
-        (eliminatorEliminationRows ?? []) as EliminatorEliminationRow[]
+        ((eliminatorEliminationRows ?? []) as EliminatorEliminationRow[]).filter(
+          (row) => visibleEliminatorIds.has(row.eliminator_id)
+        )
       );
       setMatchNameEdits((prev) => {
         const next = { ...prev };
@@ -1955,20 +2088,56 @@ export default function AdminPage() {
       const { data } = await supabase.auth.getSession();
       if (ignore) return;
       const session = data.session;
+      const userId = session?.user.id ?? null;
       setSessionEmail(session?.user.email ?? null);
+      setCurrentUserId(userId);
 
-      if (!session?.user.id) {
+      if (!userId) {
         setIsAdmin(false);
+        setPromotionMembers([]);
+        setPromotionRosterMembers([]);
+        setProfiles([]);
         setLoading(false);
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_admin")
-        .eq("id", session.user.id)
-        .single();
-      setIsAdmin(Boolean(profile?.is_admin));
+      const [
+        { data: profile },
+        { data: memberRows, error: memberError },
+        { data: rosterRows },
+      ] = await Promise.all([
+        supabase.from("profiles").select("is_admin").eq("id", userId).single(),
+        supabase
+          .from("promotion_members")
+          .select("id, promotion_id, user_id, role, revoked_at, created_at")
+          .is("revoked_at", null)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("promotion_roster_members")
+          .select("id, promotion_id, entrant_id, deactivated_at, created_at")
+          .is("deactivated_at", null)
+          .order("created_at", { ascending: false }),
+      ]);
+      const nextIsAdmin = Boolean(profile?.is_admin);
+      setIsAdmin(nextIsAdmin);
+      setPromotionMembers((memberRows ?? []) as PromotionMemberRow[]);
+      setPromotionRosterMembers((rosterRows ?? []) as PromotionRosterMemberRow[]);
+
+      if (memberError) {
+        setMessage(memberError.message);
+      }
+
+      if (nextIsAdmin) {
+        const { data: profileRows } = await supabase
+          .from("profiles")
+          .select("id, display_name, is_admin")
+          .order("display_name", { ascending: true });
+        if (!ignore) {
+          setProfiles((profileRows ?? []) as ProfileRow[]);
+        }
+      } else {
+        setProfiles([]);
+      }
       setLoading(false);
     };
 
@@ -1977,6 +2146,8 @@ export default function AdminPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSessionEmail(session?.user.email ?? null);
+      setCurrentUserId(session?.user.id ?? null);
+      void loadSession();
     });
 
     return () => {
@@ -1986,10 +2157,17 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (hasAdminAccess) {
       refreshData();
     }
-  }, [isAdmin, activeEvent?.id, selectedEventId, selectedShowId]);
+  }, [
+    hasAdminAccess,
+    isAdmin,
+    promotionMembers,
+    activeEvent?.id,
+    selectedEventId,
+    selectedShowId,
+  ]);
 
   const handleCreateEvent = async () => {
     setMessage(null);
@@ -2347,6 +2525,10 @@ export default function AdminPage() {
   };
 
   const handleCreatePromotion = async () => {
+    if (!isAdmin) {
+      setMessage("Only super admins can create promotions.");
+      return;
+    }
     setMessage(null);
     if (!promotionName.trim()) {
       setMessage("Promotion name is required.");
@@ -2701,6 +2883,10 @@ export default function AdminPage() {
   };
 
   const handleCreateRosterEntrant = async () => {
+    if (!isAdmin) {
+      setMessage("Only super admins can edit the global wrestler catalog.");
+      return;
+    }
     const trimmedName = rosterName.trim();
     if (!trimmedName) {
       setMessage("Wrestler name is required.");
@@ -2742,6 +2928,10 @@ export default function AdminPage() {
   };
 
   const handleUpdateRosterEntrant = async () => {
+    if (!isAdmin) {
+      setMessage("Only super admins can edit the global wrestler catalog.");
+      return;
+    }
     if (!selectedRosterEntrant) {
       setMessage("Select a wrestler to edit.");
       return;
@@ -2791,6 +2981,10 @@ export default function AdminPage() {
   };
 
   const handleDeactivateRosterEntrant = async (entrant: EntrantRow) => {
+    if (!isAdmin) {
+      setMessage("Only super admins can edit the global wrestler catalog.");
+      return;
+    }
     const shouldDeactivate = window.confirm(
       `Mark ${entrant.name} inactive? Existing cards will keep their wrestler references.`
     );
@@ -2814,6 +3008,146 @@ export default function AdminPage() {
     } finally {
       setRosterBusy(false);
     }
+  };
+
+  const reloadPromotionAccessData = async () => {
+    const [
+      { data: memberRows },
+      { data: rosterRows },
+      { data: profileRows },
+    ] = await Promise.all([
+      supabase
+        .from("promotion_members")
+        .select("id, promotion_id, user_id, role, revoked_at, created_at")
+        .is("revoked_at", null)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("promotion_roster_members")
+        .select("id, promotion_id, entrant_id, deactivated_at, created_at")
+        .is("deactivated_at", null)
+        .order("created_at", { ascending: false }),
+      isAdmin
+        ? supabase
+            .from("profiles")
+            .select("id, display_name, is_admin")
+            .order("display_name", { ascending: true })
+        : Promise.resolve({ data: [] }),
+    ]);
+    setPromotionMembers((memberRows ?? []) as PromotionMemberRow[]);
+    setPromotionRosterMembers((rosterRows ?? []) as PromotionRosterMemberRow[]);
+    if (isAdmin) {
+      setProfiles((profileRows ?? []) as ProfileRow[]);
+    }
+  };
+
+  const handleAddPromotionMember = async () => {
+    if (!isAdmin) {
+      setMessage("Only super admins can assign promotion access.");
+      return;
+    }
+    if (!activePromotionId || !memberUserId) {
+      setMessage("Choose a promotion and account.");
+      return;
+    }
+    setMemberBusy(true);
+    setMessage(null);
+    const { error } = await supabase.from("promotion_members").insert({
+      promotion_id: activePromotionId,
+      user_id: memberUserId,
+      role: memberRole,
+      created_by: currentUserId,
+    });
+    if (error) {
+      setMessage(error.message);
+      setMemberBusy(false);
+      return;
+    }
+    setMemberUserId("");
+    setMemberRole("manager");
+    await reloadPromotionAccessData();
+    setMemberBusy(false);
+    setToastMessage("Promotion member added.");
+  };
+
+  const handleUpdatePromotionMemberRole = async (
+    memberId: string,
+    role: "owner" | "manager"
+  ) => {
+    if (!isAdmin) {
+      setMessage("Only super admins can update promotion access.");
+      return;
+    }
+    const { error } = await supabase
+      .from("promotion_members")
+      .update({ role })
+      .eq("id", memberId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await reloadPromotionAccessData();
+    setToastMessage("Promotion member updated.");
+  };
+
+  const handleRevokePromotionMember = async (memberId: string) => {
+    if (!isAdmin) {
+      setMessage("Only super admins can revoke promotion access.");
+      return;
+    }
+    const { error } = await supabase
+      .from("promotion_members")
+      .update({ revoked_at: new Date().toISOString() })
+      .eq("id", memberId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await reloadPromotionAccessData();
+    setToastMessage("Promotion member revoked.");
+  };
+
+  const handleAddPromotionRosterEntrant = async (entrantId: string) => {
+    if (!activePromotionId || !entrantId) return;
+    setRosterBusy(true);
+    setMessage(null);
+    const { error } = await supabase.from("promotion_roster_members").insert({
+      promotion_id: activePromotionId,
+      entrant_id: entrantId,
+      created_by: currentUserId,
+    });
+    if (error) {
+      setMessage(error.message);
+      setRosterBusy(false);
+      return;
+    }
+    await reloadPromotionAccessData();
+    setRosterBusy(false);
+    setToastMessage("Wrestler added to this promotion roster.");
+  };
+
+  const handleRemovePromotionRosterEntrant = async (entrantId: string) => {
+    if (!activePromotionId || !entrantId) return;
+    const rosterRow = activePromotionRoster.find(
+      (row) => row.entrant_id === entrantId
+    );
+    if (!rosterRow) return;
+    setRosterBusy(true);
+    setMessage(null);
+    const { error } = await supabase
+      .from("promotion_roster_members")
+      .update({
+        deactivated_at: new Date().toISOString(),
+        deactivated_by: currentUserId,
+      })
+      .eq("id", rosterRow.id);
+    if (error) {
+      setMessage(error.message);
+      setRosterBusy(false);
+      return;
+    }
+    await reloadPromotionAccessData();
+    setRosterBusy(false);
+    setToastMessage("Wrestler removed from this promotion roster.");
   };
 
   const handleUpdateEvent = async () => {
@@ -4059,13 +4393,13 @@ export default function AdminPage() {
     );
   }
 
-  if (!isAdmin) {
+  if (!hasAdminAccess) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
         <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
-          <h1 className="text-2xl font-semibold">Admin access only</h1>
+          <h1 className="text-2xl font-semibold">Promotion access required</h1>
           <p className="mt-4 text-sm text-zinc-400">
-            Your account does not have admin privileges.
+            Your account is not assigned to a promotion yet.
           </p>
         </main>
       </div>
@@ -4119,7 +4453,7 @@ export default function AdminPage() {
                 {sessionEmail ?? "Admin"}
               </p>
               <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-zinc-500">
-                Admin
+                {isAdmin ? "Super admin" : "Promoter"}
               </p>
             </div>
           </div>
@@ -4545,7 +4879,7 @@ export default function AdminPage() {
             }
             onSave={handleUpdateShow}
           />
-          {activeShow && (
+          {isAdmin && activeShow && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-red-200">
@@ -4744,14 +5078,136 @@ export default function AdminPage() {
             >
               Roster
             </button>
+            {isAdmin && (
+              <button
+                className={`h-11 flex-1 rounded-2xl px-4 text-xs font-semibold uppercase tracking-[0.2em] transition sm:flex-none ${
+                  adminTab === "members"
+                    ? "bg-amber-400 text-zinc-900"
+                    : "border border-zinc-800 text-zinc-300 hover:border-amber-300 hover:text-amber-200"
+                }`}
+                type="button"
+                onClick={() => setAdminTab("members")}
+              >
+                Members
+              </button>
+            )}
           </div>
         </div>
         )}
 
         {adminView === "advanced" && (
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
+          {adminTab === "members" && isAdmin && (
+            <div className="lg:col-span-2 grid gap-6 xl:grid-cols-[minmax(0,0.9fr),minmax(0,1.4fr)]">
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                <h2 className="text-lg font-semibold">Add promotion member</h2>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Assign an existing BoutPick account to the selected promotion.
+                </p>
+                <div className="mt-4 space-y-3">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Account
+                    <select
+                      className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                      value={memberUserId}
+                      onChange={(event) => setMemberUserId(event.target.value)}
+                    >
+                      <option value="">Choose account</option>
+                      {profiles
+                        .filter((profile) => !profile.is_admin)
+                        .map((profile) => (
+                          <option key={profile.id} value={profile.id}>
+                            {profile.display_name ?? profile.id}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Role
+                    <select
+                      className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                      value={memberRole}
+                      onChange={(event) =>
+                        setMemberRole(event.target.value as "owner" | "manager")
+                      }
+                    >
+                      <option value="manager">Manager</option>
+                      <option value="owner">Owner</option>
+                    </select>
+                  </label>
+                  <button
+                    className="inline-flex h-11 w-full items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                    type="button"
+                    onClick={handleAddPromotionMember}
+                    disabled={memberBusy || !activePromotionId}
+                  >
+                    {memberBusy ? "Saving..." : "Add member"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+                <h2 className="text-lg font-semibold">Promotion members</h2>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Active members for {activePromotion?.name ?? "the selected promotion"}.
+                </p>
+                <div className="mt-4 space-y-3">
+                  {activePromotionMembers.length === 0 ? (
+                    <p className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-500">
+                      No members assigned yet.
+                    </p>
+                  ) : (
+                    activePromotionMembers.map((member) => {
+                      const profile = profiles.find(
+                        (candidate) => candidate.id === member.user_id
+                      );
+                      return (
+                        <div
+                          key={member.id}
+                          className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div>
+                            <p className="font-medium text-zinc-100">
+                              {profile?.display_name ?? member.user_id}
+                            </p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.2em] text-zinc-500">
+                              {member.role}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <select
+                              className="h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                              value={member.role}
+                              onChange={(event) =>
+                                void handleUpdatePromotionMemberRole(
+                                  member.id,
+                                  event.target.value as "owner" | "manager"
+                                )
+                              }
+                            >
+                              <option value="manager">Manager</option>
+                              <option value="owner">Owner</option>
+                            </select>
+                            <button
+                              className="inline-flex h-10 items-center justify-center rounded-full border border-red-500/70 px-4 text-xs font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100"
+                              type="button"
+                              onClick={() => void handleRevokePromotionMember(member.id)}
+                            >
+                              Revoke
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {adminTab === "roster" && (
             <div className="lg:col-span-2 grid gap-6 xl:grid-cols-[minmax(0,0.9fr),minmax(0,1.4fr)]">
+              {isAdmin && (
               <div className="space-y-6">
                 <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
                   <h2 className="text-lg font-semibold">Add wrestler</h2>
@@ -4970,15 +5426,46 @@ export default function AdminPage() {
                   )}
                 </div>
               </div>
+              )}
 
               <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-semibold">Roster</h2>
+                    <h2 className="text-lg font-semibold">Promotion roster</h2>
                     <p className="mt-2 text-sm text-zinc-400">
-                      {filteredRosterEntrants.length} of{" "}
-                      {globalRosterEntrants.length} wrestlers shown.
+                      {activePromotionRoster.length} wrestlers selected for{" "}
+                      {activePromotion?.name ?? "this promotion"}.
                     </p>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                    Selected roster
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {activePromotionRoster.length === 0 ? (
+                      <span className="text-sm text-zinc-500">
+                        No wrestlers selected yet.
+                      </span>
+                    ) : (
+                      activePromotionRoster.map((row) => {
+                        const entrant = entrantMap.get(row.entrant_id);
+                        return (
+                          <button
+                            key={row.id}
+                            className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:border-red-400 hover:text-red-100"
+                            type="button"
+                            onClick={() =>
+                              void handleRemovePromotionRosterEntrant(row.entrant_id)
+                            }
+                            disabled={rosterBusy || !canManageActivePromotion}
+                            title="Remove from this promotion roster"
+                          >
+                            {entrant?.name ?? "Unknown wrestler"} x
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
                 <datalist id="roster-promotion-options">
@@ -5050,16 +5537,19 @@ export default function AdminPage() {
                       No wrestlers match the current filters.
                     </p>
                   ) : (
-                    filteredRosterEntrants.map((entrant) => (
-                      <button
+                    filteredRosterEntrants.map((entrant) => {
+                      const inPromotionRoster =
+                        activePromotionRosterEntrantIds.has(entrant.id);
+                      return (
+                      <div
                         key={entrant.id}
                         className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${
                           rosterEditId === entrant.id
                             ? "border-amber-400 bg-amber-400/10"
-                            : "border-zinc-800 bg-zinc-950/60 hover:border-zinc-700"
+                            : inPromotionRoster
+                              ? "border-amber-400/40 bg-amber-400/5"
+                              : "border-zinc-800 bg-zinc-950/60"
                         }`}
-                        type="button"
-                        onClick={() => selectRosterEntrantForEdit(entrant)}
                       >
                         <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
                           {entrant.image_url ? (
@@ -5100,8 +5590,36 @@ export default function AdminPage() {
                             {entrant.image_url ? "Photo saved" : "No photo"}
                           </p>
                         </div>
-                      </button>
-                    ))
+                        <div className="flex shrink-0 flex-col gap-2">
+                          <button
+                            className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-[10px] font-semibold uppercase tracking-wide transition ${
+                              inPromotionRoster
+                                ? "border border-red-500/60 text-red-200 hover:border-red-400"
+                                : "border border-amber-400 text-amber-200 hover:border-amber-300"
+                            }`}
+                            type="button"
+                            onClick={() =>
+                              inPromotionRoster
+                                ? void handleRemovePromotionRosterEntrant(entrant.id)
+                                : void handleAddPromotionRosterEntrant(entrant.id)
+                            }
+                            disabled={rosterBusy || !canManageActivePromotion}
+                          >
+                            {inPromotionRoster ? "Remove" : "Add"}
+                          </button>
+                          {isAdmin ? (
+                            <button
+                              className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-4 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-300 hover:text-amber-200"
+                              type="button"
+                              onClick={() => selectRosterEntrantForEdit(entrant)}
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                    })
                   )}
                 </div>
               </div>
@@ -6340,14 +6858,16 @@ export default function AdminPage() {
                 >
                   {recalcBusy ? "Recalculating..." : "Recalculate scores"}
                 </button>
-                <button
-                  className="inline-flex h-11 items-center justify-center rounded-full border border-red-500/70 px-6 text-sm font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-70"
-                  type="button"
-                  onClick={handleClearShowScores}
-                  disabled={clearScoresBusy || !activeShow}
-                >
-                  {clearScoresBusy ? "Clearing..." : "Clear picks & scores"}
-                </button>
+                {isAdmin && (
+                  <button
+                    className="inline-flex h-11 items-center justify-center rounded-full border border-red-500/70 px-6 text-sm font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    type="button"
+                    onClick={handleClearShowScores}
+                    disabled={clearScoresBusy || !activeShow}
+                  >
+                    {clearScoresBusy ? "Clearing..." : "Clear picks & scores"}
+                  </button>
+                )}
               </div>
             </div>
           </section>
@@ -7700,14 +8220,16 @@ export default function AdminPage() {
             >
               {recalcBusy ? "Recalculating…" : "Recalculate scores"}
             </button>
-            <button
-              className="inline-flex h-11 items-center justify-center rounded-full border border-red-500/70 px-6 text-sm font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-70"
-              type="button"
-              onClick={handleClearShowScores}
-              disabled={clearScoresBusy || !activeShow}
-            >
-              {clearScoresBusy ? "Clearing…" : "Clear picks & scores"}
-            </button>
+            {isAdmin && (
+              <button
+                className="inline-flex h-11 items-center justify-center rounded-full border border-red-500/70 px-6 text-sm font-semibold uppercase tracking-wide text-red-200 transition hover:border-red-400 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-70"
+                type="button"
+                onClick={handleClearShowScores}
+                disabled={clearScoresBusy || !activeShow}
+              >
+                {clearScoresBusy ? "Clearing…" : "Clear picks & scores"}
+              </button>
+            )}
           </div>
         </section>
         )}
@@ -7955,16 +8477,18 @@ export default function AdminPage() {
                   </label>
                 </div>
               </div>
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-400">
-                <span>Need a new promotion?</span>
-                <button
-                  className="inline-flex items-center justify-center rounded-full border border-zinc-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
-                  type="button"
-                  onClick={() => setPromotionModalOpen(true)}
-                >
-                  Add promotion
-                </button>
-              </div>
+              {isAdmin && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-400">
+                  <span>Need a new promotion?</span>
+                  <button
+                    className="inline-flex items-center justify-center rounded-full border border-zinc-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
+                    type="button"
+                    onClick={() => setPromotionModalOpen(true)}
+                  >
+                    Add promotion
+                  </button>
+                </div>
+              )}
               <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
                 <button
                   className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
