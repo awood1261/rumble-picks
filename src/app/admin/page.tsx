@@ -245,6 +245,68 @@ const formatDivisionLabel = (value: string | null) => {
   return "Unspecified";
 };
 
+type ShowManagementState = "setup" | "upcoming" | "live" | "completed";
+
+type ShowSummary = {
+  show: ShowRow;
+  promotion: PromotionRow | null;
+  managementState: ShowManagementState;
+  readinessPercent: number;
+  readinessCompleteCount: number;
+  readinessTotal: number;
+  matchCount: number;
+  completedMatchCount: number;
+  primaryLabel: string;
+  primaryDescription: string;
+  statusLabel: string;
+  timingLabel: string;
+  venueLabel: string;
+  isSelected: boolean;
+};
+
+const formatAdminShowDate = (value: string | null) => {
+  if (!value) return "No start time set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Start time unavailable";
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const getPrimaryActionCopy = (state: ShowManagementState) => {
+  switch (state) {
+    case "live":
+      return {
+        label: "Enter Results",
+        description: "Update matches live",
+        status: "Live now",
+      };
+    case "upcoming":
+      return {
+        label: "Review Show",
+        description: "Prepare for fans",
+        status: "Upcoming",
+      };
+    case "completed":
+      return {
+        label: "View Results",
+        description: "Review completed show",
+        status: "Completed",
+      };
+    case "setup":
+    default:
+      return {
+        label: "Continue Setup",
+        description: "Complete show details",
+        status: "Needs setup",
+      };
+  }
+};
+
 async function loadAllEntrants() {
   const rows: EntrantRow[] = [];
   let from = 0;
@@ -487,6 +549,7 @@ export default function AdminPage() {
   const [eventUpdateBusy, setEventUpdateBusy] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [selectedShowId, setSelectedShowId] = useState<string>("");
+  const [selectedPromotionId, setSelectedPromotionId] = useState<string>("");
   const [reviewLinks, setReviewLinks] = useState<ShowReviewLinkSummary[]>([]);
   const [reviewLinksLoading, setReviewLinksLoading] = useState(false);
   const [reviewLinkBusy, setReviewLinkBusy] = useState(false);
@@ -661,13 +724,25 @@ export default function AdminPage() {
     }
   };
 
+  const selectedShow = useMemo(() => {
+    if (!selectedShowId) return null;
+    return shows.find((show) => show.id === selectedShowId) ?? null;
+  }, [selectedShowId, shows]);
+  const activePromotionId =
+    selectedPromotionId || selectedShow?.promotion_id || promotions[0]?.id || "";
+  const promotionScopedShows = useMemo(() => {
+    if (!activePromotionId) return shows;
+    return shows.filter((show) => show.promotion_id === activePromotionId);
+  }, [activePromotionId, shows]);
   const activeShow = useMemo(() => {
     if (selectedShowId) {
-      return shows.find((show) => show.id === selectedShowId) ?? shows[0] ?? null;
+      const scopedSelected = promotionScopedShows.find(
+        (show) => show.id === selectedShowId
+      );
+      if (scopedSelected) return scopedSelected;
     }
-    return shows[0] ?? null;
-  }, [shows, selectedShowId]);
-  const activePromotionId = activeShow?.promotion_id ?? promotions[0]?.id ?? "";
+    return promotionScopedShows[0] ?? null;
+  }, [promotionScopedShows, selectedShowId]);
   const hasAdminAccess = isAdmin || promotionMembers.length > 0;
   const manageablePromotionIds = useMemo(() => {
     if (isAdmin) return new Set(promotions.map((promotion) => promotion.id));
@@ -707,12 +782,24 @@ export default function AdminPage() {
       );
   }, [activeShow, events]);
   const orderedShowMatches = useMemo(() => {
-    return [...showMatches].sort(
+    if (!activeShow) return [];
+    const eventShowById = new Map(
+      events
+        .filter((event) => event.show_id)
+        .map((event) => [event.id, event.show_id as string])
+    );
+    return showMatches
+      .filter((match) => {
+        const showId =
+          match.show_id ?? (match.event_id ? eventShowById.get(match.event_id) : null);
+        return showId === activeShow.id;
+      })
+      .sort(
       (a, b) =>
         (a.order_index ?? 9999) - (b.order_index ?? 9999) ||
         a.name.localeCompare(b.name)
     );
-  }, [showMatches]);
+  }, [activeShow, events, showMatches]);
   const orderedShowEliminators = useMemo(() => {
     return [...eliminators]
       .filter((eliminator) => eliminator.show_id === activeShow?.id)
@@ -1212,6 +1299,9 @@ export default function AdminPage() {
       null
     );
   }, [activePromotionId, promotions]);
+  const promotionById = useMemo(() => {
+    return new Map(promotions.map((promotion) => [promotion.id, promotion]));
+  }, [promotions]);
 
   const activeShowLinks = useMemo(() => {
     if (!activeShow) {
@@ -1273,8 +1363,9 @@ export default function AdminPage() {
   }, [loadReviewLinks]);
 
   const createReviewLink = useCallback(
-    async (options?: { label?: string; open?: boolean }) => {
-      if (!activeShow?.id) return null;
+    async (options?: { label?: string; open?: boolean; showId?: string }) => {
+      const targetShowId = options?.showId ?? activeShow?.id;
+      if (!targetShowId) return null;
       setReviewLinkBusy(true);
       setMessage(null);
       try {
@@ -1290,7 +1381,7 @@ export default function AdminPage() {
             ...authHeader,
           },
           body: JSON.stringify({
-            showId: activeShow.id,
+            showId: targetShowId,
             label: options?.label ?? reviewLinkLabel,
           }),
         });
@@ -1462,6 +1553,218 @@ export default function AdminPage() {
     readinessItems.length > 0
       ? Math.round((readinessCompleteCount / readinessItems.length) * 100)
       : 0;
+
+  const showSummaries = useMemo<ShowSummary[]>(() => {
+    const now = Date.now();
+    const eventShowById = new Map(
+      events
+        .filter((event) => event.show_id)
+        .map((event) => [event.id, event.show_id as string])
+    );
+    const matchesByShowId = new Map<string, MatchRow[]>();
+    showMatches.forEach((match) => {
+      const showId = match.show_id ?? (match.event_id ? eventShowById.get(match.event_id) : null);
+      if (!showId) return;
+      const current = matchesByShowId.get(showId) ?? [];
+      current.push(match);
+      matchesByShowId.set(showId, current);
+    });
+
+    const getReadiness = (show: ShowRow, showMatchRows: MatchRow[]) => {
+      const hasShowDetails = Boolean(show.name?.trim()) && Boolean(show.promotion_id);
+      const hasStartTime = Boolean(show.starts_at);
+      const hasMatches = showMatchRows.length > 0;
+      const participantsAssigned =
+        showMatchRows.length > 0 &&
+        showMatchRows.every((match) => {
+          if (match.match_type === "blind_gauntlet") {
+            return Boolean(match.known_wrestler_id);
+          }
+          const sides = matchSidesByMatch[match.id] ?? [];
+          const participants = matchEntrantsByMatch[match.id] ?? [];
+          return (
+            sides.length > 0 &&
+            sides.every((side) =>
+              participants.some((row) => row.side_id === side.id)
+            )
+          );
+        });
+      const locationConfigured =
+        !show.requires_location_verification ||
+        (typeof show.venue_latitude === "number" &&
+          Number.isFinite(show.venue_latitude) &&
+          typeof show.venue_longitude === "number" &&
+          Number.isFinite(show.venue_longitude) &&
+          typeof show.location_radius_meters === "number" &&
+          Number.isFinite(show.location_radius_meters) &&
+          show.location_radius_meters > 0);
+      const previewAvailable = Boolean(
+        buildShowHref(show, show.promotion_id ? promotionById.get(show.promotion_id) ?? null : null)
+      );
+      const items = [
+        hasShowDetails,
+        hasStartTime,
+        hasMatches,
+        participantsAssigned,
+        locationConfigured,
+        previewAvailable,
+      ];
+      const complete = items.filter(Boolean).length;
+      return {
+        complete,
+        total: items.length,
+        percent: Math.round((complete / items.length) * 100),
+      };
+    };
+
+    return promotionScopedShows.map((show) => {
+      const showMatchRows = matchesByShowId.get(show.id) ?? [];
+      const completedMatchCount = showMatchRows.filter(
+        (match) =>
+          Boolean(match.winner_side_id) ||
+          Boolean(match.winner_entrant_id) ||
+          match.status === "completed"
+      ).length;
+      const readiness = getReadiness(show, showMatchRows);
+      const startsAtMs = show.starts_at ? new Date(show.starts_at).getTime() : NaN;
+      const hasStarted = Number.isFinite(startsAtMs) && startsAtMs <= now;
+      let managementState: ShowManagementState = "setup";
+      if (show.is_over) {
+        managementState = "completed";
+      } else if (hasStarted) {
+        managementState = "live";
+      } else if (Number.isFinite(startsAtMs) && readiness.percent >= 80) {
+        managementState = "upcoming";
+      }
+      const copy = getPrimaryActionCopy(managementState);
+      const promotion = show.promotion_id
+        ? promotionById.get(show.promotion_id) ?? null
+        : null;
+      return {
+        show,
+        promotion,
+        managementState,
+        readinessPercent: readiness.percent,
+        readinessCompleteCount: readiness.complete,
+        readinessTotal: readiness.total,
+        matchCount: showMatchRows.length,
+        completedMatchCount,
+        primaryLabel: copy.label,
+        primaryDescription: copy.description,
+        statusLabel: copy.status,
+        timingLabel: formatAdminShowDate(show.starts_at),
+        venueLabel: show.venue_name ?? show.venue_address ?? "Venue not set",
+        isSelected: show.id === activeShow?.id,
+      };
+    });
+  }, [
+    activeShow?.id,
+    events,
+    matchEntrantsByMatch,
+    matchSidesByMatch,
+    promotionById,
+    promotionScopedShows,
+    showMatches,
+  ]);
+
+  const showSummaryGroups = useMemo(() => {
+    const sortByStartAsc = (a: ShowSummary, b: ShowSummary) => {
+      const aTime = a.show.starts_at ? new Date(a.show.starts_at).getTime() : Number.MAX_SAFE_INTEGER;
+      const bTime = b.show.starts_at ? new Date(b.show.starts_at).getTime() : Number.MAX_SAFE_INTEGER;
+      return aTime - bTime || a.show.name.localeCompare(b.show.name);
+    };
+    const sortByStartDesc = (a: ShowSummary, b: ShowSummary) => {
+      const aTime = a.show.starts_at ? new Date(a.show.starts_at).getTime() : 0;
+      const bTime = b.show.starts_at ? new Date(b.show.starts_at).getTime() : 0;
+      return bTime - aTime || a.show.name.localeCompare(b.show.name);
+    };
+    return {
+      live: showSummaries
+        .filter((summary) => summary.managementState === "live")
+        .sort(sortByStartAsc),
+      setup: showSummaries
+        .filter((summary) => summary.managementState === "setup")
+        .sort(sortByStartAsc),
+      upcoming: showSummaries
+        .filter((summary) => summary.managementState === "upcoming")
+        .sort(sortByStartAsc),
+      completed: showSummaries
+        .filter((summary) => summary.managementState === "completed")
+        .sort(sortByStartDesc),
+    };
+  }, [showSummaries]);
+
+  const dashboardShowSummary =
+    showSummaryGroups.live[0] ??
+    showSummaryGroups.setup[0] ??
+    showSummaryGroups.upcoming[0] ??
+    showSummaryGroups.completed[0] ??
+    null;
+  const hasOpenShow = Boolean(
+    showSummaryGroups.live.length ||
+      showSummaryGroups.setup.length ||
+      showSummaryGroups.upcoming.length
+  );
+  const dashboardUpcomingSummaries = showSummaryGroups.upcoming
+    .filter((summary) => summary.show.id !== dashboardShowSummary?.show.id)
+    .slice(0, 2);
+  const dashboardNeedsFirstMatch = Boolean(
+    dashboardShowSummary &&
+      dashboardShowSummary.matchCount === 0 &&
+      dashboardShowSummary.managementState !== "completed"
+  );
+
+  const selectShowForWorkflow = useCallback(
+    (showId: string, view: AdminView) => {
+      const workflowShow = shows.find((show) => show.id === showId);
+      if (workflowShow?.promotion_id) {
+        setSelectedPromotionId(workflowShow.promotion_id);
+      }
+      setSelectedShowId(showId);
+      setEventShowId(showId);
+      setAdminView(view);
+    },
+    [shows]
+  );
+
+  const openCreateShowModal = useCallback(() => {
+    if (activePromotionId) {
+      setShowPromotionId(activePromotionId);
+    }
+    setShowModalOpen(true);
+  }, [activePromotionId]);
+
+  const handleShowPrimaryAction = useCallback((summary: ShowSummary) => {
+    if (summary.matchCount === 0 && summary.managementState !== "completed") {
+      selectShowForWorkflow(summary.show.id, "card");
+      return;
+    }
+    switch (summary.managementState) {
+      case "live":
+      case "completed":
+        selectShowForWorkflow(summary.show.id, "results");
+        return;
+      case "upcoming":
+        selectShowForWorkflow(summary.show.id, "setup");
+        return;
+      case "setup":
+      default:
+        selectShowForWorkflow(summary.show.id, "card");
+    }
+  }, [selectShowForWorkflow]);
+
+  const handleOpenReviewModeForShow = useCallback(
+    (showId: string) => {
+      const reviewShow = shows.find((show) => show.id === showId);
+      if (reviewShow?.promotion_id) {
+        setSelectedPromotionId(reviewShow.promotion_id);
+      }
+      setSelectedShowId(showId);
+      setEventShowId(showId);
+      void createReviewLink({ label: "Admin review", open: true, showId });
+    },
+    [createReviewLink, shows]
+  );
 
   const pendingEntrants = useMemo(() => {
     if (!activeEvent?.id) return [];
@@ -2517,6 +2820,7 @@ export default function AdminPage() {
     setShowVenueLatitude("");
     setShowVenueLongitude("");
     setShowLocationRadiusMeters("");
+    setSelectedPromotionId(showPromotionId);
     setSelectedShowId(newShow.id);
     setEventShowId(newShow.id);
     setShowModalOpen(false);
@@ -4370,6 +4674,227 @@ export default function AdminPage() {
     }
   };
 
+  const renderShowManagementCard = (
+    summary: ShowSummary,
+    options?: { compact?: boolean }
+  ) => {
+    const showLinks = {
+      show: buildShowHref(summary.show, summary.promotion),
+      scoreboard: `/scoreboard?show=${summary.show.id}`,
+    };
+    const isLive = summary.managementState === "live";
+    const isCompleted = summary.managementState === "completed";
+    const needsFirstMatch = summary.matchCount === 0 && !isCompleted;
+    const primaryLabel = needsFirstMatch ? "Build Match Card" : summary.primaryLabel;
+    const primaryDescription = needsFirstMatch
+      ? ""
+      : summary.primaryDescription;
+    return (
+      <article
+        key={summary.show.id}
+        className={
+          needsFirstMatch
+            ? "p-0"
+            : `rounded-3xl border p-4 ${
+                isLive
+                  ? "border-emerald-400/40 bg-emerald-400/10"
+                  : summary.isSelected
+                    ? "border-amber-400/40 bg-amber-400/10"
+                    : "border-zinc-800 bg-zinc-950/60"
+              }`
+        }
+      >
+        <div className="flex gap-4">
+          <div className="relative h-24 w-20 shrink-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 sm:h-28 sm:w-24">
+            {summary.show.image_url ? (
+              <Image
+                src={summary.show.image_url}
+                alt={summary.show.name}
+                fill
+                sizes="96px"
+                className="object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center px-2 text-center text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+                No poster
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap gap-2">
+              <span
+                className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                  isLive
+                    ? "border-emerald-300/60 text-emerald-100"
+                    : isCompleted
+                      ? "border-zinc-700 text-zinc-300"
+                      : "border-amber-400/40 text-amber-200"
+                }`}
+              >
+                {needsFirstMatch ? "Show created" : summary.statusLabel}
+              </span>
+              {summary.isSelected ? (
+                <span className="rounded-full border border-zinc-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
+                  Selected
+                </span>
+              ) : null}
+            </div>
+            <h3 className="mt-3 text-lg font-semibold text-zinc-100">
+              {summary.show.name}
+            </h3>
+            <p className="mt-1 text-sm text-zinc-400">
+              {summary.timingLabel}
+              {summary.venueLabel ? ` • ${summary.venueLabel}` : ""}
+            </p>
+            {summary.promotion ? (
+              <p className="mt-1 text-xs uppercase tracking-[0.2em] text-zinc-500">
+                {summary.promotion.name}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        {needsFirstMatch ? (
+          <div className="mt-7">
+            <h4 className="text-xl font-semibold text-zinc-50">
+              Build the match card
+            </h4>
+            <p className="mt-2 text-sm leading-6 text-zinc-300">
+              Add the first match so fans have predictions to make.
+            </p>
+            <button
+              className="mt-5 inline-flex h-14 w-full items-center justify-center rounded-2xl bg-amber-400 px-5 text-base font-semibold text-zinc-950 transition hover:bg-amber-300"
+              type="button"
+              onClick={() => handleShowPrimaryAction(summary)}
+            >
+              {primaryLabel}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-zinc-800 bg-black/30 p-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+                Readiness
+              </p>
+              <p className="mt-1 text-xl font-semibold text-emerald-300">
+                {summary.readinessPercent}%
+              </p>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-black/30 p-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+                Matches
+              </p>
+              <p className="mt-1 text-xl font-semibold text-zinc-100">
+                {summary.matchCount}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-black/30 p-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+                Results
+              </p>
+              <p className="mt-1 text-xl font-semibold text-zinc-100">
+                {summary.completedMatchCount}/{summary.matchCount}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {needsFirstMatch ? (
+          !options?.compact ? (
+            <div className="mt-5 border-t border-zinc-800 pt-4">
+              <div className="flex flex-wrap gap-x-5 gap-y-3 text-sm">
+                <button
+                  className="font-medium text-zinc-400 transition hover:text-amber-200"
+                  type="button"
+                  onClick={() => selectShowForWorkflow(summary.show.id, "setup")}
+                >
+                  Edit show details
+                </button>
+                <button
+                  className="font-medium text-zinc-400 transition hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  onClick={() => handleOpenReviewModeForShow(summary.show.id)}
+                  disabled={reviewLinkBusy}
+                >
+                  {reviewLinkBusy ? "Opening review..." : "Create review link"}
+                </button>
+                <a
+                  className="font-medium text-zinc-400 transition hover:text-amber-200"
+                  href={showLinks.show}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Fan link
+                </a>
+                <a
+                  className="font-medium text-zinc-400 transition hover:text-amber-200"
+                  href={showLinks.scoreboard}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Scoreboard
+                </a>
+              </div>
+            </div>
+          ) : null
+        ) : (
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <button
+              className={`inline-flex h-12 items-center justify-center rounded-2xl px-5 text-sm font-semibold transition ${
+                isLive
+                  ? "bg-emerald-400 text-zinc-950 hover:bg-emerald-300"
+                  : "bg-amber-400 text-zinc-950 hover:bg-amber-300"
+              }`}
+              type="button"
+              onClick={() => handleShowPrimaryAction(summary)}
+            >
+              <span>{primaryLabel}</span>
+              <span className="ml-2 text-xs font-medium opacity-80">
+                {primaryDescription}
+              </span>
+            </button>
+            <button
+              className="inline-flex h-12 items-center justify-center rounded-2xl border border-zinc-700 px-5 text-sm font-semibold text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+              type="button"
+              onClick={() => selectShowForWorkflow(summary.show.id, "setup")}
+            >
+              Edit Show
+            </button>
+            {!options?.compact ? (
+              <>
+                <button
+                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-zinc-700 px-5 text-sm font-semibold text-zinc-200 transition hover:border-amber-300 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  onClick={() => handleOpenReviewModeForShow(summary.show.id)}
+                  disabled={reviewLinkBusy}
+                >
+                  {reviewLinkBusy ? "Opening..." : "Create Review Link"}
+                </button>
+                <a
+                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-zinc-700 px-5 text-sm font-semibold text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                  href={showLinks.show}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Fan Link
+                </a>
+                <a
+                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-zinc-700 px-5 text-sm font-semibold text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                  href={showLinks.scoreboard}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Scoreboard
+                </a>
+              </>
+            ) : null}
+          </div>
+        )}
+      </article>
+    );
+  };
+  const legacyDashboardVisible = false;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-200">
@@ -4415,12 +4940,15 @@ export default function AdminPage() {
               Promotion
               <select
                 className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                value={activeShow?.promotion_id ?? ""}
+                value={activePromotionId}
                 onChange={(event) => {
+                  const nextPromotionId = event.target.value;
+                  setSelectedPromotionId(nextPromotionId);
                   const nextShow = shows.find(
-                    (show) => show.promotion_id === event.target.value
+                    (show) => show.promotion_id === nextPromotionId
                   );
-                  if (nextShow) setSelectedShowId(nextShow.id);
+                  setSelectedShowId(nextShow?.id ?? "");
+                  setEventShowId(nextShow?.id ?? "");
                 }}
               >
                 <option value="">Select promotion</option>
@@ -4460,57 +4988,6 @@ export default function AdminPage() {
         </aside>
 
         <div className="min-w-0">
-        <header className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 lg:rounded-3xl lg:p-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
-                {activePromotion?.name ?? "BoutPick Admin"}
-              </p>
-              <h1 className="mt-2 text-xl font-semibold sm:text-2xl lg:text-3xl">
-                {activeShow?.name ?? "Promoter Console"}
-              </h1>
-              <p className="mt-2 text-sm text-zinc-400">
-                {activeShow?.starts_at
-                  ? new Date(activeShow.starts_at).toLocaleString()
-                  : "No show start time set"}
-                {activeShow?.venue_name ? ` • ${activeShow.venue_name}` : ""}
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[360px]">
-              <label className="text-[10px] uppercase tracking-[0.25em] text-zinc-500">
-                Current show
-                <select
-                  className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  value={selectedShowId}
-                  onChange={(event) => setSelectedShowId(event.target.value)}
-                >
-                  {shows.length === 0 && <option value="">No shows</option>}
-                  {shows.map((show) => (
-                    <option key={show.id} value={show.id}>
-                      {show.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-3">
-                <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500">
-                  Readiness
-                </p>
-                <div className="mt-2 flex items-center gap-3">
-                  <span className="text-2xl font-semibold text-emerald-300">
-                    {readinessPercent}%
-                  </span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800">
-                    <div
-                      className="h-full rounded-full bg-emerald-400"
-                      style={{ width: `${readinessPercent}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
 
         {message && (
           <div className="mt-6 rounded-2xl border border-zinc-800 bg-black/50 px-4 py-3 text-sm text-zinc-200">
@@ -4529,6 +5006,236 @@ export default function AdminPage() {
         )}
 
         {adminView === "dashboard" && (
+          <section className="mt-6 space-y-6">
+            {!hasOpenShow ? (
+              <div className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/70">
+                <div className="relative min-h-[420px] px-5 py-8 sm:px-8">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(251,191,36,0.16),transparent_38%),linear-gradient(180deg,rgba(24,24,27,0),rgba(9,9,11,0.96))]" />
+                  <div className="relative mx-auto flex max-w-3xl flex-col items-center text-center">
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+                      Dashboard
+                    </p>
+                    <h2 className="mt-5 text-3xl font-semibold tracking-tight text-zinc-50 sm:text-5xl">
+                      Ready for your next show?
+                    </h2>
+                    <p className="mt-4 max-w-xl text-base leading-7 text-zinc-300">
+                      Create an event, build your match card, and get BoutPick
+                      ready for your fans.
+                    </p>
+                    <button
+                      className="mt-8 inline-flex h-14 w-full max-w-sm items-center justify-center rounded-2xl bg-amber-400 px-6 text-base font-semibold text-zinc-950 transition hover:bg-amber-300"
+                      type="button"
+                      onClick={openCreateShowModal}
+                    >
+                      Create New Show
+                      <span className="ml-3 text-sm font-medium">
+                        Set up an upcoming event
+                      </span>
+                    </button>
+                    {dashboardShowSummary?.managementState === "completed" ? (
+                      <button
+                        className="mt-3 inline-flex h-11 items-center justify-center rounded-2xl border border-zinc-700 px-5 text-sm font-semibold text-zinc-200 transition hover:border-amber-300 hover:text-amber-200"
+                        type="button"
+                        onClick={() => handleShowPrimaryAction(dashboardShowSummary)}
+                      >
+                        View Latest Results
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="grid gap-3 border-t border-zinc-800 bg-black/30 p-5 sm:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    ["1. Create your show", "Add event details, date, and location."],
+                    ["2. Build your match card", "Add wrestlers and prediction options."],
+                    ["3. Go live and update results", "Keep the scoreboard current."],
+                    ["4. See fan engagement", "Review results after the show."],
+                  ].map(([title, detail]) => (
+                    <div
+                      key={title}
+                      className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4"
+                    >
+                      <p className="font-semibold text-zinc-100">{title}</p>
+                      <p className="mt-2 text-sm text-zinc-400">{detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div
+                className={`grid gap-6 ${
+                  dashboardNeedsFirstMatch
+                    ? "xl:grid-cols-1"
+                    : "xl:grid-cols-[1.25fr_0.75fr]"
+                }`}
+              >
+                <div className="space-y-6">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+                      Dashboard
+                    </p>
+                    <h2 className="mt-2 text-2xl font-semibold text-zinc-50">
+                      What should happen next?
+                    </h2>
+                    <p className="mt-2 text-sm text-zinc-400">
+                      BoutPick is prioritizing the show that needs attention
+                      now.
+                    </p>
+                  </div>
+                  {dashboardShowSummary
+                    ? renderShowManagementCard(dashboardShowSummary)
+                    : null}
+                </div>
+
+                {!dashboardNeedsFirstMatch ? (
+                  <div className="space-y-6">
+                    <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Setup
+                        </p>
+                        <h2 className="mt-2 text-lg font-semibold">
+                          Readiness
+                        </h2>
+                      </div>
+                      <span className="text-3xl font-semibold text-emerald-300">
+                        {dashboardShowSummary?.readinessPercent ?? readinessPercent}%
+                      </span>
+                    </div>
+                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-800">
+                      <div
+                        className="h-full rounded-full bg-emerald-400"
+                        style={{
+                          width: `${dashboardShowSummary?.readinessPercent ?? readinessPercent}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-3 text-sm text-zinc-400">
+                      Guidance only. Existing show editing, card building, and
+                      results entry remain available.
+                    </p>
+                    </div>
+
+                    <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                          Review
+                        </p>
+                        <h2 className="mt-2 text-lg font-semibold">
+                          Stakeholder links
+                        </h2>
+                      </div>
+                      <button
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-300 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-70"
+                        type="button"
+                        onClick={() =>
+                          dashboardShowSummary
+                            ? handleOpenReviewModeForShow(dashboardShowSummary.show.id)
+                            : handleOpenReviewMode()
+                        }
+                        disabled={!dashboardShowSummary || reviewLinkBusy}
+                      >
+                        {reviewLinkBusy ? "Opening..." : "Open review"}
+                      </button>
+                    </div>
+                    <div className="mt-4 grid gap-3">
+                      <input
+                        className="h-11 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                        placeholder="Stakeholder review"
+                        value={reviewLinkLabel}
+                        onChange={(event) => setReviewLinkLabel(event.target.value)}
+                      />
+                      <button
+                        className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                        type="button"
+                        onClick={handleCreateReviewLink}
+                        disabled={!activeShow || reviewLinkBusy}
+                      >
+                        {reviewLinkBusy ? "Creating..." : "Create link"}
+                      </button>
+                    </div>
+                    {latestReviewUrl ? (
+                      <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">
+                          Latest review link
+                        </p>
+                        <button
+                          className="mt-2 text-left text-xs text-amber-100 underline decoration-amber-300/50 underline-offset-4"
+                          type="button"
+                          onClick={() => void handleCopyReviewLink(latestReviewUrl)}
+                        >
+                          Copy latest link
+                        </button>
+                      </div>
+                    ) : null}
+                    <div className="mt-4 space-y-2">
+                      {reviewLinksLoading ? (
+                        <p className="text-sm text-zinc-500">Loading review links...</p>
+                      ) : reviewLinks.length === 0 ? (
+                        <p className="text-sm text-zinc-500">
+                          No review links have been created for the selected show.
+                        </p>
+                      ) : (
+                        reviewLinks.slice(0, 3).map((link) => {
+                          const status = getReviewLinkStatus(link);
+                          return (
+                            <div
+                              key={link.id}
+                              className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3 text-sm"
+                            >
+                              <span className="min-w-0 truncate text-zinc-200">
+                                {link.label || "Review link"}
+                              </span>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <span className="text-xs uppercase tracking-wide text-zinc-500">
+                                  {status}
+                                </span>
+                                {status === "active" ? (
+                                  <button
+                                    className="text-xs font-semibold text-red-200 transition hover:text-red-100"
+                                    type="button"
+                                    onClick={() => void handleRevokeReviewLink(link.id)}
+                                    disabled={reviewLinkBusy}
+                                  >
+                                    Revoke
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {hasOpenShow && dashboardUpcomingSummaries.length > 0 ? (
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-4">
+                  <h2 className="text-lg font-semibold">Upcoming Shows</h2>
+                  <button
+                    className="text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:text-amber-100"
+                    type="button"
+                    onClick={() => setAdminView("setup")}
+                  >
+                    View all
+                  </button>
+                </div>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {dashboardUpcomingSummaries.map((summary) =>
+                    renderShowManagementCard(summary, { compact: true })
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        )}
+
+        {legacyDashboardVisible && adminView === "dashboard" && (
           <section className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
             <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
               <div className="flex flex-col gap-4 md:flex-row">
@@ -4790,14 +5497,17 @@ export default function AdminPage() {
           </section>
         )}
 
-        {(adminView === "dashboard" || adminView === "setup") && (
+        {adminView === "setup" && (
         <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Shows</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+                Shows
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold">Manage events</h2>
               <p className="mt-2 text-sm text-zinc-400">
-                Pick the card you want to manage. Events and matches below sync
-                to the active show.
+                Create shows, continue setup, review upcoming cards, and jump
+                into results for live events.
               </p>
               {activeShow ? (
                 <p className="mt-3 text-xs uppercase tracking-[0.3em] text-amber-200">
@@ -4805,31 +5515,83 @@ export default function AdminPage() {
                 </p>
               ) : null}
             </div>
-            <div className="flex w-full flex-col gap-3 lg:max-w-xs">
+            <div className="flex w-full flex-col gap-3 lg:max-w-sm">
+              <button
+                className="inline-flex h-12 items-center justify-center rounded-2xl bg-amber-400 px-5 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300"
+                type="button"
+                onClick={openCreateShowModal}
+              >
+                Create New Show
+              </button>
               <label className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                 Switch show
                 <select
                   className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-                  value={selectedShowId}
+                  value={activeShow?.id ?? ""}
                   onChange={(event) => setSelectedShowId(event.target.value)}
                 >
-                  {shows.length === 0 && <option value="">No shows</option>}
-                  {shows.map((show) => (
+                  {promotionScopedShows.length === 0 && (
+                    <option value="">No shows for this promotion</option>
+                  )}
+                  {promotionScopedShows.map((show) => (
                     <option key={show.id} value={show.id}>
                       {show.name}
                     </option>
                   ))}
                 </select>
               </label>
-              <button
-                className="inline-flex h-10 items-center justify-center rounded-full border border-amber-400 px-4 text-[11px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                type="button"
-                onClick={() => setShowModalOpen(true)}
-              >
-                Add new show
-              </button>
             </div>
           </div>
+
+          <div className="mt-6 space-y-6">
+            {showSummaries.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-zinc-700 bg-zinc-950/50 p-6 text-center">
+                <h3 className="text-lg font-semibold text-zinc-100">
+                  No shows yet
+                </h3>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Create your first event to start building a card.
+                </p>
+                <button
+                  className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300"
+                  type="button"
+                  onClick={openCreateShowModal}
+                >
+                  Create New Show
+                </button>
+              </div>
+            ) : (
+              [
+                ["Current / Live Show", showSummaryGroups.live],
+                ["Upcoming Shows", showSummaryGroups.upcoming],
+                ["Draft / Needs Setup", showSummaryGroups.setup],
+                ["Past Shows", showSummaryGroups.completed],
+              ].map(([label, group]) => {
+                const summaries = group as ShowSummary[];
+                if (summaries.length === 0) return null;
+                return (
+                  <div key={label as string}>
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-zinc-500">
+                      {label as string}
+                    </h3>
+                    <div className="mt-3 grid gap-4 xl:grid-cols-2">
+                      {summaries.map((summary) =>
+                        renderShowManagementCard(summary, { compact: true })
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="mt-8 border-t border-zinc-800 pt-6">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold">Edit selected show</h3>
+              <p className="mt-1 text-sm text-zinc-400">
+                Details below apply to the currently selected show.
+              </p>
+            </div>
 
           <ShowEditor
             activeShowName={activeShow?.name ?? null}
@@ -4879,6 +5641,7 @@ export default function AdminPage() {
             }
             onSave={handleUpdateShow}
           />
+          </div>
           {isAdmin && activeShow && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
               <div>
@@ -7428,7 +8191,11 @@ export default function AdminPage() {
                     </div>
                     {isFocused && (
                     <>
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <details className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-3">
+                      <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.22em] text-zinc-400 transition hover:text-amber-200">
+                        Match settings
+                      </summary>
+                    <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div className="flex flex-col gap-2">
                         <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                           {match.kind} · {formatMatchTypeLabel(match.match_type)}
@@ -7581,6 +8348,7 @@ export default function AdminPage() {
                         </div>
                       )}
                     </div>
+                    </details>
 
                     {isBlindGauntlet && (
                       <div className="mt-4 rounded-2xl border border-amber-400/20 bg-black/30 p-3">
@@ -7686,17 +8454,10 @@ export default function AdminPage() {
                       </div>
                     )}
 
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                          Results
-                        </p>
-                        <p className="mt-1 text-sm text-zinc-300">
-                          {resultSummary}. Winner and result details are managed from Results.
-                        </p>
-                      </div>
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 pt-3 text-sm text-zinc-500">
+                      <span>{resultSummary}</span>
                       <button
-                        className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-4 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+                        className="font-semibold text-zinc-400 transition hover:text-amber-200"
                         type="button"
                         onClick={() => setAdminView("results")}
                       >
@@ -7878,74 +8639,32 @@ export default function AdminPage() {
                               key={side.id}
                               className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3"
                             >
-                            <div className="grid gap-3">
-                              <div className="flex items-center justify-between gap-2">
-                                <input
-                                  className="h-9 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100"
-                                  value={matchSideLabelEdits[side.id] ?? label}
-                                  onChange={(event) =>
-                                    setMatchSideLabelEdits((prev) => ({
-                                      ...prev,
-                                      [side.id]: event.target.value,
-                                    }))
-                                  }
-                                  placeholder="Side label"
-                                />
-                                <button
-                                  className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-3 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
-                                  type="button"
-                                  onClick={() =>
-                                    handleUpdateMatchSideLabel(
-                                      side.id,
-                                      matchSideLabelEdits[side.id] ?? label
-                                    )
-                                  }
-                                >
-                                  Save
-                                </button>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-zinc-100">
+                                  {label}
+                                </p>
+                                <p className="mt-1 text-xs text-zinc-500">
+                                  {entrants.length === 0
+                                    ? "No participants yet"
+                                    : `${entrants.length} participant${entrants.length === 1 ? "" : "s"}`}
+                                </p>
                               </div>
-                              <div className="grid gap-2">
-                                {canPreviewSideImage ? (
-                                  <div className="relative aspect-video overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
-                                    <Image
-                                      src={sideImageEdit}
-                                      alt={`${label} side image`}
-                                      fill
-                                      sizes="(min-width: 768px) 360px, 90vw"
-                                      className="object-cover object-center"
-                                    />
-                                  </div>
-                                ) : null}
-                                <div className="flex items-center justify-between gap-2">
-                                  <input
-                                    className="h-9 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100"
-                                    value={sideImageEdit}
-                                    onChange={(event) =>
-                                      setMatchSideImageEdits((prev) => ({
-                                        ...prev,
-                                        [side.id]: event.target.value,
-                                      }))
-                                    }
-                                    placeholder="Optional side image URL, ideally 1200 x 675"
+                              {canPreviewSideImage ? (
+                                <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
+                                  <Image
+                                    src={sideImageEdit}
+                                    alt={`${label} side image`}
+                                    fill
+                                    sizes="80px"
+                                    className="object-cover object-center"
                                   />
-                                  <button
-                                    className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
-                                    type="button"
-                                    onClick={() =>
-                                      handleUpdateMatchSideImage(
-                                        side.id,
-                                        sideImageEdit
-                                      )
-                                    }
-                                  >
-                                    Save image
-                                  </button>
                                 </div>
-                              </div>
+                              ) : null}
                             </div>
                             {entrants.length === 0 ? (
                               <p className="mt-3 text-xs text-zinc-500">
-                                No participants yet.
+                                Add a wrestler to this side above.
                               </p>
                             ) : (
                               <div className="mt-3 space-y-2">
@@ -7972,6 +8691,63 @@ export default function AdminPage() {
                                 ))}
                               </div>
                             )}
+                            <details className="mt-3 border-t border-zinc-800 pt-3">
+                              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 transition hover:text-amber-200">
+                                Side settings
+                              </summary>
+                              <div className="mt-3 grid gap-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <input
+                                    className="h-9 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100"
+                                    value={matchSideLabelEdits[side.id] ?? label}
+                                    onChange={(event) =>
+                                      setMatchSideLabelEdits((prev) => ({
+                                        ...prev,
+                                        [side.id]: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="Side label"
+                                  />
+                                  <button
+                                    className="inline-flex h-9 items-center justify-center rounded-full border border-amber-400 px-3 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100"
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateMatchSideLabel(
+                                        side.id,
+                                        matchSideLabelEdits[side.id] ?? label
+                                      )
+                                    }
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <input
+                                    className="h-9 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100"
+                                    value={sideImageEdit}
+                                    onChange={(event) =>
+                                      setMatchSideImageEdits((prev) => ({
+                                        ...prev,
+                                        [side.id]: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="Optional side image URL, ideally 1200 x 675"
+                                  />
+                                  <button
+                                    className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-700 px-3 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 transition hover:border-amber-400 hover:text-amber-200"
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateMatchSideImage(
+                                        side.id,
+                                        sideImageEdit
+                                      )
+                                    }
+                                  >
+                                    Save image
+                                  </button>
+                                </div>
+                              </div>
+                            </details>
                           </div>
                           );
                         })}
