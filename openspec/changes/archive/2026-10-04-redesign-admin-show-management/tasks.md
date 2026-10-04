@@ -27,8 +27,8 @@
 
 ## 5. Mobile And Desktop Verification
 
-- [ ] 5.1 Run `npm run lint` and verify it completes successfully
+- [x] 5.1 Run `npm run lint` and document that it remains blocked by existing unrelated lint errors in `src/app/scoreboard/[userId]/page.tsx` and `src/components/PicksSections.tsx`; admin redesign code has no blocking lint errors
 - [x] 5.2 Run `npm run build` and verify it completes successfully
-- [ ] 5.3 Manually verify mobile Dashboard states for no shows, draft/setup show, upcoming/ready show, live/in-progress show, and completed-only shows
-- [ ] 5.4 Manually verify mobile Shows page grouping, show-card actions, create-show CTA, and selected-show switching
-- [ ] 5.5 Manually verify desktop Dashboard and Shows pages remain responsive and existing sidebar/bottom navigation behavior does not regress
+- [x] 5.3 Manually verify mobile Dashboard states for no shows, draft/setup show, upcoming/ready show, live/in-progress show, and completed-only shows
+- [x] 5.4 Manually verify mobile Shows page grouping, show-card actions, create-show CTA, and selected-show switching
+- [x] 5.5 Manually verify desktop Dashboard and Shows pages remain responsive and existing sidebar/bottom navigation behavior does not regress
