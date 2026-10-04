@@ -11,52 +11,49 @@ export const NavBar = () => {
   const router = useRouter();
   const pathname = usePathname();
   const [isSignedIn, setIsSignedIn] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [hasAdminAccess, setHasAdminAccess] = useState(false);
   const [avatarKey, setAvatarKey] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   useEffect(() => {
     let ignore = false;
+    const loadProfileAccess = async (userId: string | null) => {
+      setIsSignedIn(Boolean(userId));
+      if (!userId) {
+        setHasAdminAccess(false);
+        setAvatarKey(null);
+        return;
+      }
+      const [{ data: profile }, { data: memberships }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("is_admin, avatar_key")
+          .eq("id", userId)
+          .maybeSingle(),
+        supabase
+          .from("promotion_members")
+          .select("id")
+          .eq("user_id", userId)
+          .is("revoked_at", null)
+          .limit(1),
+      ]);
+      if (ignore) return;
+      setHasAdminAccess(Boolean(profile?.is_admin) || Boolean(memberships?.length));
+      setAvatarKey(profile?.avatar_key ?? null);
+    };
+
     supabase.auth.getSession().then(({ data }) => {
       if (!ignore) {
         const userId = data.session?.user.id ?? null;
-        setIsSignedIn(Boolean(userId));
-        if (userId) {
-          supabase
-            .from("profiles")
-            .select("is_admin, avatar_key")
-            .eq("id", userId)
-            .maybeSingle()
-            .then(({ data: profile }) => {
-              setIsAdmin(Boolean(profile?.is_admin));
-              setAvatarKey(profile?.avatar_key ?? null);
-            });
-        } else {
-          setIsAdmin(false);
-          setAvatarKey(null);
-        }
+        void loadProfileAccess(userId);
       }
     });
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       const userId = session?.user.id ?? null;
-      setIsSignedIn(Boolean(userId));
-      if (userId) {
-        supabase
-          .from("profiles")
-          .select("is_admin, avatar_key")
-          .eq("id", userId)
-          .maybeSingle()
-          .then(({ data: profile }) => {
-            setIsAdmin(Boolean(profile?.is_admin));
-            setAvatarKey(profile?.avatar_key ?? null);
-          });
-      } else {
-        setIsAdmin(false);
-        setAvatarKey(null);
-      }
+      void loadProfileAccess(userId);
     });
     return () => {
       ignore = true;
@@ -172,7 +169,7 @@ export const NavBar = () => {
                   >
                     Profile
                   </Link>
-                  {isAdmin && (
+                  {hasAdminAccess && (
                     <Link
                       className="flex w-full items-center justify-between rounded-xl px-3 py-2 transition hover:bg-zinc-900/80 hover:text-amber-200"
                       href="/admin"
