@@ -197,6 +197,11 @@ function PicksPageInner() {
   const [reviewValidation, setReviewValidation] =
     useState<ShowReviewValidation | null>(null);
   const [reviewValidationLoading, setReviewValidationLoading] = useState(false);
+  const [accessCodeInput, setAccessCodeInput] = useState("");
+  const [accessCodeValidatedShowId, setAccessCodeValidatedShowId] =
+    useState<string | null>(null);
+  const [accessCodeLoading, setAccessCodeLoading] = useState(false);
+  const [accessCodeMessage, setAccessCodeMessage] = useState<string | null>(null);
 
   const [shows, setShows] = useState<ShowRow[]>([]);
   const [promotions, setPromotions] = useState<PromotionRow[]>([]);
@@ -269,6 +274,11 @@ function PicksPageInner() {
     reviewValidation.showId === selectedShowId;
   const selectedShowRequiresLocationVerification =
     !!selectedShow?.requires_location_verification;
+  const selectedShowRequiresAccessCode = !!selectedShow?.access_code_required;
+  const isAccessCodeSatisfied =
+    isReviewMode ||
+    !selectedShowRequiresAccessCode ||
+    accessCodeValidatedShowId === selectedShowId;
   const selectedShowLocationGateConfig = useMemo(
     () => ({
       venueLatitude: selectedShow?.venue_latitude,
@@ -876,7 +886,7 @@ function PicksPageInner() {
     Promise.all([
           supabase
             .from("shows")
-            .select("id, name, slug, image_url, promotion_id, status, starts_at, lock_picks_at_start, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters")
+            .select("id, name, slug, image_url, promotion_id, status, starts_at, lock_picks_at_start, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters")
             .order("name", { ascending: true }),
       supabase
         .from("promotions")
@@ -974,6 +984,67 @@ function PicksPageInner() {
     selectedShowRequiresLocationVerification,
     userId,
   ]);
+
+  useEffect(() => {
+    setAccessCodeInput("");
+    setAccessCodeMessage(null);
+    if (
+      isReviewMode ||
+      !selectedShowId ||
+      !selectedShowRequiresAccessCode ||
+      typeof window === "undefined"
+    ) {
+      setAccessCodeValidatedShowId(null);
+      return;
+    }
+    const key = `bp:accessCode:${selectedShowId}:${userId ?? "anonymous"}`;
+    setAccessCodeValidatedShowId(
+      window.sessionStorage.getItem(key) === "true" ? selectedShowId : null
+    );
+  }, [isReviewMode, selectedShowId, selectedShowRequiresAccessCode, userId]);
+
+  const validateSelectedShowAccessCode = async () => {
+    if (!selectedShowId) return;
+    setAccessCodeLoading(true);
+    setAccessCodeMessage(null);
+    try {
+      const response = await fetch("/api/show-access-code/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showId: selectedShowId,
+          code: accessCodeInput,
+        }),
+      });
+      const payload = (await response.json()) as {
+        valid?: boolean;
+        required?: boolean;
+        error?: string;
+      };
+      if (!response.ok) {
+        setAccessCodeMessage(payload.error ?? "Unable to validate access code.");
+        return;
+      }
+      if (!payload.valid) {
+        setAccessCodeMessage("That access code does not match this show.");
+        return;
+      }
+      setAccessCodeValidatedShowId(selectedShowId);
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(
+          `bp:accessCode:${selectedShowId}:${userId ?? "anonymous"}`,
+          "true"
+        );
+      }
+      setAccessCodeInput("");
+    } catch (error) {
+      setAccessCodeMessage(
+        error instanceof Error ? error.message : "Unable to validate access code."
+      );
+    } finally {
+      setAccessCodeLoading(false);
+    }
+  };
 
   const loadRumbleEntries = useCallback(async () => {
     if (!selectedShowId) return;
@@ -1684,6 +1755,10 @@ function PicksPageInner() {
       return true;
     }
     if (!userId || !selectedShowId) return false;
+    if (selectedShowRequiresAccessCode && !isAccessCodeSatisfied) {
+      setMessage("Enter the show access code before saving picks.");
+      return false;
+    }
     if (selectedShowRequiresLocationVerification) {
       const storedVerification =
         hasValidSelectedShowLocationGateConfig && selectedShow
@@ -2216,6 +2291,49 @@ function PicksPageInner() {
               ? "This review link is unavailable. Visit the login screen to make picks normally."
               : "Visit the login screen to make your picks."}
           </p>
+        </main>
+      </div>
+    );
+  }
+
+  if (!isAccessCodeSatisfied) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-200">
+        <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+            Access code required
+          </p>
+          <h1 className="mt-4 text-2xl font-semibold text-zinc-100">
+            Enter the show code
+          </h1>
+          <p className="mt-4 max-w-md text-sm text-zinc-400">
+            {selectedShow?.name ?? "This show"} requires a shared code before
+            picks can be made.
+          </p>
+          <div className="mt-6 grid w-full max-w-sm gap-3">
+            <input
+              className="h-12 rounded-2xl border border-zinc-800 bg-zinc-950 px-4 text-center text-sm uppercase tracking-[0.14em] text-zinc-100"
+              placeholder="BOUT250"
+              value={accessCodeInput}
+              onChange={(event) => setAccessCodeInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void validateSelectedShowAccessCode();
+                }
+              }}
+            />
+            <button
+              className="inline-flex h-12 items-center justify-center rounded-2xl bg-amber-400 px-6 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+              type="button"
+              onClick={() => void validateSelectedShowAccessCode()}
+              disabled={accessCodeLoading || !accessCodeInput.trim()}
+            >
+              {accessCodeLoading ? "Checking..." : "Continue"}
+            </button>
+          </div>
+          {accessCodeMessage ? (
+            <p className="mt-4 text-sm text-red-200">{accessCodeMessage}</p>
+          ) : null}
         </main>
       </div>
     );
