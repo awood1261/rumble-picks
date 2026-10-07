@@ -46,6 +46,7 @@ export type ShowRow = {
   is_featured_play_show?: boolean | null;
   is_over?: boolean | null;
   use_confidence_points?: boolean | null;
+  access_code_required?: boolean | null;
   requires_location_verification?: boolean | null;
   venue_name?: string | null;
   venue_address?: string | null;

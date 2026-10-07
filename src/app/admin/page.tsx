@@ -54,6 +54,7 @@ type ShowRow = {
   is_featured_play_show?: boolean | null;
   is_over?: boolean | null;
   use_confidence_points?: boolean | null;
+  access_code_required?: boolean | null;
   requires_location_verification?: boolean | null;
   venue_name?: string | null;
   venue_address?: string | null;
@@ -201,6 +202,7 @@ const ALLOWED_ENTRANT_IMAGE_TYPES = new Set([
 ]);
 type AdminView =
   | "dashboard"
+  | "create-show"
   | "setup"
   | "card"
   | "results"
@@ -212,6 +214,25 @@ type AdvancedAdminTab =
   | "questions"
   | "roster"
   | "members";
+type CreateShowStep = "details" | "fan" | "location" | "review";
+type GeocodeResult = {
+  latitude: number;
+  longitude: number;
+  formattedAddress: string;
+};
+
+const CREATE_SHOW_STEPS: Array<{ id: CreateShowStep; label: string }> = [
+  { id: "details", label: "Details" },
+  { id: "fan", label: "Fan Experience" },
+  { id: "location", label: "Location" },
+  { id: "review", label: "Review" },
+];
+
+const LOCATION_RADIUS_OPTIONS = [
+  { label: "250 feet", meters: 76 },
+  { label: "500 feet", meters: 152 },
+  { label: "1000 feet", meters: 305 },
+];
 
 const ADMIN_NAV_ITEMS: Array<{
   view: AdminView;
@@ -504,8 +525,6 @@ export default function AdminPage() {
   const [showTagline, setShowTagline] = useState("");
   const [showRequiresEmail, setShowRequiresEmail] = useState(true);
   const [showLockPicksAtStart, setShowLockPicksAtStart] = useState(true);
-  const [showIsFeaturedPlayShow, setShowIsFeaturedPlayShow] = useState(false);
-  const [showIsOver, setShowIsOver] = useState(false);
   const [showUseConfidencePoints, setShowUseConfidencePoints] = useState(false);
   const [showRequiresLocationVerification, setShowRequiresLocationVerification] =
     useState(false);
@@ -514,7 +533,14 @@ export default function AdminPage() {
   const [showVenueLatitude, setShowVenueLatitude] = useState("");
   const [showVenueLongitude, setShowVenueLongitude] = useState("");
   const [showLocationRadiusMeters, setShowLocationRadiusMeters] = useState("");
-  const [showModalOpen, setShowModalOpen] = useState(false);
+  const [createShowStep, setCreateShowStep] = useState<CreateShowStep>("details");
+  const [showAccessCodeEnabled, setShowAccessCodeEnabled] = useState(false);
+  const [showAccessCode, setShowAccessCode] = useState("");
+  const [showCreateBusy, setShowCreateBusy] = useState(false);
+  const [showGeocodeBusy, setShowGeocodeBusy] = useState(false);
+  const [showGeocodeResult, setShowGeocodeResult] =
+    useState<GeocodeResult | null>(null);
+  const [showGeocodeError, setShowGeocodeError] = useState<string | null>(null);
   const [promotionModalOpen, setPromotionModalOpen] = useState(false);
   const [memberUserId, setMemberUserId] = useState("");
   const [memberRole, setMemberRole] = useState<"owner" | "manager">("manager");
@@ -534,6 +560,8 @@ export default function AdminPage() {
   const [showEditIsOver, setShowEditIsOver] = useState(false);
   const [showEditUseConfidencePoints, setShowEditUseConfidencePoints] =
     useState(false);
+  const [showEditAccessCode, setShowEditAccessCode] = useState("");
+  const [showAccessCodeBusy, setShowAccessCodeBusy] = useState(false);
   const [
     showEditRequiresLocationVerification,
     setShowEditRequiresLocationVerification,
@@ -1321,6 +1349,69 @@ export default function AdminPage() {
     return token ? { Authorization: `Bearer ${token}` } : null;
   }, []);
 
+  useEffect(() => {
+    setShowGeocodeResult(null);
+    setShowGeocodeError(null);
+    setShowVenueLatitude("");
+    setShowVenueLongitude("");
+  }, [showVenueAddress]);
+
+  const geocodeShowVenue = useCallback(async () => {
+    setShowGeocodeError(null);
+    if (!showPromotionId) {
+      setShowGeocodeError("Select a promotion before geocoding the venue.");
+      return false;
+    }
+    if (!showVenueAddress.trim()) {
+      setShowGeocodeError("Enter a venue address before geocoding.");
+      return false;
+    }
+    const authHeader = await getAuthHeader();
+    if (!authHeader) {
+      setShowGeocodeError("Sign in as an admin to geocode a venue.");
+      return false;
+    }
+    setShowGeocodeBusy(true);
+    try {
+      const response = await fetch("/api/admin/geocode-address", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeader,
+        },
+        body: JSON.stringify({
+          promotionId: showPromotionId,
+          address: showVenueAddress.trim(),
+        }),
+      });
+      const payload = (await response.json()) as
+        | GeocodeResult
+        | { error?: string };
+      if (!response.ok || !("latitude" in payload)) {
+        setShowGeocodeError(
+          "error" in payload && payload.error
+            ? payload.error
+            : "Unable to geocode that address."
+        );
+        return false;
+      }
+      setShowGeocodeResult(payload);
+      setShowVenueLatitude(String(payload.latitude));
+      setShowVenueLongitude(String(payload.longitude));
+      if (!showVenueAddress.trim() && payload.formattedAddress) {
+        setShowVenueAddress(payload.formattedAddress);
+      }
+      return true;
+    } catch (error) {
+      setShowGeocodeError(
+        error instanceof Error ? error.message : "Unable to geocode that address."
+      );
+      return false;
+    } finally {
+      setShowGeocodeBusy(false);
+    }
+  }, [getAuthHeader, showPromotionId, showVenueAddress]);
+
   const loadReviewLinks = useCallback(async () => {
     if (!activeShow?.id || !isAdmin) {
       setReviewLinks([]);
@@ -1731,7 +1822,8 @@ export default function AdminPage() {
     if (activePromotionId) {
       setShowPromotionId(activePromotionId);
     }
-    setShowModalOpen(true);
+    setCreateShowStep("details");
+    setAdminView("create-show");
   }, [activePromotionId]);
 
   const handleShowPrimaryAction = useCallback((summary: ShowSummary) => {
@@ -1906,7 +1998,7 @@ export default function AdminPage() {
         supabase
           .from("shows")
           .select(
-            "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+            "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
           )
           .order("created_at", { ascending: false }),
         supabase
@@ -2218,7 +2310,7 @@ export default function AdminPage() {
           supabase
             .from("shows")
             .select(
-              "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+              "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
             )
             .order("created_at", { ascending: false }),
           supabase
@@ -2756,6 +2848,21 @@ export default function AdminPage() {
       setMessage("That show share URL is already used by this promotion.");
       return;
     }
+    if (showAccessCodeEnabled && showAccessCode.trim().length < 3) {
+      setMessage("Access code must be at least 3 characters.");
+      setCreateShowStep("fan");
+      return;
+    }
+    if (
+      showRequiresLocationVerification &&
+      (!showVenueLatitude.trim() || !showVenueLongitude.trim())
+    ) {
+      const geocoded = await geocodeShowVenue();
+      if (!geocoded) {
+        setCreateShowStep("location");
+        return;
+      }
+    }
     const locationGateResult = buildShowLocationGatePayload({
       requiresLocationVerification: showRequiresLocationVerification,
       venueName: showVenueName,
@@ -2766,18 +2873,10 @@ export default function AdminPage() {
     });
     if ("error" in locationGateResult) {
       setMessage(locationGateResult.error);
+      setCreateShowStep("location");
       return;
     }
-    if (showIsFeaturedPlayShow) {
-      const { error: clearFeaturedError } = await supabase
-        .from("shows")
-        .update({ is_featured_play_show: false })
-        .eq("is_featured_play_show", true);
-      if (clearFeaturedError) {
-        setMessage(clearFeaturedError.message);
-        return;
-      }
-    }
+    setShowCreateBusy(true);
     const { data: newShow, error } = await supabase
       .from("shows")
       .insert({
@@ -2790,18 +2889,54 @@ export default function AdminPage() {
         starts_at: showStartsAt ? new Date(showStartsAt).toISOString() : null,
         requires_email_registration: showRequiresEmail,
         lock_picks_at_start: showLockPicksAtStart,
-        is_featured_play_show: showIsFeaturedPlayShow,
-        is_over: showIsOver,
+        is_featured_play_show: false,
+        is_over: false,
         use_confidence_points: showUseConfidencePoints,
+        access_code_required: false,
         ...locationGateResult.payload,
       })
       .select(
-        "id, name, slug, tagline, image_url, promotion_id, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+        "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
       )
       .single();
     if (error || !newShow) {
       setMessage(error?.message ?? "Failed to create show.");
+      setShowCreateBusy(false);
       return;
+    }
+    let createdShow = newShow as ShowRow;
+    if (showAccessCodeEnabled) {
+      const authHeader = await getAuthHeader();
+      if (!authHeader) {
+        setMessage("Show created, but sign-in was lost before setting the access code.");
+        setShowCreateBusy(false);
+        return;
+      }
+      const response = await fetch("/api/show-access-code/admin", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeader,
+        },
+        body: JSON.stringify({
+          showId: newShow.id,
+          enabled: true,
+          code: showAccessCode,
+        }),
+      });
+      const payload = (await response.json()) as {
+        show?: { id: string; access_code_required: boolean };
+        error?: string;
+      };
+      if (!response.ok || !payload.show) {
+        setMessage(payload.error ?? "Show created, but access code setup failed.");
+        setShowCreateBusy(false);
+        return;
+      }
+      createdShow = {
+        ...createdShow,
+        access_code_required: payload.show.access_code_required,
+      };
     }
     setShowName("");
     setShowSlug("");
@@ -2811,8 +2946,6 @@ export default function AdminPage() {
     setShowTagline("");
     setShowRequiresEmail(true);
     setShowLockPicksAtStart(true);
-    setShowIsFeaturedPlayShow(false);
-    setShowIsOver(false);
     setShowUseConfidencePoints(false);
     setShowRequiresLocationVerification(false);
     setShowVenueName("");
@@ -2820,12 +2953,63 @@ export default function AdminPage() {
     setShowVenueLatitude("");
     setShowVenueLongitude("");
     setShowLocationRadiusMeters("");
+    setShowAccessCodeEnabled(false);
+    setShowAccessCode("");
+    setShowGeocodeResult(null);
+    setShowGeocodeError(null);
+    setCreateShowStep("details");
+    setShows((prev) => [createdShow, ...prev.filter((show) => show.id !== createdShow.id)]);
     setSelectedPromotionId(showPromotionId);
-    setSelectedShowId(newShow.id);
-    setEventShowId(newShow.id);
-    setShowModalOpen(false);
-    setToastMessage(`Show created: ${newShow.name}. Active show updated.`);
+    setSelectedShowId(createdShow.id);
+    setEventShowId(createdShow.id);
+    setAdminView("card");
+    setToastMessage(`Show created: ${createdShow.name}. Build the match card next.`);
     refreshData();
+    setShowCreateBusy(false);
+  };
+
+  const handleCreateShowNext = async () => {
+    setMessage(null);
+    if (createShowStep === "details") {
+      if (!showPromotionId) {
+        setMessage("Select a promotion for the show.");
+        return;
+      }
+      if (!showName.trim()) {
+        setMessage("Show title is required.");
+        return;
+      }
+      setCreateShowStep("fan");
+      return;
+    }
+    if (createShowStep === "fan") {
+      if (showAccessCodeEnabled && showAccessCode.trim().length < 3) {
+        setMessage("Access code must be at least 3 characters.");
+        return;
+      }
+      setCreateShowStep("location");
+      return;
+    }
+    if (createShowStep === "location") {
+      if (showRequiresLocationVerification) {
+        if (!showVenueAddress.trim()) {
+          setMessage("Enter a venue address for location verification.");
+          return;
+        }
+        if (!showVenueLatitude.trim() || !showVenueLongitude.trim()) {
+          const geocoded = await geocodeShowVenue();
+          if (!geocoded) return;
+        }
+      }
+      setCreateShowStep("review");
+    }
+  };
+
+  const handleCreateShowBack = () => {
+    setMessage(null);
+    const index = CREATE_SHOW_STEPS.findIndex((step) => step.id === createShowStep);
+    const previous = CREATE_SHOW_STEPS[Math.max(index - 1, 0)];
+    setCreateShowStep(previous.id);
   };
 
   const handleCreatePromotion = async () => {
@@ -2944,7 +3128,7 @@ export default function AdminPage() {
       .update(payload)
       .eq("id", activeShow.id)
       .select(
-        "id, name, slug, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+        "id, name, slug, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
       )
       .single();
     if (error || !updatedShow) {
@@ -2958,6 +3142,69 @@ export default function AdminPage() {
     setToastMessage(`Show updated: ${updatedShow.name}.`);
     refreshData();
     setShowEditBusy(false);
+  };
+
+  const updateSelectedShowAccessCode = async (enabled: boolean) => {
+    if (!activeShow) {
+      setMessage("Select a show to update access-code settings.");
+      return;
+    }
+    if (enabled && showEditAccessCode.trim().length < 3) {
+      setMessage("Access code must be at least 3 characters.");
+      return;
+    }
+    setShowAccessCodeBusy(true);
+    setMessage(null);
+    try {
+      const authHeader = await getAuthHeader();
+      if (!authHeader) {
+        setMessage("Sign in as an admin to update access-code settings.");
+        return;
+      }
+      const response = await fetch("/api/show-access-code/admin", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeader,
+        },
+        body: JSON.stringify({
+          showId: activeShow.id,
+          enabled,
+          code: enabled ? showEditAccessCode : "",
+        }),
+      });
+      const payload = (await response.json()) as {
+        show?: { id: string; access_code_required: boolean };
+        error?: string;
+      };
+      if (!response.ok || !payload.show) {
+        setMessage(payload.error ?? "Failed to update access-code settings.");
+        return;
+      }
+      setShows((prev) =>
+        prev.map((show) =>
+          show.id === activeShow.id
+            ? {
+                ...show,
+                access_code_required: payload.show?.access_code_required ?? false,
+              }
+            : show
+        )
+      );
+      setShowEditAccessCode("");
+      setToastMessage(
+        enabled ? "Access code updated." : "Access code requirement cleared."
+      );
+      refreshData();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to update access-code settings."
+      );
+    } finally {
+      setShowAccessCodeBusy(false);
+    }
   };
 
   const handleDeleteShow = async () => {
@@ -5005,6 +5252,421 @@ export default function AdminPage() {
           </div>
         )}
 
+        {adminView === "create-show" && (
+          <section className="mx-auto mt-6 max-w-3xl space-y-5">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                type="button"
+                onClick={() => setAdminView("dashboard")}
+              >
+                Back
+              </button>
+              <button
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-700 text-lg text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                type="button"
+                onClick={() => setAdminView("dashboard")}
+                aria-label="Close create show"
+              >
+                ×
+              </button>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+                Create Show
+              </p>
+              <h2 className="mt-2 text-3xl font-semibold text-zinc-50">
+                Set up your event
+              </h2>
+              <p className="mt-2 text-sm text-zinc-400">
+                Add the show first. BoutPick will send you to Card Builder next.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              {CREATE_SHOW_STEPS.map((step, index) => {
+                const activeIndex = CREATE_SHOW_STEPS.findIndex(
+                  (item) => item.id === createShowStep
+                );
+                const complete = index < activeIndex;
+                const active = step.id === createShowStep;
+                return (
+                  <button
+                    key={step.id}
+                    className={`rounded-2xl border px-2 py-3 text-center text-[10px] font-semibold uppercase tracking-wide transition ${
+                      active
+                        ? "border-amber-300 bg-amber-400 text-zinc-950"
+                        : complete
+                          ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
+                          : "border-zinc-800 bg-zinc-950 text-zinc-500"
+                    }`}
+                    type="button"
+                    onClick={() => setCreateShowStep(step.id)}
+                  >
+                    <span className="block text-sm">
+                      {complete ? "✓" : index + 1}
+                    </span>
+                    {step.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
+              {createShowStep === "details" && (
+                <div className="space-y-4">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Promotion
+                    <select
+                      className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                      value={showPromotionId}
+                      onChange={(event) => setShowPromotionId(event.target.value)}
+                    >
+                      <option value="">Select promotion</option>
+                      {promotions.map((promotion) => (
+                        <option key={promotion.id} value={promotion.id}>
+                          {promotion.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Show title
+                    <input
+                      className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-base font-normal normal-case tracking-normal text-zinc-100"
+                      placeholder="Sunday Night's Main Event"
+                      value={showName}
+                      onChange={(event) => setShowName(event.target.value)}
+                    />
+                  </label>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      Show date and start time
+                      <input
+                        className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                        type="datetime-local"
+                        value={showStartsAt}
+                        onChange={(event) => setShowStartsAt(event.target.value)}
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      Venue name
+                      <input
+                        className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                        placeholder="Arena or event venue"
+                        value={showVenueName}
+                        onChange={(event) => setShowVenueName(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Venue address
+                    <input
+                      className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                      placeholder="Street address, city, state"
+                      value={showVenueAddress}
+                      onChange={(event) => setShowVenueAddress(event.target.value)}
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Show poster URL
+                    <input
+                      className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                      placeholder="Paste the show poster link"
+                      value={showImageUrl}
+                      onChange={(event) => setShowImageUrl(event.target.value)}
+                    />
+                  </label>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Short description
+                    <textarea
+                      className="mt-2 min-h-24 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                      maxLength={200}
+                      placeholder="A quick line fans will see on the show page"
+                      value={showTagline}
+                      onChange={(event) => setShowTagline(event.target.value)}
+                    />
+                    <span className="mt-1 block text-right text-[11px] font-normal normal-case tracking-normal text-zinc-500">
+                      {showTagline.length}/200
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {createShowStep === "fan" && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+                    <label className="flex items-start justify-between gap-4 text-sm text-zinc-200">
+                      <span>
+                        <span className="block font-semibold text-zinc-100">
+                          Access code
+                        </span>
+                        <span className="mt-1 block text-zinc-400">
+                          Require fans to enter a shared code before making picks.
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-5 w-5 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                        checked={showAccessCodeEnabled}
+                        onChange={(event) =>
+                          setShowAccessCodeEnabled(event.target.checked)
+                        }
+                      />
+                    </label>
+                    {showAccessCodeEnabled ? (
+                      <input
+                        className="mt-4 h-12 w-full rounded-xl border border-zinc-800 bg-black px-3 text-sm uppercase tracking-[0.12em] text-zinc-100"
+                        placeholder="BOUT250"
+                        value={showAccessCode}
+                        onChange={(event) => setShowAccessCode(event.target.value)}
+                      />
+                    ) : null}
+                  </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+                    <p className="font-semibold text-zinc-100">Fan registration</p>
+                    <div className="mt-3 grid gap-2">
+                      <label className="flex items-center gap-3 text-sm text-zinc-300">
+                        <input
+                          type="radio"
+                          className="h-4 w-4 border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                          checked={showRequiresEmail}
+                          onChange={() => setShowRequiresEmail(true)}
+                        />
+                        Email required
+                      </label>
+                      <label className="flex items-center gap-3 text-sm text-zinc-300">
+                        <input
+                          type="radio"
+                          className="h-4 w-4 border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                          checked={!showRequiresEmail}
+                          onChange={() => setShowRequiresEmail(false)}
+                        />
+                        Username only
+                      </label>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+                    <p className="font-semibold text-zinc-100">Picks close</p>
+                    <div className="mt-3 grid gap-2">
+                      <label className="flex items-center gap-3 text-sm text-zinc-300">
+                        <input
+                          type="radio"
+                          className="h-4 w-4 border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                          checked={showLockPicksAtStart}
+                          onChange={() => setShowLockPicksAtStart(true)}
+                        />
+                        At show start
+                      </label>
+                      <label className="flex items-center gap-3 text-sm text-zinc-300">
+                        <input
+                          type="radio"
+                          className="h-4 w-4 border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                          checked={!showLockPicksAtStart}
+                          onChange={() => setShowLockPicksAtStart(false)}
+                        />
+                        Manually
+                      </label>
+                    </div>
+                  </div>
+                  <label className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300">
+                    <span>
+                      <span className="block font-semibold text-zinc-100">
+                        Confidence points
+                      </span>
+                      <span className="mt-1 block text-zinc-400">
+                        Fans rank match winners for bonus scoring.
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                      checked={showUseConfidencePoints}
+                      onChange={(event) =>
+                        setShowUseConfidencePoints(event.target.checked)
+                      }
+                    />
+                  </label>
+                </div>
+              )}
+
+              {createShowStep === "location" && (
+                <div className="space-y-4">
+                  <label className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300">
+                    <span>
+                      <span className="block font-semibold text-zinc-100">
+                        Location verification
+                      </span>
+                      <span className="mt-1 block text-zinc-400">
+                        Require fans to be near the venue before making picks.
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
+                      checked={showRequiresLocationVerification}
+                      onChange={(event) =>
+                        setShowRequiresLocationVerification(event.target.checked)
+                      }
+                    />
+                  </label>
+                  {showRequiresLocationVerification ? (
+                    <>
+                      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Venue address
+                        <input
+                          className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                          placeholder="Street address, city, state"
+                          value={showVenueAddress}
+                          onChange={(event) =>
+                            setShowVenueAddress(event.target.value)
+                          }
+                        />
+                      </label>
+                      <button
+                        className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-amber-400/60 px-5 text-xs font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        type="button"
+                        onClick={() => void geocodeShowVenue()}
+                        disabled={showGeocodeBusy}
+                      >
+                        {showGeocodeBusy ? "Finding venue..." : "Find venue location"}
+                      </button>
+                      {showGeocodeResult ? (
+                        <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-100">
+                          Location found: {showGeocodeResult.formattedAddress}
+                        </div>
+                      ) : null}
+                      {showGeocodeError ? (
+                        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-100">
+                          {showGeocodeError}
+                        </div>
+                      ) : null}
+                      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Allowed distance from venue
+                        <select
+                          className="mt-2 h-12 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                          value={showLocationRadiusMeters || "152"}
+                          onChange={(event) =>
+                            setShowLocationRadiusMeters(event.target.value)
+                          }
+                        >
+                          {LOCATION_RADIUS_OPTIONS.map((option) => (
+                            <option key={option.meters} value={option.meters}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </>
+                  ) : (
+                    <p className="text-sm text-zinc-400">
+                      Location verification is off. Fans can make picks from anywhere
+                      unless another gate applies.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {createShowStep === "review" && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+                    <h3 className="text-lg font-semibold text-zinc-100">
+                      {showName || "Untitled show"}
+                    </h3>
+                    <p className="mt-2 text-sm text-zinc-400">
+                      {promotions.find((promotion) => promotion.id === showPromotionId)
+                        ?.name ?? "No promotion selected"}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      {showStartsAt
+                        ? formatAdminShowDate(new Date(showStartsAt).toISOString())
+                        : "No start time set"}
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      {showVenueName || showVenueAddress || "Venue not set"}
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+                      <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                        Fan Experience
+                      </p>
+                      <p className="mt-3 text-sm text-zinc-300">
+                        Registration: {showRequiresEmail ? "Email required" : "Username only"}
+                      </p>
+                      <p className="mt-1 text-sm text-zinc-300">
+                        Access code: {showAccessCodeEnabled ? "Required" : "Not required"}
+                      </p>
+                      <p className="mt-1 text-sm text-zinc-300">
+                        Picks close: {showLockPicksAtStart ? "At show start" : "Manually"}
+                      </p>
+                      <p className="mt-1 text-sm text-zinc-300">
+                        Confidence points: {showUseConfidencePoints ? "Enabled" : "Disabled"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+                      <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                        Location
+                      </p>
+                      <p className="mt-3 text-sm text-zinc-300">
+                        Verification: {showRequiresLocationVerification ? "Enabled" : "Disabled"}
+                      </p>
+                      {showRequiresLocationVerification ? (
+                        <>
+                          <p className="mt-1 text-sm text-zinc-300">
+                            Address: {showVenueAddress || "Not set"}
+                          </p>
+                          <p className="mt-1 text-sm text-zinc-300">
+                            Distance:{" "}
+                            {LOCATION_RADIUS_OPTIONS.find(
+                              (option) =>
+                                String(option.meters) ===
+                                (showLocationRadiusMeters || "152")
+                            )?.label ?? `${showLocationRadiusMeters} meters`}
+                          </p>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6 flex gap-3">
+                {createShowStep !== "details" ? (
+                  <button
+                    className="inline-flex h-12 flex-1 items-center justify-center rounded-2xl border border-zinc-700 px-5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-500 hover:text-zinc-100"
+                    type="button"
+                    onClick={handleCreateShowBack}
+                    disabled={showCreateBusy}
+                  >
+                    Back
+                  </button>
+                ) : null}
+                {createShowStep === "review" ? (
+                  <button
+                    className="inline-flex h-12 flex-[2] items-center justify-center rounded-2xl bg-amber-400 px-5 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                    type="button"
+                    onClick={handleCreateShow}
+                    disabled={showCreateBusy || showGeocodeBusy}
+                  >
+                    {showCreateBusy ? "Creating..." : "Create Show"}
+                  </button>
+                ) : (
+                  <button
+                    className="inline-flex h-12 flex-[2] items-center justify-center rounded-2xl bg-amber-400 px-5 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                    type="button"
+                    onClick={() => void handleCreateShowNext()}
+                    disabled={showGeocodeBusy}
+                  >
+                    Continue
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
         {adminView === "dashboard" && (
           <section className="mt-6 space-y-6">
             {!hasOpenShow ? (
@@ -5642,6 +6304,57 @@ export default function AdminPage() {
             onSave={handleUpdateShow}
           />
           </div>
+          {activeShow && (
+            <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                    Access code
+                  </p>
+                  <h3 className="mt-2 text-lg font-semibold text-zinc-100">
+                    {activeShow.access_code_required
+                      ? "Access code required"
+                      : "No access code required"}
+                  </h3>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Saved codes are hashed and cannot be viewed. Enter a new
+                    code to replace the current one.
+                  </p>
+                </div>
+                {activeShow.access_code_required ? (
+                  <button
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    type="button"
+                    onClick={() => void updateSelectedShowAccessCode(false)}
+                    disabled={showAccessCodeBusy}
+                  >
+                    Clear code
+                  </button>
+                ) : null}
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+                <input
+                  className="h-11 rounded-xl border border-zinc-800 bg-black px-3 text-sm uppercase tracking-[0.12em] text-zinc-100"
+                  placeholder={
+                    activeShow.access_code_required
+                      ? "Enter replacement code"
+                      : "Enter access code"
+                  }
+                  value={showEditAccessCode}
+                  onChange={(event) => setShowEditAccessCode(event.target.value)}
+                  disabled={showAccessCodeBusy}
+                />
+                <button
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                  type="button"
+                  onClick={() => void updateSelectedShowAccessCode(true)}
+                  disabled={showAccessCodeBusy || !showEditAccessCode.trim()}
+                >
+                  {showAccessCodeBusy ? "Saving..." : "Save code"}
+                </button>
+              </div>
+            </div>
+          )}
           {isAdmin && activeShow && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
               <div>
@@ -9064,227 +9777,6 @@ export default function AdminPage() {
             </div>
           </div>
         )}
-
-        {showModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-            <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-xl shadow-black/40">
-              <h3 className="text-lg font-semibold text-zinc-100">Create show</h3>
-              <p className="mt-2 text-sm text-zinc-400">
-                Add a new show card. This becomes the active show.
-              </p>
-              <div className="mt-4 space-y-3">
-                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  Show title
-                  <input
-                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
-                    placeholder="Sunday Night's Main Event"
-                    value={showName}
-                    onChange={(event) => setShowName(event.target.value)}
-                  />
-                </label>
-                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  Share URL name
-                  <input
-                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
-                    placeholder="sunday-nights-main-event"
-                    value={showSlug}
-                    onChange={(event) => setShowSlug(event.target.value)}
-                  />
-                  <span className="mt-2 block text-xs font-normal normal-case tracking-normal text-zinc-400">
-                    Leave blank to create one from the show title.
-                  </span>
-                </label>
-                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  Promotion
-                  <select
-                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
-                    value={showPromotionId}
-                    onChange={(event) => setShowPromotionId(event.target.value)}
-                  >
-                    <option value="">Select promotion</option>
-                    {promotions.map((promotion) => (
-                      <option key={promotion.id} value={promotion.id}>
-                        {promotion.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  Show poster image
-                  <input
-                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
-                    placeholder="Paste the show poster link"
-                    value={showImageUrl}
-                    onChange={(event) => setShowImageUrl(event.target.value)}
-                  />
-                </label>
-                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  Short show description
-                  <input
-                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
-                    placeholder="A quick line fans will see on the show page"
-                    value={showTagline}
-                    onChange={(event) => setShowTagline(event.target.value)}
-                  />
-                </label>
-                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  Show date and start time
-                  <input
-                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
-                    type="datetime-local"
-                    value={showStartsAt}
-                    onChange={(event) => setShowStartsAt(event.target.value)}
-                  />
-                </label>
-                <label className="flex items-center gap-3 text-sm text-zinc-300">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
-                    checked={showRequiresEmail}
-                    onChange={(event) => setShowRequiresEmail(event.target.checked)}
-                  />
-                  Require email registration
-                </label>
-                <label className="flex items-center gap-3 text-sm text-zinc-300">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
-                    checked={showLockPicksAtStart}
-                    onChange={(event) => setShowLockPicksAtStart(event.target.checked)}
-                  />
-                  Lock all picks at show start
-                </label>
-                <label className="flex items-center gap-3 text-sm text-zinc-300">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
-                    checked={showIsFeaturedPlayShow}
-                    onChange={(event) =>
-                      setShowIsFeaturedPlayShow(event.target.checked)
-                    }
-                  />
-                  Send /play to this show
-                </label>
-                <label className="flex items-center gap-3 text-sm text-zinc-300">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
-                    checked={showIsOver}
-                    onChange={(event) => setShowIsOver(event.target.checked)}
-                  />
-                  Mark show as over
-                </label>
-                <label className="flex items-center gap-3 text-sm text-zinc-300">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
-                    checked={showUseConfidencePoints}
-                    onChange={(event) =>
-                      setShowUseConfidencePoints(event.target.checked)
-                    }
-                  />
-                  Use confidence points for match winners
-                </label>
-                <label className="flex items-center gap-3 text-sm text-zinc-300">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-amber-300 focus:ring-amber-400"
-                    checked={showRequiresLocationVerification}
-                    onChange={(event) =>
-                      setShowRequiresLocationVerification(event.target.checked)
-                    }
-                  />
-                  Require location verification
-                </label>
-                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  Venue name
-                  <input
-                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
-                    placeholder="Arena or event venue"
-                    value={showVenueName}
-                    onChange={(event) => setShowVenueName(event.target.value)}
-                  />
-                </label>
-                <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  Venue address
-                  <input
-                    className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
-                    placeholder="Street address or city"
-                    value={showVenueAddress}
-                    onChange={(event) => setShowVenueAddress(event.target.value)}
-                  />
-                </label>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                    Venue latitude
-                    <input
-                      className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
-                      inputMode="decimal"
-                      placeholder="Map latitude"
-                      value={showVenueLatitude}
-                      onChange={(event) =>
-                        setShowVenueLatitude(event.target.value)
-                      }
-                    />
-                  </label>
-                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                    Venue longitude
-                    <input
-                      className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
-                      inputMode="decimal"
-                      placeholder="Map longitude"
-                      value={showVenueLongitude}
-                      onChange={(event) =>
-                        setShowVenueLongitude(event.target.value)
-                      }
-                    />
-                  </label>
-                  <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                    Location check-in radius
-                    <input
-                      className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
-                      inputMode="numeric"
-                      placeholder="Meters from the venue"
-                      value={showLocationRadiusMeters}
-                      onChange={(event) =>
-                        setShowLocationRadiusMeters(event.target.value)
-                      }
-                    />
-                  </label>
-                </div>
-              </div>
-              {isAdmin && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-400">
-                  <span>Need a new promotion?</span>
-                  <button
-                    className="inline-flex items-center justify-center rounded-full border border-zinc-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-amber-400 hover:text-amber-200"
-                    type="button"
-                    onClick={() => setPromotionModalOpen(true)}
-                  >
-                    Add promotion
-                  </button>
-                </div>
-              )}
-              <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
-                <button
-                  className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 px-4 text-xs font-semibold uppercase tracking-wide text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
-                  type="button"
-                  onClick={() => setShowModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="inline-flex h-10 items-center justify-center rounded-full bg-amber-400 px-5 text-xs font-semibold uppercase tracking-wide text-zinc-900 transition hover:bg-amber-300"
-                  type="button"
-                  onClick={handleCreateShow}
-                >
-                  Save show
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {promotionModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
             <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-xl shadow-black/40">
