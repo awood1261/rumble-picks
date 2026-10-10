@@ -47,7 +47,7 @@
 - [x] 7.1 Run `npx tsc --noEmit --pretty false` and document the result.
 - [x] 7.2 Run `npm run lint` and document any existing unrelated lint failures separately from this change.
 - [x] 7.3 Run `npm run build` when feasible and document the result or any unrelated build blocker.
-- [ ] 7.4 Manually verify create show -> post-create prompt -> set up planned matches -> Card Builder on mobile viewport.
-- [ ] 7.5 Manually verify create show -> skip planned setup -> Card Builder on mobile viewport.
-- [ ] 7.6 Manually verify promotion-scoped owner/manager behavior, including that a manager cannot preserve a selected show from a different promotion.
-- [ ] 7.7 Manually verify an existing show with no planned count continues to support Card Builder, Results, Picks, and Scoreboard.
+- [x] 7.4 Manually verify create show -> post-create prompt -> set up planned matches -> Card Builder on mobile viewport.
+- [x] 7.5 Manually verify create show -> skip planned setup -> Card Builder on mobile viewport.
+- [x] 7.6 Manually verify promotion-scoped owner/manager behavior, including that a manager cannot preserve a selected show from a different promotion.
+- [x] 7.7 Manually verify an existing show with no planned count continues to support Card Builder, Results, Picks, and Scoreboard.
