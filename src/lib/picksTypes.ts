@@ -53,6 +53,7 @@ export type ShowRow = {
   venue_latitude?: number | null;
   venue_longitude?: number | null;
   location_radius_meters?: number | null;
+  planned_match_count?: number | null;
 };
 
 export type PromotionRow = {

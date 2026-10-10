@@ -61,6 +61,7 @@ type ShowRow = {
   venue_latitude?: number | null;
   venue_longitude?: number | null;
   location_radius_meters?: number | null;
+  planned_match_count?: number | null;
 };
 
 type PromotionRow = {
@@ -203,6 +204,7 @@ const ALLOWED_ENTRANT_IMAGE_TYPES = new Set([
 type AdminView =
   | "dashboard"
   | "create-show"
+  | "post-create-card-setup"
   | "setup"
   | "card"
   | "results"
@@ -246,6 +248,31 @@ const ADMIN_NAV_ITEMS: Array<{
   { view: "scoreboard", label: "Scoreboard", mobileLabel: "Scores" },
   { view: "advanced", label: "Advanced", mobileLabel: "More" },
 ];
+
+const ADMIN_VIEW_TO_TOOL_PARAM: Partial<Record<AdminView, string>> = {
+  dashboard: "dashboard",
+  "create-show": "create-show",
+  "post-create-card-setup": "card-setup",
+  setup: "shows",
+  card: "card",
+  results: "results",
+  scoreboard: "scoreboard",
+  advanced: "more",
+};
+
+const ADMIN_TOOL_PARAM_TO_VIEW: Record<string, AdminView> = {
+  dashboard: "dashboard",
+  "create-show": "create-show",
+  "card-setup": "post-create-card-setup",
+  shows: "setup",
+  setup: "setup",
+  card: "card",
+  results: "results",
+  scoreboard: "scoreboard",
+  scores: "scoreboard",
+  more: "advanced",
+  advanced: "advanced",
+};
 
 const slugifyStorageSegment = (value: string) =>
   value
@@ -537,6 +564,10 @@ export default function AdminPage() {
   const [showAccessCodeEnabled, setShowAccessCodeEnabled] = useState(false);
   const [showAccessCode, setShowAccessCode] = useState("");
   const [showCreateBusy, setShowCreateBusy] = useState(false);
+  const [postCreateShowId, setPostCreateShowId] = useState("");
+  const [plannedMatchCount, setPlannedMatchCount] = useState(6);
+  const [plannedMatchBusy, setPlannedMatchBusy] = useState(false);
+  const [plannedMatchCountEdit, setPlannedMatchCountEdit] = useState("");
   const [showGeocodeBusy, setShowGeocodeBusy] = useState(false);
   const [showGeocodeResult, setShowGeocodeResult] =
     useState<GeocodeResult | null>(null);
@@ -641,6 +672,7 @@ export default function AdminPage() {
   const [matchChampionshipImageUrl, setMatchChampionshipImageUrl] = useState("");
   const [matchKnownWrestlerId, setMatchKnownWrestlerId] = useState("");
   const [matchCandidateIds, setMatchCandidateIds] = useState<string[]>([]);
+  const [matchOrderIndex, setMatchOrderIndex] = useState("");
   const [matchCreateOpen, setMatchCreateOpen] = useState(false);
   const [focusedMatchId, setFocusedMatchId] = useState<string | null>(null);
   const [matchEntrantSelection, setMatchEntrantSelection] = useState<Record<string, string>>({});
@@ -694,6 +726,7 @@ export default function AdminPage() {
   );
   const [scrollMatchId, setScrollMatchId] = useState<string | null>(null);
   const matchRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const initialAdminContextAppliedRef = useRef(false);
   const [scrollEliminatorId, setScrollEliminatorId] = useState<string | null>(
     null
   );
@@ -771,6 +804,10 @@ export default function AdminPage() {
     }
     return promotionScopedShows[0] ?? null;
   }, [promotionScopedShows, selectedShowId]);
+  const postCreateShow = useMemo(() => {
+    if (!postCreateShowId) return null;
+    return shows.find((show) => show.id === postCreateShowId) ?? null;
+  }, [postCreateShowId, shows]);
   const hasAdminAccess = isAdmin || promotionMembers.length > 0;
   const manageablePromotionIds = useMemo(() => {
     if (isAdmin) return new Set(promotions.map((promotion) => promotion.id));
@@ -988,6 +1025,16 @@ export default function AdminPage() {
     activeShow?.location_radius_meters,
   ]);
   useEffect(() => {
+    if (
+      selectedShowId &&
+      activePromotionId &&
+      !promotionScopedShows.some((show) => show.id === selectedShowId)
+    ) {
+      setSelectedShowId("");
+      setEventShowId("");
+    }
+  }, [activePromotionId, promotionScopedShows, selectedShowId]);
+  useEffect(() => {
     if (activeShow?.id && selectedShowId !== activeShow.id) {
       setSelectedShowId(activeShow.id);
     }
@@ -997,6 +1044,14 @@ export default function AdminPage() {
       setEventShowId(selectedShowId);
     }
   }, [eventShowId, selectedShowId]);
+  useEffect(() => {
+    setPlannedMatchCountEdit(
+      activeShow?.planned_match_count === null ||
+        activeShow?.planned_match_count === undefined
+        ? ""
+        : String(activeShow.planned_match_count)
+    );
+  }, [activeShow?.id, activeShow?.planned_match_count]);
   useEffect(() => {
     if (!activeShow) return;
     if (selectedShowId && activeShow.id !== selectedShowId) {
@@ -1343,6 +1398,76 @@ export default function AdminPage() {
     };
   }, [activePromotion, activeShow]);
 
+  useEffect(() => {
+    if (initialAdminContextAppliedRef.current) return;
+    if (typeof window === "undefined") return;
+    if (!hasAdminAccess) return;
+    if (promotions.length === 0 && shows.length === 0) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const promotionParam = params.get("promotion");
+    const showParam = params.get("show");
+    const toolParam = params.get("tool");
+
+    let nextPromotionId = selectedPromotionId;
+    if (promotionParam) {
+      const matchingPromotion = promotions.find(
+        (promotion) =>
+          promotion.id === promotionParam || promotion.slug === promotionParam
+      );
+      nextPromotionId = matchingPromotion?.id ?? nextPromotionId;
+    }
+
+    const showsInPromotion = nextPromotionId
+      ? shows.filter((show) => show.promotion_id === nextPromotionId)
+      : shows;
+    if (showParam) {
+      const matchingShow = showsInPromotion.find(
+        (show) => show.id === showParam || show.slug === showParam
+      );
+      if (matchingShow) {
+        nextPromotionId = matchingShow.promotion_id ?? nextPromotionId;
+        setSelectedShowId(matchingShow.id);
+        setEventShowId(matchingShow.id);
+      }
+    }
+
+    if (nextPromotionId) {
+      setSelectedPromotionId(nextPromotionId);
+    }
+    if (toolParam && ADMIN_TOOL_PARAM_TO_VIEW[toolParam]) {
+      setAdminView(ADMIN_TOOL_PARAM_TO_VIEW[toolParam]);
+    }
+    initialAdminContextAppliedRef.current = true;
+  }, [hasAdminAccess, promotions, selectedPromotionId, shows]);
+
+  useEffect(() => {
+    if (!initialAdminContextAppliedRef.current) return;
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (activePromotion) {
+      params.set("promotion", activePromotion.slug || activePromotion.id);
+    } else {
+      params.delete("promotion");
+    }
+    if (activeShow) {
+      params.set("show", activeShow.slug || activeShow.id);
+    } else {
+      params.delete("show");
+    }
+    params.set("tool", ADMIN_VIEW_TO_TOOL_PARAM[adminView] ?? "dashboard");
+
+    const query = params.toString();
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${
+      window.location.hash
+    }`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextUrl !== currentUrl) {
+      window.history.replaceState(null, "", nextUrl);
+    }
+  }, [activePromotion, activeShow, adminView]);
+
   const getAuthHeader = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -1576,6 +1701,52 @@ export default function AdminPage() {
       remaining: Math.max(orderedShowMatches.length - completed, 0),
     };
   }, [orderedShowMatches]);
+  const getMatchSetupStatus = useCallback(
+    (match: MatchRow) => {
+      if (match.match_type === "blind_gauntlet") {
+        const candidates = gauntletCandidateEntrantsByMatch[match.id] ?? [];
+        return Boolean(match.known_wrestler_id) && candidates.length >= 3
+          ? "configured"
+          : "needs_attention";
+      }
+      const sides = matchSidesByMatch[match.id] ?? [];
+      const participants = matchEntrantsByMatch[match.id] ?? [];
+      return sides.length > 0 &&
+        sides.every((side) =>
+          participants.some((row) => row.side_id === side.id)
+        )
+        ? "configured"
+        : "needs_attention";
+    },
+    [gauntletCandidateEntrantsByMatch, matchEntrantsByMatch, matchSidesByMatch]
+  );
+  const configuredMatchCount = useMemo(
+    () =>
+      orderedShowMatches.filter(
+        (match) => getMatchSetupStatus(match) === "configured"
+      ).length,
+    [getMatchSetupStatus, orderedShowMatches]
+  );
+  const plannedMatchTotal =
+    typeof activeShow?.planned_match_count === "number"
+      ? activeShow.planned_match_count
+      : null;
+  const virtualPlannedSlots = useMemo(() => {
+    if (plannedMatchTotal === null) return [];
+    const missingCount = Math.max(plannedMatchTotal - orderedShowMatches.length, 0);
+    return Array.from({ length: missingCount }, (_, index) => ({
+      slotNumber: orderedShowMatches.length + index + 1,
+      orderIndex: orderedShowMatches.length + index + 1,
+    }));
+  }, [orderedShowMatches.length, plannedMatchTotal]);
+  const cardProgressDenominator =
+    plannedMatchTotal !== null
+      ? Math.max(plannedMatchTotal, orderedShowMatches.length)
+      : orderedShowMatches.length;
+  const cardProgressPercent =
+    cardProgressDenominator > 0
+      ? Math.round((configuredMatchCount / cardProgressDenominator) * 100)
+      : 0;
 
   const readinessItems = useMemo(() => {
     const hasShowDetails = Boolean(activeShow?.name?.trim()) && Boolean(activeShow?.promotion_id);
@@ -1998,7 +2169,7 @@ export default function AdminPage() {
         supabase
           .from("shows")
           .select(
-            "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+            "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters, planned_match_count"
           )
           .order("created_at", { ascending: false }),
         supabase
@@ -2310,7 +2481,7 @@ export default function AdminPage() {
           supabase
             .from("shows")
             .select(
-              "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+              "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters, planned_match_count"
             )
             .order("created_at", { ascending: false }),
           supabase
@@ -2893,10 +3064,11 @@ export default function AdminPage() {
         is_over: false,
         use_confidence_points: showUseConfidencePoints,
         access_code_required: false,
+        planned_match_count: null,
         ...locationGateResult.payload,
       })
       .select(
-        "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+        "id, name, slug, tagline, image_url, promotion_id, status, starts_at, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters, planned_match_count"
       )
       .single();
     if (error || !newShow) {
@@ -2962,7 +3134,9 @@ export default function AdminPage() {
     setSelectedPromotionId(showPromotionId);
     setSelectedShowId(createdShow.id);
     setEventShowId(createdShow.id);
-    setAdminView("card");
+    setPostCreateShowId(createdShow.id);
+    setPlannedMatchCount(6);
+    setAdminView("post-create-card-setup");
     setToastMessage(`Show created: ${createdShow.name}. Build the match card next.`);
     refreshData();
     setShowCreateBusy(false);
@@ -3010,6 +3184,90 @@ export default function AdminPage() {
     const index = CREATE_SHOW_STEPS.findIndex((step) => step.id === createShowStep);
     const previous = CREATE_SHOW_STEPS[Math.max(index - 1, 0)];
     setCreateShowStep(previous.id);
+  };
+
+  const saveShowPlannedMatchCount = async (
+    showId: string,
+    count: number | null
+  ) => {
+    setPlannedMatchBusy(true);
+    setMessage(null);
+    const { data, error } = await supabase
+      .from("shows")
+      .update({ planned_match_count: count })
+      .eq("id", showId)
+      .select("id, planned_match_count")
+      .single();
+    setPlannedMatchBusy(false);
+    if (error) {
+      setMessage(error.message);
+      return false;
+    }
+    setShows((prev) =>
+      prev.map((show) =>
+        show.id === showId
+          ? { ...show, planned_match_count: data?.planned_match_count ?? count }
+          : show
+      )
+    );
+    return true;
+  };
+
+  const handleSavePostCreatePlannedMatches = async () => {
+    const targetShowId = postCreateShowId || activeShow?.id;
+    if (!targetShowId) return;
+    const saved = await saveShowPlannedMatchCount(
+      targetShowId,
+      Math.max(0, Math.min(100, plannedMatchCount))
+    );
+    if (!saved) return;
+    setPostCreateShowId("");
+    setAdminView("card");
+    setToastMessage("Card Builder is ready.");
+    refreshData();
+  };
+
+  const handleSkipPostCreatePlannedMatches = async () => {
+    const targetShowId = postCreateShowId || activeShow?.id;
+    if (!targetShowId) return;
+    const saved = await saveShowPlannedMatchCount(targetShowId, null);
+    if (!saved) return;
+    setPostCreateShowId("");
+    setAdminView("card");
+    setToastMessage("Add matches when you are ready.");
+    refreshData();
+  };
+
+  const handleUpdateActiveShowPlannedMatches = async () => {
+    if (!activeShow?.id) return;
+    const trimmed = plannedMatchCountEdit.trim();
+    const count = trimmed ? Number(trimmed) : null;
+    if (count !== null && (!Number.isInteger(count) || count < 0 || count > 100)) {
+      setMessage("Planned match count must be a whole number from 0 to 100.");
+      return;
+    }
+    const saved = await saveShowPlannedMatchCount(activeShow.id, count);
+    if (saved) {
+      setToastMessage(
+        count === null ? "Planned match count cleared." : "Planned match count updated."
+      );
+    }
+  };
+
+  const openPlannedMatchSlot = (orderIndex: number) => {
+    setMatchName(`Match ${orderIndex}`);
+    setMatchKind("match");
+    setMatchType("singles");
+    setMatchRosterYear("");
+    setMatchRosterGender("men");
+    setMatchIsMainEvent(false);
+    setMatchIsChampionship(false);
+    setMatchChampionshipName("");
+    setMatchChampionshipImageUrl("");
+    setMatchKnownWrestlerId("");
+    setMatchCandidateIds([]);
+    setMatchOrderIndex(String(orderIndex));
+    setMatchCreateOpen(true);
   };
 
   const handleCreatePromotion = async () => {
@@ -3128,7 +3386,7 @@ export default function AdminPage() {
       .update(payload)
       .eq("id", activeShow.id)
       .select(
-        "id, name, slug, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters"
+        "id, name, slug, tagline, image_url, promotion_id, starts_at, status, requires_email_registration, lock_picks_at_start, is_featured_play_show, is_over, use_confidence_points, access_code_required, requires_location_verification, venue_name, venue_address, venue_latitude, venue_longitude, location_radius_meters, planned_match_count"
       )
       .single();
     if (error || !updatedShow) {
@@ -3296,7 +3554,11 @@ export default function AdminPage() {
       setShows((prev) => prev.filter((show) => show.id !== activeShow.id));
       setSelectedShowId((prev) => {
         if (prev !== activeShow.id) return prev;
-        const remaining = shows.filter((show) => show.id !== activeShow.id);
+        const remaining = shows.filter(
+          (show) =>
+            show.id !== activeShow.id &&
+            show.promotion_id === activeShow.promotion_id
+        );
         return remaining[0]?.id ?? "";
       });
       setToastMessage("Show deleted.");
@@ -3872,6 +4134,7 @@ export default function AdminPage() {
         champion_side_id: null,
         known_wrestler_id:
           matchType === "blind_gauntlet" ? matchKnownWrestlerId : null,
+        order_index: matchOrderIndex ? Number(matchOrderIndex) : null,
       })
       .select("id")
       .single();
@@ -3904,6 +4167,7 @@ export default function AdminPage() {
       setMatchChampionshipImageUrl("");
       setMatchKnownWrestlerId("");
       setMatchCandidateIds([]);
+      setMatchOrderIndex("");
       setMatchCreateOpen(false);
       refreshData();
       return;
@@ -3944,6 +4208,7 @@ export default function AdminPage() {
     setMatchChampionshipImageUrl("");
     setMatchKnownWrestlerId("");
     setMatchCandidateIds([]);
+    setMatchOrderIndex("");
     setMatchCreateOpen(false);
     refreshData();
   };
@@ -5140,6 +5405,23 @@ export default function AdminPage() {
       </article>
     );
   };
+  const renderAdminToolContext = (toolLabel: string) => {
+    if (!activePromotion && !activeShow) return null;
+    return (
+      <div className="mb-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-500">
+          Current context
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-200">
+          <span>{activePromotion?.name ?? "No promotion"}</span>
+          <span className="text-zinc-600">→</span>
+          <span>{activeShow?.name ?? "No show selected"}</span>
+          <span className="text-zinc-600">→</span>
+          <span className="text-amber-200">{toolLabel}</span>
+        </div>
+      </div>
+    );
+  };
   const legacyDashboardVisible = false;
 
   if (loading) {
@@ -5662,6 +5944,93 @@ export default function AdminPage() {
                     Continue
                   </button>
                 )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {adminView === "post-create-card-setup" && (
+          <section className="mx-auto mt-8 max-w-3xl space-y-5">
+            <div className="rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-300/50 bg-emerald-400/20 text-3xl text-emerald-200">
+                ✓
+              </div>
+              <p className="mt-5 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200">
+                Show created
+              </p>
+              <h2 className="mt-2 text-3xl font-semibold text-zinc-50">
+                {postCreateShow?.name ?? activeShow?.name ?? "Your show"} is ready for a card.
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-300">
+                If you know the planned match count, BoutPick can show empty
+                card slots so the Card Builder has a clear target.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">
+                Set up your card?
+              </p>
+              <h3 className="mt-2 text-xl font-semibold text-zinc-100">
+                How many matches are planned?
+              </h3>
+              <div className="mt-5 flex items-center justify-center gap-3">
+                <button
+                  className="flex h-12 w-12 items-center justify-center rounded-full border border-zinc-700 text-2xl text-zinc-200 transition hover:border-amber-300 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  type="button"
+                  onClick={() =>
+                    setPlannedMatchCount((current) => Math.max(0, current - 1))
+                  }
+                  disabled={plannedMatchBusy || plannedMatchCount <= 0}
+                  aria-label="Decrease planned matches"
+                >
+                  −
+                </button>
+                <input
+                  className="h-14 w-28 rounded-2xl border border-zinc-700 bg-zinc-950 text-center text-2xl font-semibold text-zinc-100"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={plannedMatchCount}
+                  onChange={(event) =>
+                    setPlannedMatchCount(
+                      Math.max(0, Math.min(100, Number(event.target.value) || 0))
+                    )
+                  }
+                />
+                <button
+                  className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-400/70 text-2xl text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  type="button"
+                  onClick={() =>
+                    setPlannedMatchCount((current) => Math.min(100, current + 1))
+                  }
+                  disabled={plannedMatchBusy || plannedMatchCount >= 100}
+                  aria-label="Increase planned matches"
+                >
+                  +
+                </button>
+              </div>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <button
+                  className="inline-flex h-12 items-center justify-center rounded-2xl bg-amber-400 px-5 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                  type="button"
+                  onClick={() => void handleSavePostCreatePlannedMatches()}
+                  disabled={plannedMatchBusy}
+                >
+                  {plannedMatchBusy
+                    ? "Saving..."
+                    : `Set Up ${plannedMatchCount} ${
+                        plannedMatchCount === 1 ? "Match" : "Matches"
+                      }`}
+                </button>
+                <button
+                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-zinc-700 px-5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-70"
+                  type="button"
+                  onClick={() => void handleSkipPostCreatePlannedMatches()}
+                  disabled={plannedMatchBusy}
+                >
+                  I’ll add matches as I go
+                </button>
               </div>
             </div>
           </section>
@@ -6355,7 +6724,7 @@ export default function AdminPage() {
               </div>
             </div>
           )}
-          {isAdmin && activeShow && (
+          {canManageActivePromotion && activeShow && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-red-200">
@@ -7859,6 +8228,7 @@ export default function AdminPage() {
 
         {adminView === "results" && (
           <section className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+            {renderAdminToolContext("Results")}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
@@ -8250,6 +8620,7 @@ export default function AdminPage() {
         {adminView === "scoreboard" && (
           <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_0.8fr]">
             <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+              {renderAdminToolContext("Scoreboard")}
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
@@ -8423,6 +8794,7 @@ export default function AdminPage() {
 
         {adminView === "card" && (
           <section className="mt-10 rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6">
+          {renderAdminToolContext("Card Builder")}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-amber-200">
@@ -8456,10 +8828,18 @@ export default function AdminPage() {
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
               <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-                Matches
+                Planned
               </p>
               <p className="mt-2 text-2xl font-semibold text-zinc-100">
-                {orderedShowMatches.length}
+                {plannedMatchTotal ?? "Unset"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                Configured
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-zinc-100">
+                {configuredMatchCount}/{cardProgressDenominator || orderedShowMatches.length || 0}
               </p>
             </div>
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
@@ -8470,13 +8850,51 @@ export default function AdminPage() {
                 {matchEntrants.length}
               </p>
             </div>
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-              <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-                Preview
-              </p>
-              <p className="mt-2 text-sm font-semibold text-zinc-100">
-                {activeShowLinks ? "Available" : "Select a show"}
-              </p>
+          </div>
+          <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                  Card progress
+                </p>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-emerald-400 transition-all"
+                    style={{ width: `${Math.min(100, cardProgressPercent)}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-sm text-zinc-400">
+                  {plannedMatchTotal === null
+                    ? `${orderedShowMatches.length} ${
+                        orderedShowMatches.length === 1 ? "match" : "matches"
+                      } added`
+                    : `${configuredMatchCount} of ${cardProgressDenominator} ${
+                        cardProgressDenominator === 1 ? "match" : "matches"
+                      } configured`}
+                </p>
+              </div>
+              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 sm:w-48">
+                Planned matches
+                <div className="mt-2 flex gap-2">
+                  <input
+                    className="h-11 min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                    type="number"
+                    min="0"
+                    max="100"
+                    placeholder="Unset"
+                    value={plannedMatchCountEdit}
+                    onChange={(event) => setPlannedMatchCountEdit(event.target.value)}
+                  />
+                  <button
+                    className="inline-flex h-11 items-center justify-center rounded-xl border border-amber-400/60 px-3 text-[10px] font-semibold uppercase tracking-wide text-amber-200 transition hover:border-amber-300 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    type="button"
+                    onClick={() => void handleUpdateActiveShowPlannedMatches()}
+                    disabled={!activeShow || plannedMatchBusy}
+                  >
+                    Save
+                  </button>
+                </div>
+              </label>
             </div>
           </div>
           <details
@@ -8495,7 +8913,7 @@ export default function AdminPage() {
                 Collapse
               </span>
             </summary>
-            <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,auto]">
+            <div className="mt-4 grid gap-3 md:grid-cols-[2fr,1fr,7rem,auto]">
               <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
                 Match title
                 <input
@@ -8523,6 +8941,17 @@ export default function AdminPage() {
                   <option value="blind_gauntlet">Blind Gauntlet Match</option>
                   <option value="multi">Multi-person</option>
                 </select>
+              </label>
+              <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Order
+                <input
+                  className="mt-2 h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-normal normal-case tracking-normal text-zinc-100"
+                  type="number"
+                  min="1"
+                  placeholder="Next"
+                  value={matchOrderIndex}
+                  onChange={(event) => setMatchOrderIndex(event.target.value)}
+                />
               </label>
               <button
                 className="inline-flex h-11 items-center justify-center rounded-full bg-amber-400 px-6 text-sm font-semibold uppercase tracking-wide text-zinc-950 transition hover:bg-amber-300 md:self-end"
@@ -8668,7 +9097,7 @@ export default function AdminPage() {
             )}
           </details>
 
-          {orderedShowMatches.length === 0 ? (
+          {orderedShowMatches.length === 0 && virtualPlannedSlots.length === 0 ? (
             <p className="mt-6 text-sm text-zinc-400">No matches added yet.</p>
           ) : (
             <div className="mt-6 space-y-4">
@@ -9471,6 +9900,31 @@ export default function AdminPage() {
                   </div>
                 );
               })}
+              {virtualPlannedSlots.map((slot) => (
+                <button
+                  key={`planned-slot-${slot.slotNumber}`}
+                  className="flex w-full items-center justify-between gap-4 rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/35 p-4 text-left transition hover:border-amber-400/70 hover:bg-amber-400/10"
+                  type="button"
+                  onClick={() => openPlannedMatchSlot(slot.orderIndex)}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-950 text-lg font-semibold text-zinc-400">
+                      {slot.slotNumber}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-base font-semibold text-zinc-200">
+                        Match {slot.slotNumber}
+                      </p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-zinc-500">
+                        Not configured
+                      </p>
+                    </div>
+                  </div>
+                  <span className="rounded-full border border-amber-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-200">
+                    Add match
+                  </span>
+                </button>
+              ))}
             </div>
           )}
         </section>
